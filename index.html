@@ -1,0 +1,2877 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>6×6 variant sudoku</title>
+<meta name="theme-color" content="#e9edf2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f141a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sudoku 6×6">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<style>
+:root{
+  --bg:#e9edf2; --surface:#ffffff; --ink:#151d27; --muted:#556170; --rule:#c6cfd9; --cell:#ffffff; --thick:#151d27;
+  --accent:#1f4fd1; --accent-ink:#ffffff; --entry:#1f4fd1; --given:#151d27;
+  --sel:rgba(31,79,209,.16); --errbg:rgba(201,48,39,.18); --wrongbg:rgba(201,48,39,.34);
+  --err:#b8281f; --ok:#1c7a45; --warn:#94560a; --diag:rgba(21,29,39,.14); --par:#d3dae2;
+  --thermo:#b3bcc7; --arrow:#7c8896; --whisper:#3aa05f; --renban:#b56fd0; --pal:#4b9cd8; --between:#d39b2a; --regsum:#e0705c;
+  --rg0:#e6eefb; --rg1:#fbeadf; --rg2:#e4f3e6; --rg3:#f6e6f1; --rg4:#f8f2d4; --rg5:#dff2f2;
+  --c1:#a3abb7; --c2:#f3e9b8; --c3:#f0b3ae; --c4:#f4cf85; --c5:#b5dcae; --c6:#b4cdf3; --c7:#d9bdea;
+  --font:'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f141a; --surface:#182029; --ink:#e7edf4; --muted:#93a0af; --rule:#38444f; --cell:#1a222b; --thick:#dbe3ec;
+    --accent:#7ba4ff; --accent-ink:#0b1420; --entry:#8db0ff; --given:#f1f5f9;
+    --sel:rgba(123,164,255,.24); --errbg:rgba(255,120,110,.22); --wrongbg:rgba(255,120,110,.42);
+    --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
+    --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a;
+    --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
+    --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#182029; --ink:#e7edf4; --muted:#93a0af; --rule:#38444f; --cell:#1a222b; --thick:#dbe3ec;
+  --accent:#7ba4ff; --accent-ink:#0b1420; --entry:#8db0ff; --given:#f1f5f9;
+  --sel:rgba(123,164,255,.24); --errbg:rgba(255,120,110,.22); --wrongbg:rgba(255,120,110,.42);
+  --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
+  --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a;
+  --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
+  --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font);-webkit-text-size-adjust:100%}
+h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
+h1{font-size:24px;line-height:1.15}
+h2{font-size:15px;margin:22px 0 8px}
+.small{font-size:13px;color:var(--muted);margin:6px 0}
+.okc{color:var(--ok)} .warnc{color:var(--warn)} .errc{color:var(--err)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+input,select,textarea{font-size:16px}
+body{overscroll-behavior-y:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:minmax(0,600px) minmax(320px,400px);gap:36px;max-width:1080px;margin:0 auto;padding:28px 24px 48px;align-items:start;justify-content:center}
+.stage{min-width:0}
+.titlebar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:13px;padding:2px 9px;border:1px solid var(--rule);border-radius:999px;color:var(--muted);background:var(--surface)}
+.clock{text-align:right;flex:none}
+#timer{display:block;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.boardwrap{width:100%}
+#board{display:block;width:100%;height:auto;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;border-radius:6px}
+.msg{min-height:1.6em;margin:10px 0 6px;font-weight:700}
+.msg.ok{color:var(--ok)} .msg.warn{color:var(--warn)} .msg.err{color:var(--err)}
+
+.pad{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;max-width:600px}
+.pad .btn{padding:0 4px;min-width:0}
+.pad .digit{height:52px;font-size:22px;font-weight:700}
+.pad .wide{grid-column:span 3}
+.btn{height:40px;padding:0 14px;border:1px solid var(--rule);background:var(--surface);border-radius:8px;cursor:pointer;font-weight:700;font-size:14px}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+.btn.quiet{font-weight:400;background:transparent}
+.btn.on,.btn[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+body[data-tab="edit"] .playonly{display:none}
+body[data-tab="edit"] .pad{grid-template-columns:repeat(7,minmax(0,1fr))}
+
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:0 20px 22px;min-width:0}
+.tabs{overflow-x:auto;scrollbar-width:none;display:flex;gap:2px;margin:0 -20px;padding:0 12px;border-bottom:1px solid var(--rule)}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:14px 10px 11px;font-weight:700;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--ink)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{white-space:nowrap;flex:none}
+.tabpane{padding-top:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.opts{display:grid;gap:6px;margin-top:16px}
+.opts label,.optlist label{display:flex;gap:9px;align-items:center;cursor:pointer}
+.optlist{display:grid;gap:7px}
+input[type=checkbox],input[type=radio]{width:17px;height:17px;accent-color:var(--accent);margin:0;flex:none}
+.lede{margin:14px 0 6px}
+.rules{margin:0;padding-left:20px}
+.rules li{margin:0 0 6px}
+.hint{margin:10px 0;padding:8px 10px;border-left:3px solid var(--accent);background:var(--sel);border-radius:0 6px 6px 0;font-size:14px}
+.field{display:grid;gap:5px;margin-top:16px;font-weight:700}
+.field input,.inline input,.inline select,select,textarea{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:7px 10px}
+.inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.inline input[type=number]{width:84px}
+textarea{width:100%;resize:vertical;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+
+/* generator */
+.vgroup{border:0;padding:0;margin:14px 0 0;min-width:0}
+.vgroup legend{font-weight:700;padding:0;margin-bottom:6px;font-size:14px}
+.chipset{display:flex;flex-wrap:wrap;gap:6px}
+.vchip{position:relative;cursor:pointer}
+.vchip input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.vchip span{display:inline-block;padding:5px 12px;border:1px solid var(--rule);border-radius:999px;font-size:14px;background:var(--surface)}
+.vchip:hover span{border-color:var(--muted)}
+.vchip input:checked + span{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.vchip input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.presets .btn{height:32px;padding:0 11px;font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg label{position:relative;padding:7px 13px;cursor:pointer;border-right:1px solid var(--rule)}
+.seg label:last-child{border-right:0}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;width:100%;height:100%;cursor:pointer}
+.seg label:has(input:checked){background:var(--ink);color:var(--surface);font-weight:700}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+
+/* editor */
+.tgroup{margin-top:14px}
+.tlabel{font-weight:700;font-size:14px;margin-bottom:6px}
+.tbtns{display:flex;flex-wrap:wrap;gap:6px}
+.tbtn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);cursor:pointer;font-size:14px}
+.tbtn:hover{border-color:var(--muted)}
+.tbtn.on{border-color:var(--accent);background:var(--sel);font-weight:700;box-shadow:inset 0 0 0 1px var(--accent)}
+.sw{display:inline-block;width:14px;height:14px;position:relative;flex:none}
+.sw-given::before{content:'5';position:absolute;inset:-3px 0 0 2px;font-weight:700;font-size:15px}
+.sw-even{background:var(--par);border-radius:2px}
+.sw-odd{background:var(--par);border-radius:50%}
+.sw-region{background:linear-gradient(90deg,var(--rg0) 33%,var(--rg1) 33% 66%,var(--rg2) 66%);border:1px solid var(--rule)}
+.sw-cage{border:1.5px dashed var(--ink);border-radius:2px}
+.sw-arrow{border:2px solid var(--arrow);border-radius:50%}
+.sw-clue::before{content:'↘';position:absolute;inset:-4px 0 0 0;font-size:15px}
+.sw-thermo{background:var(--thermo);border-radius:50%}
+.sw-whisper{height:5px;top:4px;background:var(--whisper);border-radius:3px}
+.sw-renban{height:8px;top:3px;background:var(--renban);border-radius:4px;opacity:.7}
+.sw-palindrome{height:8px;top:3px;background:var(--pal);border-radius:4px;opacity:.7}
+.sw-regsum{height:6px;top:4px;background:var(--regsum);border-radius:3px}
+.sw-oline{border:2px dashed var(--muted);border-radius:3px}
+.sw-between{height:4px;top:5px;background:var(--between);border-radius:2px}
+.sw-cons{height:6px;top:4px;background:var(--ink);border-radius:3px}
+.sw-white{border:2px solid var(--ink);border-radius:50%;background:var(--cell)}
+.sw-black{background:var(--ink);border-radius:50%}
+.sw-X::before,.sw-V::before{position:absolute;inset:-3px 0 0 1px;font-weight:700;font-size:15px}
+.sw-X::before{content:'X'} .sw-V::before{content:'V'}
+.sw-erase::before{content:'×';position:absolute;inset:-6px 0 0 2px;font-size:20px;line-height:1}
+.rswrow{display:flex;gap:8px;margin:10px 0}
+.rsw{width:36px;height:36px;border:2px solid var(--rule);border-radius:8px;padding:3px;background:var(--surface);cursor:pointer}
+.rsw span{display:block;width:100%;height:100%;border-radius:4px}
+.rsw.rg0 span{background:var(--rg0)} .rsw.rg1 span{background:var(--rg1)} .rsw.rg2 span{background:var(--rg2)}
+.rsw.rg3 span{background:var(--rg3)} .rsw.rg4 span{background:var(--rg4)} .rsw.rg5 span{background:var(--rg5)}
+.rsw.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.result{min-height:1.5em;margin:10px 0 0;font-weight:700}
+.result.ok{color:var(--ok)} .result.warn{color:var(--warn)} .result.err{color:var(--err)}
+
+/* outside clue entry */
+.ringbar{margin:10px 0 0;padding:12px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);max-width:600px}
+.rnlabel{font-weight:700}
+.ringbar .inline{margin-top:8px}
+.ringbar .small{margin:8px 0 0}
+#rnVal{width:96px}
+
+/* colors */
+.colors{display:flex;flex-wrap:wrap;gap:8px}
+.colorrow{margin-top:14px;max-width:600px}
+.csw{width:42px;height:42px;border:2px solid var(--rule);border-radius:8px;padding:3px;background:var(--surface);cursor:pointer}
+.csw span{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:4px;font-size:13px;font-weight:700;color:var(--ink)}
+.csw:hover{border-color:var(--muted)}
+.csw.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.csw.c1 span{background:var(--c1)} .csw.c2 span{background:var(--c2)} .csw.c3 span{background:var(--c3)} .csw.c4 span{background:var(--c4)}
+.csw.c5 span{background:var(--c5)} .csw.c6 span{background:var(--c6)} .csw.c7 span{background:var(--c7)}
+.csw.clr span{font-size:20px;font-weight:400;background:transparent}
+.sw-paint{background:linear-gradient(90deg,var(--c1) 33%,var(--c3) 33% 66%,var(--c6) 66%);border-radius:3px}
+.sw-mkc{border:2px solid var(--ink);border-radius:50%}
+.sw-mks{border:2px solid var(--ink);border-radius:3px}
+
+/* history */
+.hcard{border-bottom:1px solid var(--rule)}
+.hcard summary{list-style:none;cursor:pointer;padding:10px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.hcard summary::-webkit-details-marker{display:none}
+.hcard summary::after{content:'›';font-size:22px;line-height:1;color:var(--muted);transform:rotate(90deg)}
+.hcard details[open] summary::after{transform:rotate(-90deg)}
+.hmain{display:grid}
+.hrec{list-style:none;margin:0;padding:0 0 4px}
+.hrec li{display:grid;grid-template-columns:1fr auto 4.5em;gap:10px;padding:6px 0;font-variant-numeric:tabular-nums;border-top:1px dotted var(--rule)}
+.hrec .hnote{color:var(--muted);font-size:13px;text-align:right}
+.hcard .row{margin:8px 0 12px}
+details.about{margin-top:18px;border-top:1px solid var(--rule);padding-top:12px}
+details.about summary{cursor:pointer;font-weight:700}
+details.about p{margin:8px 0 0}
+
+/* library */
+.llist{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.lcard{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.ltitle{font-weight:700}
+.lsub{font-size:13px;color:var(--muted)}
+.lact{display:flex;gap:6px;flex:none}
+.lact .btn{height:34px}
+.empty{padding:12px 0;color:var(--muted);font-size:14px}
+
+/* board svg */
+#board text{font-family:var(--font)}
+.bd{fill:var(--cell)}
+.rg0{fill:var(--rg0)} .rg1{fill:var(--rg1)} .rg2{fill:var(--rg2)} .rg3{fill:var(--rg3)} .rg4{fill:var(--rg4)} .rg5{fill:var(--rg5)}
+.sel,.hl{fill:var(--sel)}
+.bad{fill:var(--errbg)} .wrong{fill:var(--wrongbg)}
+.gl{stroke:var(--rule);stroke-width:1}
+.thick{stroke:var(--thick);stroke-width:3.5;fill:none;stroke-linecap:square}
+.diag{stroke:var(--diag);stroke-width:4}
+.par{fill:var(--par)}
+.ln{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ln.thermo{stroke-width:15} .ln.arrow{stroke-width:4.5} .ln.whisper{stroke-width:8}
+.ln.regsum{stroke-width:9;opacity:.9} .ln.renban{stroke-width:14;opacity:.55} .ln.palindrome{stroke-width:14;opacity:.55} .ln.between{stroke-width:4}
+.abulb{fill:none;stroke-width:3.5} .ebulb{fill:none;stroke-width:3.5}
+.cage{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85;stroke-linecap:butt}
+.cage.on{stroke:var(--accent);stroke-width:2.6;opacity:1}
+.cbg{fill:var(--cell);opacity:.9}
+.csum{font-size:11px;font-weight:700;fill:var(--ink)}
+.gv,.ev,.sv{font-size:34px;text-anchor:middle;dominant-baseline:central}
+.gv{font-weight:700;fill:var(--given)} .ev{font-weight:400;fill:var(--entry)} .sv{font-weight:400;fill:var(--ok)}
+.cd{font-size:12px;fill:var(--muted);text-anchor:middle;dominant-baseline:central}
+.bar{fill:var(--ink)} .dotw{fill:var(--cell);stroke:var(--ink);stroke-width:2} .dotb{fill:var(--ink)}
+.xvbg{fill:var(--cell)} .xv{font-size:16px;font-weight:700;fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+.rtag{font-size:11px;font-weight:700;fill:var(--muted)} .rtag.lk{font-size:17px;font-weight:400;fill:var(--ink);text-anchor:middle}
+.rval{font-size:17px;font-weight:700;fill:var(--ink);text-anchor:middle}
+.rval.live{fill:var(--muted);font-weight:400}
+.obox{fill:var(--cell);stroke-width:2.2}
+.obox.bad{stroke:var(--err);stroke-width:3.2;fill:var(--errbg)}
+.rval.ent{fill:var(--entry);font-weight:400}
+.rcd{font-size:9.5px;fill:var(--muted);text-anchor:middle}
+.rcd.lg{font-size:10.5px}
+.rtag.sm{font-size:10px}
+.col{stroke:none}
+.col1{fill:var(--c1)} .col2{fill:var(--c2)} .col3{fill:var(--c3)} .col4{fill:var(--c4)} .col5{fill:var(--c5)} .col6{fill:var(--c6)} .col7{fill:var(--c7)}
+.mkc,.mks{fill:none;stroke:var(--ink);stroke-width:2.6}
+.mkn{font-size:13px;font-weight:700;fill:var(--ink);text-anchor:end}
+.ringsel{fill:var(--sel);stroke:var(--accent);stroke-width:2}
+.ringg{fill:none;stroke:var(--rule);stroke-dasharray:3 3}
+
+@media (min-width:921px) and (min-height:860px){.stage{position:sticky;top:16px}}
+@media (max-width:920px){
+  .app{grid-template-columns:minmax(0,1fr);gap:22px;padding:max(16px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(40px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+  .panel{padding:0 16px 20px} .tabs{margin:0 -16px}
+  .pad .digit{height:56px}
+  .tabs button{padding:14px 8px 11px;font-size:14px}
+  .tbtns,.chipset{gap:6px}
+  .colors{gap:6px} .csw{width:38px;height:38px}
+  h1{font-size:21px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body data-tab="play">
+<div class="app">
+  <section class="stage" aria-label="Puzzle">
+    <header class="titlebar">
+      <div>
+        <h1 id="ptitle">Loading</h1>
+        <div id="pchips" class="chips"></div>
+      </div>
+      <div class="clock"><span id="timer">0:00</span><span id="pstat" class="small"></span></div>
+    </header>
+    <div class="boardwrap"><svg id="board" viewBox="0 0 444 444" role="img" aria-label="Sudoku board"></svg></div>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+    <div id="ringBar" class="ringbar playonly" hidden>
+      <div id="rnLabel" class="rnlabel"></div>
+      <div class="inline">
+        <input id="rnVal" type="number" inputmode="numeric" min="0" max="21" aria-label="Clue value" placeholder="Number">
+        <button id="rnSet" class="btn primary">Set value</button>
+        <button id="rnPencil" class="btn">Pencil mark</button>
+        <button id="rnClear" class="btn quiet">Clear</button>
+      </div>
+      <p id="rnHint" class="small"></p>
+    </div>
+    <div class="pad" id="pad">
+      <button class="btn digit" data-d="1">1</button><button class="btn digit" data-d="2">2</button><button class="btn digit" data-d="3">3</button>
+      <button class="btn digit" data-d="4">4</button><button class="btn digit" data-d="5">5</button><button class="btn digit" data-d="6">6</button>
+      <button class="btn digit" data-d="0" aria-label="Erase">⌫</button>
+    </div>
+    <div class="row playonly" style="max-width:600px">
+      <button id="pencilBtn" class="btn" aria-pressed="false">Pencil marks</button>
+      <button id="undoBtn" class="btn">Undo</button>
+      <button id="redoBtn" class="btn">Redo</button>
+    </div>
+    <div class="playonly colorrow">
+      <div class="colors" id="colorSwatches" role="group" aria-label="Cell colors"></div>
+      <p class="small">Select cells, then click colors to add or remove them. A cell can hold several colors and splits into equal slices. S toggles Shade. Shade (S) and Land (L) drive shading puzzles. The other colors are free markers.</p>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Sections">
+      <button data-tab="play" class="on" role="tab" aria-selected="true">Play</button>
+      <button data-tab="generate" role="tab" aria-selected="false">Generate</button>
+      <button data-tab="edit" role="tab" aria-selected="false">Edit</button>
+      <button data-tab="library" role="tab" aria-selected="false">Library</button>
+      <button data-tab="history" role="tab" aria-selected="false">History</button>
+    </nav>
+
+    <div id="tab-play" class="tabpane">
+      <h2>Rules</h2>
+      <ul id="rules" class="rules"></ul>
+      <div class="row">
+        <button id="checkBtn" class="btn primary">Check</button>
+        <button id="hintBtn" class="btn">Hint</button>
+        <button id="revealBtn" class="btn">Show solution</button>
+        <button id="restartBtn" class="btn quiet">Restart</button>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="showConf" checked> Highlight rule conflicts</label>
+        <label><input type="checkbox" id="autoClear" checked> Clear pencil marks in peer cells</label>
+      </div>
+      <p class="small">Keys: 1–6 enter a digit, C toggles pencil marks, arrows move (Shift extends), Backspace erases, Ctrl+Z undoes. Drag across cells to select several.</p>
+      <div class="row"><button id="editBtn" class="btn">Edit this puzzle</button></div>
+    </div>
+
+    <div id="tab-generate" class="tabpane" hidden>
+      <p class="lede">Pick any mix of variants. The generator builds a grid, adds clues from it, then trims them until exactly one solution remains.</p>
+      <div id="presets" class="presets"></div>
+      <div id="genChips"></div>
+      <p id="genNote" class="small warnc" role="status"></p>
+      <div class="inline">
+        <span style="font-weight:700">Clues</span>
+        <div class="seg" id="genDiff" role="radiogroup" aria-label="Clue density">
+          <label><input type="radio" name="gd" value="easy">Relaxed</label>
+          <label><input type="radio" name="gd" value="medium" checked>Standard</label>
+          <label><input type="radio" name="gd" value="hard">Minimal</label>
+        </div>
+      </div>
+      <div class="inline" id="genWhisper" hidden>
+        <label for="whisperGen" style="font-weight:700">Whispers differ by at least</label>
+        <select id="whisperGen"><option value="3">3</option><option value="4" selected>4</option></select>
+      </div>
+      <div class="row">
+        <button id="genBtn" class="btn primary">Generate puzzle</button>
+        <button id="surpriseBtn" class="btn">Surprise me</button>
+      </div>
+      <p id="genStatus" class="small" role="status"></p>
+      <p class="small"><span id="genCount"></span>. Relaxed keeps more givens, Minimal keeps as few clues as uniqueness allows.</p>
+    </div>
+
+    <div id="tab-edit" class="tabpane" hidden>
+      <label class="field">Title<input id="ptitleInput" type="text" maxlength="60" placeholder="Untitled puzzle"></label>
+      <div id="tools"></div>
+      <p id="toolHint" class="hint"></p>
+      <div id="regionBox" hidden>
+        <div class="rswrow" id="regionSwatches"></div>
+        <div class="row" style="margin-top:0"><button id="resetRegions" class="btn quiet">Reset to 2×3 boxes</button></div>
+        <p id="regionWarn" class="small"></p>
+      </div>
+      <div id="paintBox" hidden>
+        <div class="rswrow" id="paintSwatches"></div>
+        <p class="small">Shade and Land cells are given parts of the shading solution. The other colors only decorate. Click a painted cell with the same color to clear it.</p>
+      </div>
+      <div id="markBox" class="inline" hidden>
+        <label for="markVal" style="font-weight:700">Fixed size</label>
+        <input id="markVal" type="number" min="1" max="36" inputmode="numeric" placeholder="Use digit">
+        <span class="small" style="margin:0">Leave blank so the cell’s digit gives the size.</span>
+      </div>
+      <div id="olBox" class="inline" hidden>
+        <select id="olType" aria-label="Line type">
+          <option value="thermo">Thermo</option><option value="arrow">Arrow</option><option value="whisper">Whisper</option>
+          <option value="renban">Renban</option><option value="palindrome">Palindrome</option>
+        </select>
+        <select id="olKind" aria-label="Clue type">
+          <option value="xs">X-sums</option><option value="sw">Sandwich</option><option value="sk">Skyscraper</option>
+        </select>
+        <label id="olDiffWrap" hidden>differ by at least <input id="olDiff" type="number" min="1" max="20" value="5"></label>
+      </div>
+      <div id="cageBox" class="inline" hidden>
+        <label for="cageSum" style="font-weight:700">Cage sum</label>
+        <input id="cageSum" type="number" min="1" max="21" inputmode="numeric">
+        <button id="cageDel" class="btn quiet">Delete cage</button>
+      </div>
+      <div id="ringBox" class="inline" hidden>
+        <select id="ringKind" aria-label="Clue type"></select>
+        <input id="ringVal" type="number" min="0" max="40" inputmode="numeric" aria-label="Clue value" placeholder="Value">
+        <button id="ringDel" class="btn quiet">Remove</button>
+      </div>
+
+      <h2>Grid rules</h2>
+      <div class="optlist">
+        <label><input type="checkbox" id="optDiag"> Both diagonals contain 1–6</label>
+        <label><input type="checkbox" id="optKnight"> Anti-knight</label>
+        <label><input type="checkbox" id="optKing"> Anti-king</label>
+        <label><input type="checkbox" id="optDisjoint"> Disjoint groups</label>
+        <label><input type="checkbox" id="optNonconsec"> Unmarked neighbors are never consecutive</label>
+        <label><input type="checkbox" id="optKropki"> Every Kropki pair is marked (dots)</label>
+        <label><input type="checkbox" id="optXV"> Every XV pair is marked</label>
+      </div>
+      <h2>Shading rules</h2>
+      <div class="optlist">
+        <label><input type="checkbox" id="optWater"> All shaded cells form one connected region</label>
+        <label><input type="checkbox" id="optPool"> No 2×2 block is fully shaded</label>
+        <label><input type="checkbox" id="optNkLand"> Every island has exactly one circle</label>
+        <label><input type="checkbox" id="optNkWater"> Every shaded region has exactly one square</label>
+        <label><input type="checkbox" id="optShadeWhisper"> Shaded cells that touch differ by at least the whisper minimum</label>
+      </div>
+      <div class="inline" id="whisperRow">
+        <label for="whisperDiff" style="font-weight:700">Whispers differ by at least</label>
+        <select id="whisperDiff"><option>2</option><option>3</option><option>4</option><option>5</option></select>
+      </div>
+
+      <h2>Check the puzzle</h2>
+      <div class="row" style="margin-top:0">
+        <button id="uniqBtn" class="btn primary">Check for one solution</button>
+        <button id="addGivensBtn" class="btn">Add givens until unique</button>
+        <button id="trimBtn" class="btn">Remove extra givens</button>
+      </div>
+      <p id="uniqOut" class="result" role="status"></p>
+      <div class="row">
+        <button id="playBtn" class="btn primary">Play this puzzle</button>
+        <button id="clearGivens" class="btn quiet">Clear givens</button>
+        <button id="clearAll" class="btn quiet">Clear everything</button>
+      </div>
+    </div>
+
+    <div id="tab-library" class="tabpane" hidden>
+      <h2>Starter puzzles</h2>
+      <ul id="libList" class="llist"></ul>
+      <h2>Saved in this browser</h2>
+      <ul id="savedList" class="llist"></ul>
+      <div class="row">
+        <button id="saveBtn" class="btn">Save current puzzle</button>
+        <button id="newBlank" class="btn quiet">New blank puzzle</button>
+      </div>
+      <h2>Share or restore</h2>
+      <textarea id="ioText" rows="4" spellcheck="false" aria-label="Puzzle text" placeholder="Export prints the puzzle here. Paste exported text and choose Import to load it."></textarea>
+      <div class="row">
+        <button id="exportBtn" class="btn">Export current</button>
+        <button id="importBtn" class="btn">Import from text</button>
+      </div>
+      <p id="ioMsg" class="small" role="status"></p>
+      <details class="about">
+        <summary>Install on iPhone</summary>
+        <p>Open this page in Safari, tap Share, then Add to Home Screen. The app opens full screen and works offline once installed. Puzzles, history and progress stay on the device.</p>
+      </details>
+    </div>
+
+    <div id="tab-history" class="tabpane" hidden>
+      <h2>Solve history</h2>
+      <p id="histSummary" class="small"></p>
+      <ul id="histList" class="llist"></ul>
+      <div class="row"><button id="histClear" class="btn quiet">Clear all history</button></div>
+      <p class="small">Each solve is timed from your first move. Solves that used hints are marked and do not count as a best time. Solves after Show solution are not saved. Times stay on this device.</p>
+    </div>
+  </aside>
+</div>
+<script>/* ===== Core: model, solver, verifier ===== */
+(function (root) {
+'use strict';
+const N = 6, NN = 36, ALL = 126;
+const bit = d => 1 << d;
+const EVEN = bit(2) | bit(4) | bit(6), ODD = bit(1) | bit(3) | bit(5);
+const ix = (r, c) => r * N + c;
+const rowOf = i => (i / N) | 0, colOf = i => i % N;
+const inGrid = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+const pop = m => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function shuffle(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+const pick = (arr, rng) => arr[Math.floor(rng() * arr.length)];
+
+const nbr4 = [], nbr8 = [];
+for (let i = 0; i < NN; i++) {
+  const r = rowOf(i), c = colOf(i); nbr4[i] = []; nbr8[i] = [];
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    if (!dr && !dc) continue;
+    if (!inGrid(r + dr, c + dc)) continue;
+    nbr8[i].push(ix(r + dr, c + dc));
+    if (!dr || !dc) nbr4[i].push(ix(r + dr, c + dc));
+  }
+}
+const orthPairs = [];
+for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+  if (c + 1 < N) orthPairs.push([ix(r, c), ix(r, c + 1)]);
+  if (r + 1 < N) orthPairs.push([ix(r, c), ix(r + 1, c)]);
+}
+
+function stdRegions() {
+  const a = [];
+  for (let i = 0; i < NN; i++) a.push((rowOf(i) >> 1) * 2 + ((colOf(i) / 3) | 0));
+  return a;
+}
+function newPuzzle() {
+  return {
+    v: 3, title: '', regions: stdRegions(), givens: new Array(NN).fill(0),
+    opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false,
+            nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
+            waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false },
+    cages: [], lines: [], edges: [], parity: new Array(NN).fill(0), clues: [], olines: [],
+    marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
+    sol: null, ssol: null, meta: null
+  };
+}
+function usesShade(p) {
+  const o = p.opts || {};
+  return !!((p.marks && p.marks.some(x => x)) || (p.paint && p.paint.some(x => x & 6)) ||
+    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper);
+}
+function clonePuzzle(p) { return JSON.parse(JSON.stringify(p)); }
+
+// cells read from an outside clue toward the far side
+function clueSeq(cl) {
+  const out = [];
+  if (cl.kind === 'lk') {
+    let r = cl.r + cl.dr, c = cl.c + cl.dc;
+    while (inGrid(r, c)) { out.push(ix(r, c)); r += cl.dr; c += cl.dc; }
+    return out;
+  }
+  if (cl.r === -1 && cl.c >= 0 && cl.c < N) for (let r = 0; r < N; r++) out.push(ix(r, cl.c));
+  else if (cl.r === N && cl.c >= 0 && cl.c < N) for (let r = N - 1; r >= 0; r--) out.push(ix(r, cl.c));
+  else if (cl.c === -1 && cl.r >= 0 && cl.r < N) for (let c = 0; c < N; c++) out.push(ix(cl.r, c));
+  else if (cl.c === N && cl.r >= 0 && cl.r < N) for (let c = N - 1; c >= 0; c--) out.push(ix(cl.r, c));
+  return out;
+}
+
+/* ---- partial-assignment checks (g: digits, 0 = empty). Return false only when definitely violated ---- */
+function chkSum(g, cells, T, distinct) {
+  let s = 0, unk = 0, used = 0;
+  for (const i of cells) { const v = g[i]; if (v) { s += v; used |= bit(v); } else unk++; }
+  if (!unk) return s === T;
+  if (!distinct) return s + unk <= T && T <= s + 6 * unk;
+  const av = []; for (let d = 1; d <= 6; d++) if (!(used & bit(d))) av.push(d);
+  if (av.length < unk) return false;
+  let mn = 0, mx = 0;
+  for (let k = 0; k < unk; k++) { mn += av[k]; mx += av[av.length - 1 - k]; }
+  return s + mn <= T && T <= s + mx;
+}
+function chkXsum(g, seq, T) {
+  const a0 = g[seq[0]];
+  const tryN = a0 ? [a0] : [1, 2, 3, 4, 5, 6];
+  for (const n of tryN) {
+    let s = n, unk = 0;
+    for (let k = 1; k < n; k++) { const v = g[seq[k]]; if (v) s += v; else unk++; }
+    if (s + unk <= T && T <= s + 6 * unk) return true;
+  }
+  return false;
+}
+function chkSandwich(g, seq, T) {
+  const a = seq.map(i => g[i]);
+  for (let p = 0; p < N; p++) {
+    if (a[p] && a[p] !== 1) continue;
+    for (let q = 0; q < N; q++) {
+      if (q === p) continue;
+      if (a[q] && a[q] !== 6) continue;
+      let ok = true;
+      for (let k = 0; k < N; k++) if ((a[k] === 1 && k !== p) || (a[k] === 6 && k !== q)) { ok = false; break; }
+      if (!ok) continue;
+      const lo = Math.min(p, q), hi = Math.max(p, q);
+      let s = 0, unk = 0;
+      for (let k = lo + 1; k < hi; k++) { if (a[k]) s += a[k]; else unk++; }
+      if (s + 2 * unk <= T && T <= s + 5 * unk) return true;
+    }
+  }
+  return false;
+}
+function chkSky(g, seq, n) {
+  let max = 0, cnt = 0, k = 0;
+  for (; k < N; k++) { const v = g[seq[k]]; if (!v) break; if (v > max) { max = v; cnt++; } }
+  if (cnt > n) return false;
+  if (k === N) return cnt === n;
+  if (max === 6) return cnt === n;
+  return cnt + Math.min(6 - max, N - k) >= n;
+}
+function chkBetween(g, cells) {
+  const L = cells.length, a = g[cells[0]], b = g[cells[L - 1]];
+  if (a && b && Math.abs(a - b) < 2) return false;
+  for (let k = 1; k < L - 1; k++) {
+    const v = g[cells[k]]; if (!v) continue;
+    if (a && v === a) return false;
+    if (b && v === b) return false;
+    if (a && b && (v < Math.min(a, b) || v > Math.max(a, b))) return false;
+  }
+  return true;
+}
+function chkRenban(g, cells) {
+  let mn = 9, mx = 0;
+  for (const i of cells) { const v = g[i]; if (v) { if (v < mn) mn = v; if (v > mx) mx = v; } }
+  return mx === 0 || mx - mn <= cells.length - 1;
+}
+function chkArrow(g, cells) {
+  const c = g[cells[0]]; let s = 0, unk = 0;
+  for (let k = 1; k < cells.length; k++) { const v = g[cells[k]]; if (v) s += v; else unk++; }
+  if (!unk) return c ? s === c : (s >= 1 && s <= 6);
+  if (c) return s + unk <= c && c <= s + 6 * unk;
+  return s + unk <= 6;
+}
+
+
+/* ---- region sum lines ---- */
+function sumBounds(g, cells) {           // cells share a region, so digits are distinct
+  let s = 0, unk = 0, used = 0;
+  for (const i of cells) { const v = g[i]; if (v) { s += v; used |= bit(v); } else unk++; }
+  if (!unk) return [s, s];
+  const av = []; for (let d = 1; d <= 6; d++) if (!(used & bit(d))) av.push(d);
+  if (av.length < unk) return null;
+  let mn = 0, mx = 0;
+  for (let k = 0; k < unk; k++) { mn += av[k]; mx += av[av.length - 1 - k]; }
+  return [s + mn, s + mx];
+}
+function chkRegSum(g, runs) {
+  let lo = 0, hi = 99;
+  for (const run of runs) {
+    const b = sumBounds(g, run); if (!b) return false;
+    if (b[0] > lo) lo = b[0]; if (b[1] < hi) hi = b[1];
+  }
+  return lo <= hi;
+}
+function regRuns(cells, regions) {
+  const runs = []; let cur = [cells[0]];
+  for (let k = 1; k < cells.length; k++) {
+    if (regions[cells[k]] === regions[cells[k - 1]]) cur.push(cells[k]); else { runs.push(cur); cur = [cells[k]]; }
+  }
+  runs.push(cur); return runs;
+}
+
+/* ---- outside clue value ranges (partial grids) and outside-line rules ---- */
+function clueRange(kind, seq, g) {
+  if (kind === 'xs') {
+    const a0 = g[seq[0]]; let lo = 99, hi = -1;
+    for (const n of (a0 ? [a0] : [1, 2, 3, 4, 5, 6])) {
+      let s = n, unk = 0;
+      for (let k = 1; k < n; k++) { const v = g[seq[k]]; if (v) s += v; else unk++; }
+      if (s + unk < lo) lo = s + unk; if (s + 6 * unk > hi) hi = s + 6 * unk;
+    }
+    return [lo, hi];
+  }
+  if (kind === 'sw') {
+    const a = seq.map(i => g[i]); let lo = 99, hi = -1;
+    for (let p = 0; p < N; p++) {
+      if (a[p] && a[p] !== 1) continue;
+      for (let q = 0; q < N; q++) {
+        if (q === p || (a[q] && a[q] !== 6)) continue;
+        let ok = true;
+        for (let k = 0; k < N; k++) if ((a[k] === 1 && k !== p) || (a[k] === 6 && k !== q)) { ok = false; break; }
+        if (!ok) continue;
+        let s = 0, unk = 0;
+        for (let k = Math.min(p, q) + 1; k < Math.max(p, q); k++) { if (a[k]) s += a[k]; else unk++; }
+        if (s + 2 * unk < lo) lo = s + 2 * unk; if (s + 5 * unk > hi) hi = s + 5 * unk;
+      }
+    }
+    return hi < 0 ? null : [lo, hi];
+  }
+  let max = 0, cnt = 0, k = 0;
+  for (; k < N; k++) { const v = g[seq[k]]; if (!v) break; if (v > max) { max = v; cnt++; } }
+  if (k === N || max === 6) return [cnt, cnt];
+  if (cnt === 0) return [1, 6];
+  return [cnt, cnt + Math.min(6 - max, N - k)];
+}
+function chkOLine(g, ol, seqs) {
+  const R = [];
+  for (const sq of seqs) { const r = clueRange(ol.kind, sq, g); if (!r) return false; R.push(r); }
+  const k = R.length, t = ol.type, exact = R.every(r => r[0] === r[1]);
+  if (t === 'thermo') {
+    let m = R[0][0]; if (m > R[0][1]) return false;
+    for (let i = 1; i < k; i++) { m = Math.max(R[i][0], m + 1); if (m > R[i][1]) return false; }
+  } else if (t === 'whisper') {
+    const d = +ol.diff || 4;
+    for (let i = 0; i + 1 < k; i++) if (Math.max(R[i + 1][1] - R[i][0], R[i][1] - R[i + 1][0]) < d) return false;
+  } else if (t === 'arrow') {
+    let lo = 0, hi = 0; for (let i = 1; i < k; i++) { lo += R[i][0]; hi += R[i][1]; }
+    if (R[0][0] > hi || R[0][1] < lo) return false;
+  } else if (t === 'palindrome') {
+    for (let i = 0; i < (k >> 1); i++) { const a = R[i], b = R[k - 1 - i]; if (Math.max(a[0], b[0]) > Math.min(a[1], b[1])) return false; }
+  } else if (t === 'renban') {
+    const known = R.filter(r => r[0] === r[1]).map(r => r[0]);
+    if (new Set(known).size !== known.length) return false;
+    if (known.length && Math.max(...known) - Math.min(...known) > k - 1) return false;
+    if (exact && Math.max(...known) - Math.min(...known) !== k - 1) return false;
+  }
+  return true;
+}
+
+/* ---- compile a puzzle into propagation structures ---- */
+function compile(p) {
+  const cand0 = new Array(NN).fill(ALL);
+  const peerSet = []; for (let i = 0; i < NN; i++) peerSet.push(new Set());
+  const bin = []; for (let i = 0; i < NN; i++) bin.push([]);
+  const groups = [], cellGroups = []; for (let i = 0; i < NN; i++) cellGroups.push([]);
+  const o = p.opts || {};
+
+  for (let i = 0; i < NN; i++) {
+    if (p.givens[i]) cand0[i] &= bit(p.givens[i]);
+    if (p.parity[i] === 2) cand0[i] &= EVEN; else if (p.parity[i] === 1) cand0[i] &= ODD;
+  }
+  const distinct = cells => { for (const a of cells) for (const b of cells) if (a !== b) peerSet[a].add(b); };
+  for (let r = 0; r < N; r++) { const a = [], b = []; for (let c = 0; c < N; c++) { a.push(ix(r, c)); b.push(ix(c, r)); } distinct(a); distinct(b); }
+  const regCells = {};
+  for (let i = 0; i < NN; i++) (regCells[p.regions[i]] = regCells[p.regions[i]] || []).push(i);
+  const regList = Object.keys(regCells).sort((a, b) => a - b).map(k => regCells[k]);
+  regList.forEach(distinct);
+  if (o.diag) { const a = [], b = []; for (let i = 0; i < N; i++) { a.push(ix(i, i)); b.push(ix(i, N - 1 - i)); } distinct(a); distinct(b); }
+  if (o.disjoint) {
+    const byPos = [];
+    regList.forEach(cells => { const s = cells.slice().sort((a, b) => a - b); s.forEach((cell, k) => (byPos[k] = byPos[k] || []).push(cell)); });
+    byPos.forEach(g => { if (g.length > 1) distinct(g); });
+  }
+  if (o.antiKing) for (let i = 0; i < NN; i++) for (const j of nbr8[i]) peerSet[i].add(j);
+  if (o.antiKnight) for (let i = 0; i < NN; i++) {
+    const r = rowOf(i), c = colOf(i);
+    for (const [dr, dc] of [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]])
+      if (inGrid(r + dr, c + dc)) peerSet[i].add(ix(r + dr, c + dc));
+  }
+  const addBin = (i, j, f) => {
+    const tij = [0, 0, 0, 0, 0, 0, 0], tji = [0, 0, 0, 0, 0, 0, 0];
+    for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) {
+      if (f(a, b)) tij[a] |= bit(b);
+      if (f(b, a)) tji[a] |= bit(b);
+    }
+    bin[i].push({ j, tab: tij }); bin[j].push({ j: i, tab: tji });
+  };
+  const addGroup = (cells, f) => {
+    const gi = groups.length; groups.push({ cells, f });
+    for (const c of new Set(cells)) cellGroups[c].push(gi);
+  };
+
+  // cages
+  for (const cg of p.cages) {
+    distinct(cg.cells);
+    if (cg.sum != null && cg.sum !== '') { const T = +cg.sum; addGroup(cg.cells, g => chkSum(g, cg.cells, T, true)); }
+  }
+  // lines
+  const wd = +o.whisperDiff || 4;
+  for (const ln of p.lines) {
+    const cs = ln.cells, L = cs.length;
+    if (ln.type === 'thermo') {
+      for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
+      for (let k = 0; k < L; k++) {
+        let m = 0; for (let d = 1; d <= 6; d++) if (d >= k + 1 && d <= 6 - (L - 1 - k)) m |= bit(d);
+        cand0[cs[k]] &= m;
+      }
+    } else if (ln.type === 'whisper') {
+      for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => Math.abs(a - b) >= wd);
+    } else if (ln.type === 'palindrome') {
+      for (let k = 0; k < (L >> 1); k++) addBin(cs[k], cs[L - 1 - k], (a, b) => a === b);
+    } else if (ln.type === 'renban') {
+      distinct(cs); addGroup(cs, g => chkRenban(g, cs));
+    } else if (ln.type === 'between') {
+      if (L >= 3) {
+        for (let k = 1; k < L - 1; k++) cand0[cs[k]] &= (bit(2) | bit(3) | bit(4) | bit(5));
+        addGroup(cs, g => chkBetween(g, cs));
+      }
+    } else if (ln.type === 'regsum') {
+      const runs = regRuns(cs, p.regions);
+      if (runs.length >= 2) addGroup(cs, g => chkRegSum(g, runs));
+    } else if (ln.type === 'arrow') {
+      if (L >= 2) {
+        const tl = L - 1; let mc = 0, mt = 0;
+        for (let d = 1; d <= 6; d++) { if (d >= tl) mc |= bit(d); if (d <= 6 - (tl - 1)) mt |= bit(d); }
+        cand0[cs[0]] &= mc; for (let k = 1; k < L; k++) cand0[cs[k]] &= mt;
+        addGroup(cs, g => chkArrow(g, cs));
+      }
+    }
+  }
+  // pair markers
+  const key = (a, b) => a < b ? a + ',' + b : b + ',' + a;
+  const have = { cons: new Set(), white: new Set(), black: new Set(), X: new Set(), V: new Set() };
+  for (const e of p.edges) {
+    have[e.t] && have[e.t].add(key(e.a, e.b));
+    if (e.t === 'cons') addBin(e.a, e.b, (a, b) => Math.abs(a - b) === 1);
+    else if (e.t === 'white') addBin(e.a, e.b, (a, b) => Math.abs(a - b) === 1);
+    else if (e.t === 'black') addBin(e.a, e.b, (a, b) => a === 2 * b || b === 2 * a);
+    else if (e.t === 'X') addBin(e.a, e.b, (a, b) => a + b === 10);
+    else if (e.t === 'V') addBin(e.a, e.b, (a, b) => a + b === 5);
+  }
+  for (const [a, b] of orthPairs) {
+    const k = key(a, b);
+    if (o.nonconsec && !have.cons.has(k)) addBin(a, b, (x, y) => Math.abs(x - y) !== 1);
+    if (o.kropkiNeg && !have.white.has(k) && !have.black.has(k))
+      addBin(a, b, (x, y) => Math.abs(x - y) !== 1 && x !== 2 * y && y !== 2 * x);
+    if (o.xvNeg && !have.X.has(k) && !have.V.has(k))
+      addBin(a, b, (x, y) => x + y !== 5 && x + y !== 10);
+  }
+  // lines through hidden outside clues
+  for (const ol of (p.olines || [])) {
+    const seqs = ol.cells.map(([r, c]) => clueSeq({ kind: ol.kind, r, c }));
+    if (seqs.length < 2 || seqs.some(sq => sq.length !== N)) continue;
+    addGroup(Array.from(new Set([].concat(...seqs))), g => chkOLine(g, ol, seqs));
+  }
+  // outside clues
+  for (const cl of p.clues) {
+    const seq = clueSeq(cl), T = +cl.val;
+    if (cl.val === '' || cl.val == null || isNaN(T)) continue;
+    if (cl.kind === 'lk') { if (seq.length) addGroup(seq, g => chkSum(g, seq, T, false)); }
+    else if (seq.length === N) {
+      if (cl.kind === 'xs') addGroup(seq, g => chkXsum(g, seq, T));
+      else if (cl.kind === 'sw') addGroup(seq, g => chkSandwich(g, seq, T));
+      else if (cl.kind === 'sk') addGroup(seq, g => chkSky(g, seq, T));
+    }
+  }
+  const useShade = usesShade(p);
+  const sdom0 = new Array(NN).fill(3), mk = [];
+  if (useShade) for (let i = 0; i < NN; i++) {
+    const mkk = (p.marks && p.marks[i]) || 0, pt = (p.paint && p.paint[i]) || 0;
+    let d = 3;
+    if (mkk === 1) d &= 1; else if (mkk === 2) d &= 2;
+    if (pt & 2) d &= 2;
+    if (pt & 4) d &= 1;
+    sdom0[i] = d;
+    if (mkk) mk.push(i);
+  }
+  const wdv = +o.whisperDiff || 4, allow = [0];
+  for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= wdv) mm |= bit(e); allow[d] = mm; }
+  return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
+    useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
+    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper }, wd: wdv, allow };
+}
+
+/* ---- shading propagation (sg: 0 unknown, 1 land, 2 water; sdom bit1 land, bit2 water) ---- */
+const blocks = [];
+for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++) blocks.push([ix(r, c), ix(r, c + 1), ix(r + 1, c), ix(r + 1, c + 1)]);
+function flood(start, ok) {
+  const seen = new Uint8Array(NN), st = [start], out = [start]; seen[start] = 1;
+  while (st.length) {
+    const i = st.pop(), nb = nbr4[i];
+    for (let k = 0; k < nb.length; k++) { const j = nb[k]; if (!seen[j] && ok(j)) { seen[j] = 1; st.push(j); out.push(j); } }
+  }
+  return out;
+}
+function shadeProp(m, grid, sg, sdom, cand) {
+  const o = m.sopts;
+  let changed = true, guard = 0;
+  const setS = (j, v) => {
+    if (sg[j]) return sg[j] === v;
+    if (!(sdom[j] & v)) return false;
+    sdom[j] = v; sg[j] = v; changed = true; return true;
+  };
+  while (changed) {
+    if (++guard > 80) break;
+    changed = false;
+    for (let i = 0; i < NN; i++) if (!sg[i]) {
+      const d = sdom[i]; if (!d) return false;
+      if (d !== 3) { sg[i] = d; changed = true; }
+    }
+    if (o.shadeWhisper) for (const [i, j] of orthPairs) {
+      const si = sg[i], sj = sg[j], di = grid[i], dj = grid[j];
+      if (di && dj && Math.abs(di - dj) < m.wd) {
+        if (si === 2 && sj === 2) return false;
+        if (si === 2 && !setS(j, 1)) return false;
+        if (sj === 2 && !setS(i, 1)) return false;
+      } else if (si === 2 && sj === 2) {
+        if (di && !dj) { const nc = cand[j] & m.allow[di]; if (!nc) return false; if (nc !== cand[j]) { cand[j] = nc; changed = true; } }
+        else if (dj && !di) { const nc = cand[i] & m.allow[dj]; if (!nc) return false; if (nc !== cand[i]) { cand[i] = nc; changed = true; } }
+      }
+    }
+    if (o.noPool) for (const b of blocks) {
+      let w = 0, un = 0, u = -1;
+      for (const c of b) { if (sg[c] === 2) w++; else if (!sg[c]) { un++; u = c; } }
+      if (w === 4) return false;
+      if (w === 3 && un === 1 && !setS(u, 1)) return false;
+    }
+    for (const k of m.mk) {
+      const X = m.marks[k] === 1 ? 1 : 2, Y = 3 - X;
+      if (sg[k] !== X) { if (sg[k] === Y) return false; if (!setS(k, X)) return false; }
+      const def = flood(k, j => sg[j] === X), pot = flood(k, j => sg[j] !== Y);
+      const dn = def.length, pn = pot.length;
+      let n = 0;
+      if (m.mval[k]) { n = m.mval[k]; if (dn > n || pn < n) return false; }
+      else {
+        let V = 0;
+        for (let d = Math.max(dn, 1); d <= pn && d <= 6; d++) V |= bit(d);
+        V &= cand[k];
+        if (!V) return false;
+        if (V !== cand[k]) { cand[k] = V; changed = true; }
+        if (pop(V) === 1) { for (let d = 1; d <= 6; d++) if (V & bit(d)) n = d; }
+      }
+      if (n) {
+        if (dn === n) for (const c of def) for (const j of nbr4[c]) if (!sg[j] && !setS(j, Y)) return false;
+        if (pn === n) for (const c of pot) if (!sg[c] && !setS(c, X)) return false;
+      }
+    }
+    if (o.waterConn) {
+      let start = -1, wc = 0;
+      for (let i = 0; i < NN; i++) if (sg[i] === 2) { wc++; if (start < 0) start = i; }
+      if (wc > 1) {
+        const comp = flood(start, j => sg[j] !== 1); let cnt = 0;
+        for (const c of comp) if (sg[c] === 2) cnt++;
+        if (cnt < wc) return false;
+      }
+    }
+    const nkCheck = X => {
+      const seen = new Uint8Array(NN);
+      for (let i = 0; i < NN; i++) if (sg[i] === X && !seen[i]) {
+        const comp = flood(i, j => sg[j] === X); let mc = 0;
+        for (const c of comp) { seen[c] = 1; if (m.marks[c] === X) mc++; }
+        if (mc > 1) return false;
+        if (mc === 0) { const pot = flood(i, j => sg[j] !== 3 - X); if (!pot.some(c => m.marks[c] === X)) return false; }
+      }
+      return true;
+    };
+    if (o.nkLand && !nkCheck(1)) return false;
+    if (o.nkWater && !nkCheck(2)) return false;
+  }
+  return true;
+}
+
+/* cells that definitely break a shading rule (for live feedback) */
+function shadeConflicts(m, grid, sg) {
+  const bad = new Set();
+  if (!m.useShade) return bad;
+  const o = m.sopts;
+  if (o.shadeWhisper) for (const [i, j] of orthPairs)
+    if (sg[i] === 2 && sg[j] === 2 && grid[i] && grid[j] && Math.abs(grid[i] - grid[j]) < m.wd) { bad.add(i); bad.add(j); }
+  if (o.noPool) for (const b of blocks) if (b.every(c => sg[c] === 2)) b.forEach(c => bad.add(c));
+  for (const k of m.mk) {
+    const X = m.marks[k] === 1 ? 1 : 2, Y = 3 - X;
+    if (sg[k] === Y) { bad.add(k); continue; }
+    const seed = sg[k] === X ? k : -1; if (seed < 0) continue;
+    const def = flood(k, j => sg[j] === X), pot = flood(k, j => sg[j] !== Y);
+    const ns = m.mval[k] ? [m.mval[k]] : (grid[k] ? [grid[k]] : [1, 2, 3, 4, 5, 6]);
+    if (!ns.some(n => def.length <= n && n <= pot.length)) { def.forEach(c => bad.add(c)); bad.add(k); }
+  }
+  if (o.waterConn) {
+    const water = []; for (let i = 0; i < NN; i++) if (sg[i] === 2) water.push(i);
+    if (water.length > 1) {
+      const comp = new Set(flood(water[0], j => sg[j] !== 1));
+      water.forEach(c => { if (!comp.has(c)) { bad.add(c); bad.add(water[0]); } });
+    }
+  }
+  const nk = X => {
+    const seen = new Uint8Array(NN);
+    for (let i = 0; i < NN; i++) if (sg[i] === X && !seen[i]) {
+      const comp = flood(i, j => sg[j] === X), mks = [];
+      comp.forEach(c => { seen[c] = 1; if (m.marks[c] === X) mks.push(c); });
+      if (mks.length > 1) mks.forEach(c => bad.add(c));
+      if (!mks.length) { const pot = flood(i, j => sg[j] !== 3 - X); if (!pot.some(c => m.marks[c] === X)) comp.forEach(c => bad.add(c)); }
+    }
+  };
+  if (o.nkLand) nk(1);
+  if (o.nkWater) nk(2);
+  return bad;
+}
+
+/* ---- solver (digits, plus shading when the puzzle uses it) ---- */
+function solvePuzzle(p, o) {
+  o = o || {};
+  const limit = o.limit || 2, rng = o.rng || null, maxNodes = o.maxNodes || 400000;
+  const m = o.model || compile(p);
+  const useShade = m.useShade;
+  const grid = new Int8Array(NN);
+  const sols = [], shades = []; let nodes = 0, aborted = false;
+  const none = () => ({ count: 0, sols, shades, aborted: false, nodes: 0 });
+  function place(cand, i, d) {
+    grid[i] = d; cand[i] = bit(d);
+    const nb = ~bit(d);
+    const pe = m.peers[i];
+    for (let k = 0; k < pe.length; k++) {
+      const j = pe[k];
+      if (grid[j]) { if (grid[j] === d) return false; }
+      else { const c = cand[j] & nb; if (!c) return false; cand[j] = c; }
+    }
+    const bn = m.bin[i];
+    for (let k = 0; k < bn.length; k++) {
+      const b = bn[k], allow = b.tab[d];
+      if (grid[b.j]) { if (!(allow & bit(grid[b.j]))) return false; }
+      else { const c = cand[b.j] & allow; if (!c) return false; cand[b.j] = c; }
+    }
+    const cg = m.cellGroups[i];
+    for (let k = 0; k < cg.length; k++) if (!m.groups[cg[k]].f(grid)) return false;
+    return true;
+  }
+  let cand = m.cand0.slice();
+  const sdom = m.sdom0.slice(), sg0 = new Int8Array(NN);
+  for (let i = 0; i < NN; i++) if (!cand[i]) return none();
+  for (let i = 0; i < NN; i++) {
+    const d = p.givens[i];
+    if (d) {
+      if (!(cand[i] & bit(d))) return none();
+      if (!place(cand, i, d)) return none();
+    }
+  }
+  if (useShade && !shadeProp(m, grid, sg0, sdom, cand)) return none();
+  function dfs(cand, sdom, sg) {
+    if (aborted || sols.length >= limit) return;
+    if (++nodes > maxNodes) { aborted = true; return; }
+    let best = -1, bc = 99, kind = 0;
+    for (let i = 0; i < NN; i++) if (!grid[i]) {
+      const c = pop(cand[i]);
+      if (c < bc) { bc = c; best = i; kind = 1; if (c <= 1) break; }
+    }
+    if (bc === 0) return;
+    if (useShade && bc > 1) {
+      let lk = -1, lc = 99;
+      for (const k of m.mk) if (!m.mval[k] && !grid[k]) { const c = pop(cand[k]); if (c < lc) { lc = c; lk = k; } }
+      if (lk >= 0) { best = lk; kind = 1; }
+      else for (let i = 0; i < NN; i++) if (!sg[i]) { best = i; kind = 2; break; }
+    } else if (useShade && best < 0) {
+      for (let i = 0; i < NN; i++) if (!sg[i]) { best = i; kind = 2; break; }
+    }
+    if (best < 0) {
+      sols.push(Array.from(grid));
+      if (useShade) shades.push(Array.from(sg, v => v === 2 ? 1 : 0));
+      return;
+    }
+    if (kind === 2) {
+      const vs = [1, 2].filter(v => sdom[best] & v);
+      if (rng) shuffle(vs, rng);
+      for (const v of vs) {
+        const nc = cand.slice(), nd = sdom.slice(), ns = sg.slice();
+        nd[best] = v; ns[best] = v;
+        if (shadeProp(m, grid, ns, nd, nc)) dfs(nc, nd, ns);
+        if (aborted || sols.length >= limit) return;
+      }
+      return;
+    }
+    const digits = []; for (let d = 1; d <= 6; d++) if (cand[best] & bit(d)) digits.push(d);
+    if (rng) shuffle(digits, rng);
+    for (const d of digits) {
+      const nc = cand.slice();
+      if (place(nc, best, d)) {
+        if (!useShade) dfs(nc, sdom, sg);
+        else { const nd = sdom.slice(), ns = sg.slice(); if (shadeProp(m, grid, ns, nd, nc)) dfs(nc, nd, ns); }
+      }
+      grid[best] = 0;
+      if (aborted || sols.length >= limit) return;
+    }
+  }
+  dfs(cand, sdom, sg0);
+  return { count: sols.length, sols, shades, aborted, nodes };
+}
+
+/* ---- independent full-grid verifier: returns list of problems ---- */
+function verify(p, g, sh) {
+  const errs = [];
+  const o = p.opts || {};
+  const dist = (cells, label) => { if (new Set(cells.map(i => g[i])).size !== cells.length) errs.push(label); };
+  for (let i = 0; i < NN; i++) if (!g[i] || g[i] < 1 || g[i] > 6) return ['incomplete'];
+  for (let r = 0; r < N; r++) {
+    dist([0, 1, 2, 3, 4, 5].map(c => ix(r, c)), 'row ' + (r + 1));
+    dist([0, 1, 2, 3, 4, 5].map(c => ix(c, r)), 'column ' + (r + 1));
+  }
+  const regs = {};
+  for (let i = 0; i < NN; i++) (regs[p.regions[i]] = regs[p.regions[i]] || []).push(i);
+  const regList = Object.values(regs);
+  regList.forEach((c, k) => dist(c, 'region ' + (k + 1)));
+  for (let i = 0; i < NN; i++) {
+    if (p.givens[i] && p.givens[i] !== g[i]) errs.push('given ' + i);
+    if (p.parity[i] === 2 && g[i] % 2) errs.push('even ' + i);
+    if (p.parity[i] === 1 && g[i] % 2 === 0) errs.push('odd ' + i);
+  }
+  if (o.diag) { dist([0, 1, 2, 3, 4, 5].map(i => ix(i, i)), 'diag1'); dist([0, 1, 2, 3, 4, 5].map(i => ix(i, 5 - i)), 'diag2'); }
+  if (o.disjoint) {
+    for (let k = 0; k < 6; k++) dist(regList.map(cells => cells.slice().sort((a, b) => a - b)[k]), 'disjoint ' + k);
+  }
+  for (let i = 0; i < NN; i++) for (let j = i + 1; j < NN; j++) {
+    const dr = Math.abs(rowOf(i) - rowOf(j)), dc = Math.abs(colOf(i) - colOf(j));
+    if (g[i] !== g[j]) continue;
+    if (o.antiKing && dr <= 1 && dc <= 1) errs.push('king ' + i + ',' + j);
+    if (o.antiKnight && ((dr === 1 && dc === 2) || (dr === 2 && dc === 1))) errs.push('knight ' + i + ',' + j);
+  }
+  for (const cg of p.cages) {
+    dist(cg.cells, 'cage');
+    if (cg.sum != null && cg.sum !== '' && cg.cells.reduce((a, c) => a + g[c], 0) !== +cg.sum) errs.push('cage sum');
+  }
+  for (const ln of p.lines) {
+    const v = ln.cells.map(c => g[c]), L = v.length;
+    if (ln.type === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(v[k] < v[k + 1])) errs.push('thermo'); }
+    else if (ln.type === 'whisper') { for (let k = 0; k + 1 < L; k++) if (Math.abs(v[k] - v[k + 1]) < (+o.whisperDiff || 4)) errs.push('whisper'); }
+    else if (ln.type === 'palindrome') { for (let k = 0; k < L; k++) if (v[k] !== v[L - 1 - k]) errs.push('palindrome'); }
+    else if (ln.type === 'renban') { if (new Set(v).size !== L || Math.max(...v) - Math.min(...v) !== L - 1) errs.push('renban'); }
+    else if (ln.type === 'between') {
+      const lo = Math.min(v[0], v[L - 1]), hi = Math.max(v[0], v[L - 1]);
+      for (let k = 1; k < L - 1; k++) if (!(v[k] > lo && v[k] < hi)) errs.push('between');
+    } else if (ln.type === 'arrow') {
+      let s = 0; for (let k = 1; k < L; k++) s += v[k];
+      if (s !== v[0]) errs.push('arrow');
+    } else if (ln.type === 'regsum') {
+      const sums = regRuns(ln.cells, p.regions).map(run => run.reduce((a, c) => a + g[c], 0));
+      if (new Set(sums).size > 1) errs.push('regsum');
+    }
+  }
+  const has = { cons: new Set(), white: new Set(), black: new Set(), X: new Set(), V: new Set() };
+  const key = (a, b) => a < b ? a + ',' + b : b + ',' + a;
+  for (const e of p.edges) {
+    has[e.t] && has[e.t].add(key(e.a, e.b));
+    const a = g[e.a], b = g[e.b];
+    if ((e.t === 'cons' || e.t === 'white') && Math.abs(a - b) !== 1) errs.push(e.t);
+    if (e.t === 'black' && !(a === 2 * b || b === 2 * a)) errs.push('black');
+    if (e.t === 'X' && a + b !== 10) errs.push('X');
+    if (e.t === 'V' && a + b !== 5) errs.push('V');
+  }
+  for (const [i, j] of orthPairs) {
+    const a = g[i], b = g[j], k = key(i, j);
+    if (o.nonconsec && !has.cons.has(k) && Math.abs(a - b) === 1) errs.push('nonconsec');
+    if (o.kropkiNeg && !has.white.has(k) && !has.black.has(k) && (Math.abs(a - b) === 1 || a === 2 * b || b === 2 * a)) errs.push('kropkiNeg');
+    if (o.xvNeg && !has.X.has(k) && !has.V.has(k) && (a + b === 5 || a + b === 10)) errs.push('xvNeg');
+  }
+  for (const cl of p.clues) {
+    if (cl.val === '' || cl.val == null) continue;
+    const seq = clueSeq(cl), T = +cl.val, v = seq.map(i => g[i]);
+    if (cl.kind === 'lk') { if (v.reduce((a, b) => a + b, 0) !== T) errs.push('lk'); }
+    else if (seq.length === N) {
+      if (cl.kind === 'xs') { const n = v[0]; let s = 0; for (let k = 0; k < n; k++) s += v[k]; if (s !== T) errs.push('xs'); }
+      else if (cl.kind === 'sw') {
+        const a = v.indexOf(1), b = v.indexOf(6); let s = 0;
+        for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k];
+        if (s !== T) errs.push('sw');
+      } else if (cl.kind === 'sk') {
+        let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
+        if (c !== T) errs.push('sk');
+      }
+    }
+  }
+  for (const ol of (p.olines || [])) {
+    const vals = ol.cells.map(([r, c]) => outVal(ol.kind, clueSeq({ kind: ol.kind, r, c }), g)), L = vals.length;
+    if (vals.some(v => v == null)) { errs.push('outside line'); continue; }
+    if (ol.type === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(vals[k] < vals[k + 1])) errs.push('outside thermo'); }
+    else if (ol.type === 'whisper') { for (let k = 0; k + 1 < L; k++) if (Math.abs(vals[k] - vals[k + 1]) < (+ol.diff || 4)) errs.push('outside whisper'); }
+    else if (ol.type === 'arrow') { let s = 0; for (let k = 1; k < L; k++) s += vals[k]; if (s !== vals[0]) errs.push('outside arrow'); }
+    else if (ol.type === 'renban') { if (new Set(vals).size !== L || Math.max(...vals) - Math.min(...vals) !== L - 1) errs.push('outside renban'); }
+    else if (ol.type === 'palindrome') { for (let k = 0; k < L; k++) if (vals[k] !== vals[L - 1 - k]) errs.push('outside palindrome'); }
+  }
+  if (usesShade(p)) verifyShade(p, g, sh || new Array(NN).fill(0), errs);
+  return errs;
+}
+
+/* exact value of an outside clue for a full grid (independent of the solver's range code) */
+function outVal(kind, seq, g) {
+  if (seq.length !== N) return null;
+  const v = seq.map(i => g[i]);
+  if (kind === 'xs') { let s = 0; for (let k = 0; k < v[0]; k++) s += v[k]; return s; }
+  if (kind === 'sw') {
+    const a = v.indexOf(1), b = v.indexOf(6); if (a < 0 || b < 0) return null;
+    let s = 0; for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k]; return s;
+  }
+  let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; } return c;
+}
+
+/* independent shading check: sh[i] = 1 for shaded cells */
+function verifyShade(p, g, sh, errs) {
+  const o = p.opts || {}, marks = p.marks || [], mval = p.mval || [], paint = p.paint || [];
+  const label = col => {              // connected components of cells whose sh equals col
+    const id = new Array(NN).fill(-1); let n = 0;
+    for (let s0 = 0; s0 < NN; s0++) {
+      if (id[s0] >= 0 || sh[s0] !== col) continue;
+      const q = [s0]; id[s0] = n;
+      while (q.length) {
+        const c = q.pop(), r = rowOf(c), cc = colOf(c);
+        for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const r2 = r + dr, c2 = cc + dc;
+          if (!inGrid(r2, c2)) continue;
+          const j = ix(r2, c2);
+          if (id[j] < 0 && sh[j] === col) { id[j] = n; q.push(j); }
+        }
+      }
+      n++;
+    }
+    return { id, n };
+  };
+  const L = label(0), Wt = label(1);
+  const size = (lab, k) => lab.id.filter(x => x === lab.id[k]).length;
+  for (let i = 0; i < NN; i++) {
+    if (marks[i] === 1 && sh[i] !== 0) errs.push('circle must be unshaded');
+    if (marks[i] === 2 && sh[i] !== 1) errs.push('square must be shaded');
+    if ((paint[i] & 2) && sh[i] !== 1) errs.push('painted shade');
+    if ((paint[i] & 4) && sh[i] !== 0) errs.push('painted land');
+    if (marks[i]) {
+      const lab = marks[i] === 1 ? L : Wt, n = mval[i] || g[i];
+      if (lab.id[i] >= 0 && size(lab, i) !== n) errs.push('region size');
+    }
+  }
+  if (o.waterConn && Wt.n > 1) errs.push('water not connected');
+  if (o.noPool) for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++)
+    if (sh[ix(r, c)] && sh[ix(r, c + 1)] && sh[ix(r + 1, c)] && sh[ix(r + 1, c + 1)]) errs.push('pool');
+  if (o.shadeWhisper) for (const [a, b] of orthPairs)
+    if (sh[a] && sh[b] && Math.abs(g[a] - g[b]) < (+o.whisperDiff || 4)) errs.push('shaded whisper');
+  const perRegion = (lab, colour) => {
+    for (let k = 0; k < lab.n; k++) {
+      let cnt = 0; for (let i = 0; i < NN; i++) if (lab.id[i] === k && marks[i] === (colour === 0 ? 1 : 2)) cnt++;
+      if (cnt !== 1) errs.push('one marker per region');
+    }
+  };
+  if (o.nkLand) perRegion(L, 0);
+  if (o.nkWater) perRegion(Wt, 1);
+}
+
+/* cells that definitely break a rule given a partial grid (for live feedback) */
+function conflicts(p, model, grid) {
+  const bad = new Set();
+  for (let i = 0; i < NN; i++) {
+    const d = grid[i]; if (!d) continue;
+    for (const j of model.peers[i]) if (grid[j] === d) { bad.add(i); bad.add(j); }
+    for (const b of model.bin[i]) if (grid[b.j] && !(b.tab[d] & bit(grid[b.j]))) { bad.add(i); bad.add(b.j); }
+  }
+  for (const g of model.groups) if (!g.f(grid)) for (const c of g.cells) if (grid[c]) bad.add(c);
+  return bad;
+}
+
+const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper' };
+
+root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
+  stdRegions, newPuzzle, usesShade, clueRange, outVal, regRuns, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
+  chkSum, chkXsum, chkSandwich, chkSky };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/* ===== Generator ===== */
+(function (root) {
+'use strict';
+const S = root.SX;
+const { N, NN, ix, rowOf, colOf, inGrid, nbr4, nbr8, orthPairs, shuffle, pick, mulberry32,
+        newPuzzle, clonePuzzle, clueSeq, solvePuzzle } = S;
+
+const VARIANTS = [
+  { k: 'diag', label: 'Diagonal', group: 'Grid rules' },
+  { k: 'antiknight', label: 'Anti-knight', group: 'Grid rules' },
+  { k: 'antiking', label: 'Anti-king', group: 'Grid rules' },
+  { k: 'disjoint', label: 'Disjoint groups', group: 'Grid rules' },
+  { k: 'irregular', label: 'Irregular regions', group: 'Grid rules' },
+  { k: 'killer', label: 'Killer cages', group: 'Sums' },
+  { k: 'arrow', label: 'Arrow', group: 'Sums' },
+  { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
+  { k: 'xsum', label: 'X-Sums', group: 'Sums' },
+  { k: 'sandwich', label: 'Sandwich', group: 'Sums' },
+  { k: 'skyscraper', label: 'Skyscraper', group: 'Sums' },
+  { k: 'thermo', label: 'Thermo', group: 'Lines' },
+  { k: 'whisper', label: 'German whispers', group: 'Lines' },
+  { k: 'renban', label: 'Renban', group: 'Lines' },
+  { k: 'palindrome', label: 'Palindrome', group: 'Lines' },
+  { k: 'between', label: 'Between lines', group: 'Lines' },
+  { k: 'regsum', label: 'Region sum lines', group: 'Lines' },
+  { k: 'consecutive', label: 'Consecutive', group: 'Pair clues' },
+  { k: 'kropki', label: 'Kropki', group: 'Pair clues' },
+  { k: 'xv', label: 'XV', group: 'Pair clues' },
+  { k: 'evenodd', label: 'Even / Odd', group: 'Pair clues' },
+  { k: 'outxsum', label: 'X-sums on lines', group: 'Outside lines' },
+  { k: 'outsandwich', label: 'Sandwich on lines', group: 'Outside lines' },
+  { k: 'outsky', label: 'Skyscraper on lines', group: 'Outside lines' },
+  { k: 'nurikabe', label: 'Nurikabe', group: 'Shading' },
+  { k: 'shadeline', label: 'Shaded whispers', group: 'Shading' }
+];
+const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
+
+const MIN_KEEP = { killer: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
+  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, nurikabe: 0, shadeline: 0, regsum: 1,
+  outxsum: 1, outsandwich: 1, outsky: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0 };
+
+function randomRegions(rng) {
+  for (let attempt = 0; attempt < 800; attempt++) {
+    const reg = new Array(NN).fill(-1), size = new Array(6).fill(0);
+    const seeds = shuffle([...Array(NN).keys()], rng).slice(0, 6);
+    seeds.forEach((c, k) => { reg[c] = k; size[k] = 1; });
+    let ok = true;
+    for (let step = 0; step < NN - 6; step++) {
+      const order = shuffle([0, 1, 2, 3, 4, 5], rng).sort((a, b) => size[a] - size[b]);
+      let grown = false;
+      for (const k of order) {
+        if (size[k] >= 6) continue;
+        const opts = [];
+        for (let i = 0; i < NN; i++) if (reg[i] === k) for (const nb of nbr4[i]) if (reg[nb] === -1) opts.push(nb);
+        if (opts.length) { const nb = pick(opts, rng); reg[nb] = k; size[k]++; grown = true; break; }
+      }
+      if (!grown) { ok = false; break; }
+    }
+    if (!ok || reg.some(x => x < 0)) continue;
+    const std = S.stdRegions();
+    let same = true; // avoid returning the standard boxes
+    const map = {};
+    for (let i = 0; i < NN; i++) { if (map[reg[i]] === undefined) map[reg[i]] = std[i]; else if (map[reg[i]] !== std[i]) same = false; }
+    if (same) continue;
+    return reg;
+  }
+  return null;
+}
+
+function ringSlots(kind) {
+  const out = [];
+  if (kind === 'lk') {
+    for (let r = -1; r <= 6; r++) for (let c = -1; c <= 6; c++) {
+      if (inGrid(r, c)) continue;
+      for (const dr of [-1, 1]) for (const dc of [-1, 1]) if (inGrid(r + dr, c + dc)) {
+        const cl = { kind: 'lk', r, c, dr, dc };
+        if (clueSeq(cl).length >= 2) out.push(cl);
+      }
+    }
+  } else {
+    for (let c = 0; c < N; c++) { out.push({ kind, r: -1, c }); out.push({ kind, r: N, c }); }
+    for (let r = 0; r < N; r++) { out.push({ kind, r, c: -1 }); out.push({ kind, r, c: N }); }
+  }
+  return out;
+}
+function clueValue(cl, sol) {
+  const v = clueSeq(cl).map(i => sol[i]);
+  if (cl.kind === 'lk') return v.reduce((a, b) => a + b, 0);
+  if (cl.kind === 'xs') { let s = 0; for (let k = 0; k < v[0]; k++) s += v[k]; return s; }
+  if (cl.kind === 'sw') {
+    const a = v.indexOf(1), b = v.indexOf(6); let s = 0;
+    for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k];
+    return s;
+  }
+  let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
+  return c;
+}
+
+function sampleLines(sol, rng, o) {
+  const lines = [], used = new Set();
+  for (let a = 0; a < o.attempts && lines.length < o.max; a++) {
+    const L = o.minL + Math.floor(rng() * (o.maxL - o.minL + 1));
+    const start = Math.floor(rng() * NN);
+    if (used.has(start)) continue;
+    const path = [start], inPath = new Set(path);
+    while (path.length < L) {
+      const last = path[path.length - 1];
+      const opts = nbr8[last].filter(j => !inPath.has(j) && !used.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j)));
+      if (!opts.length) break;
+      const j = pick(opts, rng); path.push(j); inPath.add(j);
+    }
+    if (path.length >= o.minL && o.finalOK(path.map(k => sol[k]), path)) { lines.push(path); path.forEach(k => used.add(k)); }
+  }
+  return lines;
+}
+
+function killerCages(sol, rng) {
+  const cageOf = new Array(NN).fill(-1), cages = [];
+  for (const s of shuffle([...Array(NN).keys()], rng)) {
+    if (cageOf[s] >= 0) continue;
+    const target = pick([2, 2, 3, 3, 3, 4], rng);
+    const cells = [s], digs = new Set([sol[s]]); cageOf[s] = cages.length;
+    while (cells.length < target) {
+      const opts = [];
+      for (const c of cells) for (const nb of nbr4[c]) if (cageOf[nb] < 0 && !digs.has(sol[nb])) opts.push(nb);
+      if (!opts.length) break;
+      const nb = pick(opts, rng); cells.push(nb); cageOf[nb] = cages.length; digs.add(sol[nb]);
+    }
+    cages.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0) });
+  }
+  return cages.filter(c => c.cells.length >= 2);
+}
+
+/* Nurikabe: islands (unshaded) sized by the digit in their circled cell, one connected water region, no 2x2 pools */
+function makeNurikabe(sol, rng) {
+  for (let att = 0; att < 800; att++) {
+    const st = new Int8Array(NN), circles = [];
+    for (const c of shuffle([...Array(NN).keys()], rng)) {
+      if (st[c]) continue;
+      if (nbr4[c].some(j => st[j] === 1)) continue;
+      const size = sol[c], isl = [c], inIsl = new Set([c]);
+      while (isl.length < size) {
+        const opts = [];
+        for (const a of isl) for (const j of nbr4[a])
+          if (!st[j] && !inIsl.has(j) && !nbr4[j].some(q => st[q] === 1 && !inIsl.has(q))) opts.push(j);
+        if (!opts.length) break;
+        const j = pick(opts, rng); isl.push(j); inIsl.add(j);
+      }
+      if (isl.length < size) continue;
+      isl.forEach(a => { st[a] = 1; });
+      isl.forEach(a => nbr4[a].forEach(j => { if (!st[j]) st[j] = 2; }));
+      circles.push(c);
+    }
+    const sh = Array.from(st, v => v === 1 ? 0 : 1);
+    const water = sh.reduce((a, b) => a + b, 0);
+    if (circles.length < 4 || circles.length > 10 || water < 12 || water > 24) continue;
+    const probe = newPuzzle(); probe.opts.waterConn = true; probe.opts.noPool = true;
+    if (S.verifyShade) { const errs = []; S.verifyShade(probe, sol, sh, errs); if (errs.length) continue; }
+    return { sh, circles };
+  }
+  return null;
+}
+/* Shaded whispers: a shaded path whose touching cells differ by at least wd */
+function makeShadeLine(sol, rng, wd) {
+  for (let att = 0; att < 6000; att++) {
+    const L = 4 + Math.floor(rng() * 5);
+    const path = [Math.floor(rng() * NN)], inP = new Set(path);
+    while (path.length < L) {
+      const last = path[path.length - 1];
+      const opts = nbr4[last].filter(j => !inP.has(j) && Math.abs(sol[j] - sol[last]) >= wd);
+      if (!opts.length) break;
+      const j = pick(opts, rng); path.push(j); inP.add(j);
+    }
+    if (path.length < 4) continue;
+    const sh = new Array(NN).fill(0); path.forEach(c => { sh[c] = 1; });
+    if (orthPairs.some(([a, b]) => sh[a] && sh[b] && Math.abs(sol[a] - sol[b]) < wd)) continue;
+    return { sh, path };
+  }
+  return null;
+}
+
+const OL_TYPES = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome'];
+function sideCell(side, i) { return side === 0 ? [-1, i] : side === 1 ? [N, i] : side === 2 ? [i, -1] : [i, N]; }
+function outOK(type, v, d) {
+  const L = v.length, sum = a => a.reduce((x, y) => x + y, 0);
+  if (type === 'thermo') return v.every((x, i) => i === 0 || x > v[i - 1]);
+  if (type === 'whisper') return v.every((x, i) => i === 0 || Math.abs(x - v[i - 1]) >= d);
+  if (type === 'arrow') return v[0] === sum(v.slice(1));
+  if (type === 'renban') return new Set(v).size === L && Math.max(...v) - Math.min(...v) === L - 1;
+  return v.every((x, i) => x === v[L - 1 - i]);
+}
+function sampleOutLines(kind, sol, rng, usedRing, max) {
+  const lines = [];
+  for (let a = 0; a < 5000 && lines.length < max; a++) {
+    const side = Math.floor(rng() * 4), type = pick(OL_TYPES, rng);
+    const L = type === 'arrow' ? 3 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 3);
+    const start = Math.floor(rng() * (N - L + 1));
+    let cells = []; for (let k = 0; k < L; k++) cells.push(sideCell(side, start + k));
+    if (rng() < 0.5) cells.reverse();
+    if (cells.some(([r, c]) => usedRing.has(r + ',' + c))) continue;
+    const vals = cells.map(([r, c]) => clueValue({ kind, r, c }, sol));
+    const diff = kind === 'sk' ? 3 : 5;
+    if (!outOK(type, vals, diff)) continue;
+    cells.forEach(([r, c]) => usedRing.add(r + ',' + c));
+    lines.push({ type, kind, cells, vals, diff: type === 'whisper' ? diff : undefined });
+  }
+  return lines;
+}
+
+function buildPool(V, sol, rng, neg, whisperDiff, regions) {
+  const items = [];
+  const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
+  const usedRing = new Set();
+  const sum = a => a.reduce((x, y) => x + y, 0);
+
+  if (V.has('killer')) killerCages(sol, rng).forEach(cg => add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })));
+
+  if (V.has('thermo')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 6, attempts: 1200,
+      prefixOK: v => v.length < 2 || v[v.length - 1] > v[v.length - 2], finalOK: () => true })
+      .forEach(cs => add('thermo', p => p.lines.push({ type: 'thermo', cells: cs.slice() })));
+  }
+  if (V.has('arrow')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 4, max: 4, attempts: 3000,
+      prefixOK: v => sum(v.slice(1)) <= v[0], finalOK: v => v[0] >= 3 && sum(v.slice(1)) === v[0] })
+      .forEach(cs => add('arrow', p => p.lines.push({ type: 'arrow', cells: cs.slice() })));
+  }
+  if (V.has('renban')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 5, attempts: 3000,
+      prefixOK: v => new Set(v).size === v.length && Math.max(...v) - Math.min(...v) <= 4 && Math.max(...v) - Math.min(...v) <= v.length + 1,
+      finalOK: v => new Set(v).size === v.length && Math.max(...v) - Math.min(...v) === v.length - 1 })
+      .forEach(cs => add('renban', p => p.lines.push({ type: 'renban', cells: cs.slice() })));
+  }
+  if (V.has('whisper')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 6, max: 5, attempts: 4000,
+      prefixOK: v => v.length < 2 || Math.abs(v[v.length - 1] - v[v.length - 2]) >= whisperDiff, finalOK: () => true })
+      .forEach(cs => add('whisper', p => p.lines.push({ type: 'whisper', cells: cs.slice() })));
+  }
+  if (V.has('palindrome')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 4, attempts: 6000,
+      prefixOK: () => true, finalOK: v => v.every((x, k) => x === v[v.length - 1 - k]) })
+      .forEach(cs => add('palindrome', p => p.lines.push({ type: 'palindrome', cells: cs.slice() })));
+  }
+  if (V.has('between')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 4, attempts: 6000,
+      prefixOK: () => true,
+      finalOK: v => { const lo = Math.min(v[0], v[v.length - 1]), hi = Math.max(v[0], v[v.length - 1]); return v.slice(1, -1).every(x => x > lo && x < hi); } })
+      .forEach(cs => add('between', p => p.lines.push({ type: 'between', cells: cs.slice() })));
+  }
+
+  if (V.has('regsum')) {
+    sampleLines(sol, rng, { minL: 4, maxL: 8, max: 3, attempts: 9000,
+      prefixOK: () => true,
+      finalOK: (v, cells) => { const runs = S.regRuns(cells, regions); if (runs.length < 2 || runs.length > 4) return false;
+        const sums = runs.map(r => r.reduce((a, c) => a + sol[c], 0)); return sums.every(x => x === sums[0]); } })
+      .forEach(cs => add('regsum', p => p.lines.push({ type: 'regsum', cells: cs.slice() })));
+  }
+  const nOutV = ['outxsum', 'outsandwich', 'outsky'].filter(k => V.has(k)).length;
+  [['outxsum', 'xs'], ['outsandwich', 'sw'], ['outsky', 'sk']].forEach(([variant, kind]) => {
+    if (!V.has(variant)) return;
+    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1][nOutV]);
+    lines.forEach(ln => add(variant, p => p.olines.push({ type: ln.type, kind: ln.kind, cells: ln.cells.map(c => c.slice()), diff: ln.diff })));
+    lines.forEach(ln => ln.cells.forEach(([r, c], k) => add(variant + '-c', p => p.clues.push({ kind, r, c, val: ln.vals[k] }))));
+    let n = 0;
+    for (const cl of shuffle(ringSlots(kind), rng)) {
+      if (n >= [0, 8, 4, 2][nOutV]) break;
+      const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
+      usedRing.add(rk); n++;
+      const val = clueValue(cl, sol);
+      add(variant + '-c', p => p.clues.push(Object.assign({}, cl, { val })));
+    }
+  });
+
+  const ringPool = (variant, kind, max, slots) => {
+    let n = 0;
+    for (const cl of shuffle(slots, rng)) {
+      if (n >= max) break;
+      const rk = cl.r + ',' + cl.c;
+      if (usedRing.has(rk)) continue;
+      usedRing.add(rk); n++;
+      const val = clueValue(cl, sol);
+      add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
+    }
+  };
+  const nRing = ['littlekiller', 'xsum', 'sandwich', 'skyscraper'].filter(k => V.has(k)).length || 1;
+  const share = Math.max(3, Math.floor((28 - usedRing.size) / nRing));
+  if (V.has('littlekiller')) ringPool('littlekiller', 'lk', Math.min(16, share), ringSlots('lk'));
+  if (V.has('xsum')) ringPool('xsum', 'xs', Math.min(10, share), ringSlots('xs'));
+  if (V.has('sandwich')) {
+    const slots = [];
+    for (let c = 0; c < N; c++) slots.push({ kind: 'sw', r: rng() < .5 ? -1 : N, c });
+    for (let r = 0; r < N; r++) slots.push({ kind: 'sw', r, c: rng() < .5 ? -1 : N });
+    ringPool('sandwich', 'sw', Math.min(8, share), slots);
+  }
+  if (V.has('skyscraper')) ringPool('skyscraper', 'sk', Math.min(10, share), ringSlots('sk'));
+
+  const key = (a, b) => [a, b];
+  if (V.has('consecutive'))
+    for (const [a, b] of orthPairs) if (Math.abs(sol[a] - sol[b]) === 1)
+      add('consecutive', p => p.edges.push({ a, b, t: 'cons' }), neg.consecutive);
+  if (V.has('kropki'))
+    for (const [a, b] of orthPairs) {
+      const x = sol[a], y = sol[b];
+      const isBlack = x === 2 * y || y === 2 * x, isWhite = Math.abs(x - y) === 1;
+      if (isBlack) add('kropki', p => p.edges.push({ a, b, t: 'black' }), neg.kropki);
+      else if (isWhite) add('kropki', p => p.edges.push({ a, b, t: 'white' }), neg.kropki);
+    }
+  if (V.has('xv'))
+    for (const [a, b] of orthPairs) {
+      const s = sol[a] + sol[b];
+      if (s === 10) add('xv', p => p.edges.push({ a, b, t: 'X' }), neg.xv);
+      else if (s === 5) add('xv', p => p.edges.push({ a, b, t: 'V' }), neg.xv);
+    }
+  if (V.has('evenodd'))
+    for (let i = 0; i < NN; i++) add('evenodd', p => { p.parity[i] = sol[i] % 2 ? 1 : 2; });
+  return items;
+}
+
+function add2(items, variant, i, v) { items.push({ variant, locked: false, apply: p => { p.paint[i] = v === 1 ? 2 : 4; } }); }
+function assemble(base, items, givens, sol) {
+  const p = clonePuzzle(base);
+  items.forEach(it => it.apply(p));
+  givens.forEach(i => { p.givens[i] = sol[i]; });
+  return p;
+}
+const isUnique = (p, maxNodes) => { const r = solvePuzzle(p, { limit: 2, maxNodes: maxNodes || 60000 }); return r.count === 1 && !r.aborted; };
+
+function tryGenerate(V, diff, rng, deadline, spec) {
+  const base = newPuzzle();
+  if (V.has('irregular')) { const rg = randomRegions(rng); if (!rg) return null; base.regions = rg; }
+  base.opts.diag = V.has('diag');
+  base.opts.antiKnight = V.has('antiknight');
+  base.opts.antiKing = V.has('antiking');
+  base.opts.disjoint = V.has('disjoint') && !V.has('irregular');
+  const whisperDiff = spec.whisperDiff || 4;
+  base.opts.whisperDiff = whisperDiff;
+  const negChoice = k => spec.negative && spec.negative[k] !== undefined ? !!spec.negative[k] : rng() < 0.5;
+  const neg = { consecutive: negChoice('consecutive'), kropki: negChoice('kropki'), xv: negChoice('xv') };
+  base.opts.nonconsec = V.has('consecutive') && neg.consecutive;
+  base.opts.kropkiNeg = V.has('kropki') && neg.kropki;
+  base.opts.xvNeg = V.has('xv') && neg.xv;
+
+  const r0 = solvePuzzle(base, { limit: 1, rng, maxNodes: 40000 });
+  if (!r0.count) return null;
+  const sol = r0.sols[0];
+
+  let ssol = null;
+  if (V.has('nurikabe')) {
+    const nk = makeNurikabe(sol, rng); if (!nk) return null;
+    base.opts.waterConn = true; base.opts.noPool = true; base.opts.nkLand = true;
+    nk.circles.forEach(c => { base.marks[c] = 1; });
+    ssol = nk.sh;
+  } else if (V.has('shadeline')) {
+    const sl = makeShadeLine(sol, rng, whisperDiff); if (!sl) return null;
+    base.opts.waterConn = true; base.opts.shadeWhisper = true;
+    base.marks[sl.path[0]] = 2; base.mval[sl.path[0]] = sl.path.length;
+    ssol = sl.sh;
+  }
+  const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions);
+  if (ssol) {
+    const kind = V.has('nurikabe') ? 'nurikabe' : 'shadeline';
+    for (let i = 0; i < NN; i++) if (!base.marks[i]) add2(items, kind, i, ssol[i] ? 1 : 2);
+  }
+  const usedVariants = Array.from(V).filter(k => MIN_KEEP[k] !== undefined);
+  for (const k of usedVariants) {
+    const need = Math.min(MIN_KEEP[k], 2);
+    if (items.filter(it => it.variant === k).length < need) return null;
+  }
+  const hasItems = items.length > 0;
+  const g0 = hasItems ? { easy: 8, medium: 3, hard: 0 }[diff] : { easy: 16, medium: 12, hard: 0 }[diff];
+  const floorG = hasItems ? { easy: 8, medium: 3, hard: 0 }[diff] : { easy: 18, medium: 14, hard: 0 }[diff];
+
+  let inc = new Set(items);
+  const givens = new Set(shuffle([...Array(NN).keys()], rng).slice(0, g0));
+  const build = () => assemble(base, items.filter(it => inc.has(it)), givens, sol);
+
+  // A: make unique
+  let guard = 0;
+  while (!isUnique(build(), 80000)) {
+    const rest = [...Array(NN).keys()].filter(i => !givens.has(i));
+    if (!rest.length || ++guard > NN) return null;
+    givens.add(pick(rest, rng));
+    if (Date.now() > deadline + 4000) return null;
+  }
+  // C: drop redundant givens
+  for (const g of shuffle(Array.from(givens), rng)) {
+    if (givens.size <= floorG || Date.now() > deadline) break;
+    givens.delete(g);
+    if (!isUnique(build(), 50000)) givens.add(g);
+  }
+  // B: drop redundant constraints
+  if (hasItems) {
+    const removable = shuffle(items.filter(it => !it.locked), rng);
+    let budget = diff === 'easy' ? Math.floor(removable.length * 0.4) : 1e9;
+    for (const it of removable) {
+      if (budget <= 0 || Date.now() > deadline) break;
+      const cnt = items.filter(x => x.variant === it.variant && inc.has(x)).length;
+      const mkp = MIN_KEEP[it.variant];
+      if (cnt <= (mkp === undefined ? 1 : mkp)) continue;
+      inc.delete(it);
+      if (isUnique(build(), 50000)) budget--; else inc.add(it);
+    }
+  }
+  const p = build();
+  p.sol = sol.slice();
+  p.ssol = ssol ? ssol.slice() : null;
+  const labels = [];
+  V.forEach(k => { if (LABEL[k]) labels.push(LABEL[k]); });
+  p.title = labels.length ? labels.join(' + ') : 'Classic';
+  p.meta = { variants: Array.from(V), difficulty: diff };
+  const chk = S.verify(p, sol, ssol || undefined);
+  if (chk.length) return null;
+  return p;
+}
+
+function generate(spec, seed, budgetMs) {
+  const rng = mulberry32(seed == null ? (Date.now() & 0x7fffffff) : seed);
+  const deadline = Date.now() + (budgetMs || 9000);
+  const V = new Set(spec.variants);
+  const diff = spec.difficulty || 'medium';
+  for (let attempt = 0; attempt < 80 && Date.now() < deadline; attempt++) {
+    const p = tryGenerate(V, diff, rng, deadline, spec);
+    if (p) return p;
+  }
+  return null;
+}
+
+root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
+root.SX.randomRegions = randomRegions;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>window.SX_LIB = [{"v":3,"title":"Classic","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[2,3,5,6,0,0,0,4,0,0,0,5,1,6,3,0,5,0,5,0,0,0,0,0,0,5,0,2,0,0,3,0,0,5,0,6],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":[],"difficulty":"easy"}},{"v":3,"title":"Little Killer + X-Sums","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,6,0,0,0,0,0,0,0,1,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":3,"dr":1,"dc":-1,"val":10},{"kind":"lk","r":-1,"c":5,"dr":1,"dc":-1,"val":20},{"kind":"lk","r":1,"c":-1,"dr":1,"dc":1,"val":16},{"kind":"lk","r":-1,"c":-1,"dr":1,"dc":1,"val":24},{"kind":"lk","r":6,"c":5,"dr":-1,"dc":-1,"val":20},{"kind":"xs","r":-1,"c":4,"val":21},{"kind":"xs","r":4,"c":-1,"val":21}],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,1,2,4,6,3,3,4,6,1,2,5,4,6,5,2,3,1,1,2,3,5,4,6,6,5,4,3,1,2,2,3,1,6,5,4],"ssol":null,"meta":{"variants":["littlekiller","xsum"],"difficulty":"medium"}},{"v":3,"title":"Killer + Diagonal","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,6,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[12,18,6],"sum":10},{"cells":[33,27,28],"sum":8},{"cells":[32,26],"sum":7}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,4,2,6,4,3,2,6,1,5,1,6,5,3,4,2,2,4,6,1,5,3,3,5,1,2,6,4],"ssol":null,"meta":{"variants":["killer","diag"],"difficulty":"medium"}},{"v":3,"title":"Thermo + Even/Odd","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,6,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[0,6,12]},{"type":"thermo","cells":[32,31,26]}],"edges":[],"parity":[0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,2,1,0,0,0,2,0,0,2,0,0,0,2,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":null,"meta":{"variants":["thermo","evenodd"],"difficulty":"medium"}},{"v":3,"title":"Arrow + Kropki","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,4,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"arrow","cells":[24,31,30]}],"edges":[{"a":3,"b":4,"t":"black"},{"a":4,"b":5,"t":"white"},{"a":10,"b":16,"t":"white"},{"a":13,"b":19,"t":"black"},{"a":14,"b":15,"t":"black"},{"a":15,"b":16,"t":"white"},{"a":19,"b":20,"t":"white"},{"a":27,"b":28,"t":"black"},{"a":32,"b":33,"t":"white"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,5,1,4,2,3,4,3,2,6,5,1,1,2,6,3,4,5,5,4,3,1,6,2,3,6,5,2,1,4,2,1,4,5,3,6],"ssol":null,"meta":{"variants":["arrow","kropki"],"difficulty":"medium"}},{"v":3,"title":"XV + Consecutive","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":2,"b":3,"t":"cons"},{"a":6,"b":12,"t":"cons"},{"a":8,"b":14,"t":"cons"},{"a":10,"b":11,"t":"cons"},{"a":15,"b":21,"t":"cons"},{"a":26,"b":32,"t":"cons"},{"a":32,"b":33,"t":"cons"},{"a":3,"b":4,"t":"V"},{"a":4,"b":10,"t":"X"},{"a":12,"b":18,"t":"X"},{"a":23,"b":29,"t":"V"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,6,2,1,4,3,3,1,4,2,6,5,4,5,3,6,1,2,6,2,1,5,3,4,2,4,6,3,5,1,1,3,5,4,2,6],"ssol":null,"meta":{"variants":["xv","consecutive"],"difficulty":"hard"}},{"v":3,"title":"German Whispers + Renban","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[6,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"renban","cells":[14,21,15,10]},{"type":"renban","cells":[20,26,19]},{"type":"whisper","cells":[11,16,21]},{"type":"whisper","cells":[32,25,24]},{"type":"whisper","cells":[6,7,0,1]},{"type":"whisper","cells":[35,28,23]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["whisper","renban"],"difficulty":"medium"}},{"v":3,"title":"Sandwich + Skyscraper","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,2,0,3,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":-1,"c":0,"val":0},{"kind":"sw","r":4,"c":-1,"val":0},{"kind":"sw","r":6,"c":1,"val":9},{"kind":"sw","r":-1,"c":2,"val":11},{"kind":"sk","r":3,"c":6,"val":2},{"kind":"sk","r":-1,"c":1,"val":3},{"kind":"sk","r":-1,"c":5,"val":2},{"kind":"sk","r":5,"c":-1,"val":4},{"kind":"sk","r":-1,"c":4,"val":1}],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":null,"meta":{"variants":["sandwich","skyscraper"],"difficulty":"medium"}},{"v":3,"title":"Anti-knight + Kropki","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":true,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":2,"b":3,"t":"black"},{"a":10,"b":11,"t":"black"},{"a":11,"b":17,"t":"black"},{"a":12,"b":13,"t":"black"},{"a":17,"b":23,"t":"white"},{"a":18,"b":24,"t":"white"},{"a":28,"b":34,"t":"white"},{"a":30,"b":31,"t":"black"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,4,2,1,5,3,3,5,1,6,4,2,2,1,5,3,6,4,4,6,3,2,1,5,5,3,6,4,2,1,1,2,4,5,3,6],"ssol":null,"meta":{"variants":["antiknight","kropki"],"difficulty":"hard"}},{"v":3,"title":"Irregular + Killer","regions":[2,2,2,5,5,5,2,2,2,5,5,5,3,3,3,1,1,1,3,0,0,1,1,4,3,0,0,4,1,4,3,0,0,4,4,4],"givens":[0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,4,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[26,25,20,31],"sum":13},{"cells":[1,2,7,0],"sum":14},{"cells":[4,5,10],"sum":9},{"cells":[14,13,8],"sum":8},{"cells":[30,24],"sum":7},{"cells":[28,34],"sum":10}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[1,4,6,2,3,5,2,3,5,4,1,6,6,2,1,3,5,4,5,6,4,1,2,3,4,1,3,5,6,2,3,5,2,6,4,1],"ssol":null,"meta":{"variants":["irregular","killer"],"difficulty":"medium"}},{"v":3,"title":"Palindrome + Between + Thermo","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[32,27,26]},{"type":"thermo","cells":[1,6,0]},{"type":"thermo","cells":[21,14,8]},{"type":"thermo","cells":[12,18,19,13]},{"type":"palindrome","cells":[24,18,13,8,1]},{"type":"palindrome","cells":[9,10,16]},{"type":"palindrome","cells":[32,33,28]},{"type":"between","cells":[24,30,25]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["palindrome","between","thermo"],"difficulty":"medium"}},{"v":3,"title":"Disjoint Groups + XV","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,2],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":true,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":0,"b":1,"t":"V"},{"a":6,"b":7,"t":"X"},{"a":7,"b":8,"t":"V"},{"a":13,"b":14,"t":"V"},{"a":15,"b":16,"t":"X"},{"a":19,"b":20,"t":"X"},{"a":27,"b":28,"t":"V"},{"a":28,"b":29,"t":"X"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,5,2,3,4,6,1,1,6,4,2,5,3,3,5,2,1,4,6,4,1,6,5,3,2],"ssol":null,"meta":{"variants":["disjoint","xv"],"difficulty":"medium"}},{"v":3,"title":"Anti-king + Little Killer + Sandwich","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":true,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":3,"dr":1,"dc":-1,"val":9},{"kind":"lk","r":-1,"c":5,"dr":1,"dc":-1,"val":20},{"kind":"lk","r":4,"c":-1,"dr":-1,"dc":1,"val":17},{"kind":"sw","r":-1,"c":4,"val":0},{"kind":"sw","r":2,"c":-1,"val":14}],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,3,6,2,1,5,1,2,4,5,3,6,6,5,3,1,4,2,3,4,2,6,5,1,5,6,1,4,2,3],"ssol":null,"meta":{"variants":["antiking","littlekiller","sandwich"],"difficulty":"medium"}},{"v":3,"title":"Diagonal + Little Killer + X-Sums","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":2,"dr":1,"dc":1,"val":9},{"kind":"lk","r":4,"c":-1,"dr":-1,"dc":1,"val":16},{"kind":"lk","r":6,"c":3,"dr":-1,"dc":-1,"val":15},{"kind":"xs","r":-1,"c":5,"val":12},{"kind":"xs","r":6,"c":5,"val":10},{"kind":"xs","r":-1,"c":3,"val":14}],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,5,1,2,3,4,1,6,2,5,6,5,2,4,3,1,1,3,4,2,5,6,5,2,6,1,4,3],"ssol":null,"meta":{"variants":["diag","littlekiller","xsum"],"difficulty":"hard"}},{"v":3,"title":"Arrow + Thermo + Renban + Even/Odd","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[6,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[32,27,26]},{"type":"thermo","cells":[21,14,8]},{"type":"arrow","cells":[13,14,8]},{"type":"arrow","cells":[29,22,21]},{"type":"renban","cells":[15,22,27,26,25]}],"edges":[],"parity":[0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["arrow","thermo","renban","evenodd"],"difficulty":"medium"}},{"v":3,"title":"Nurikabe","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,1,0,0,1],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,4,0,0,0,0,0,0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,2,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":[0,0,1,0,0,0,0,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,0,1,0],"meta":{"variants":["nurikabe"],"difficulty":"medium"}},{"v":3,"title":"Shaded Whispers","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[2,0,0,3,0,0,0,0,0,0,5,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":true},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":[0,1,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"meta":{"variants":["shadeline"],"difficulty":"medium"}},{"v":3,"title":"Nurikabe + Killer","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[29,35,34],"sum":12},{"cells":[19,13,7],"sum":14},{"cells":[0,6,12,18],"sum":14},{"cells":[21,20],"sum":8}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,2,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":[1,1,0,1,1,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,0],"meta":{"variants":["nurikabe","killer"],"difficulty":"medium"}},{"v":3,"title":"Shaded Whispers + Diagonal","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":true},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,2,0,0,0,0,0,0,0,0],"sol":[2,1,4,5,6,3,5,3,6,1,2,4,3,6,5,4,1,2,4,2,1,6,3,5,1,5,3,2,4,6,6,4,2,3,5,1],"ssol":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"meta":{"variants":["shadeline","diag"],"difficulty":"hard"}},{"v":3,"title":"Nurikabe + Thermo","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[10,3,9,4]},{"type":"thermo","cells":[18,19,26]},{"type":"thermo","cells":[2,7,8,13]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":[1,1,0,1,1,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,0],"meta":{"variants":["nurikabe","thermo"],"difficulty":"hard"}},{"v":3,"title":"Region Sum Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,3,0,0,1,0,6,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"regsum","cells":[3,10,16,15]},{"type":"regsum","cells":[34,27,32,26,31]},{"type":"regsum","cells":[25,19,14,7,6]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["regsum"],"difficulty":"medium"}},{"v":3,"title":"Region Sums + Irregular","regions":[2,2,2,2,1,1,5,5,2,2,1,1,5,5,0,0,4,1,5,0,0,0,4,1,5,0,3,3,4,4,3,3,3,3,4,4],"givens":[0,3,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"regsum","cells":[7,6,1,0]},{"type":"regsum","cells":[3,8,14,15]},{"type":"regsum","cells":[28,34,33,32,27]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,3,1,5,2,4,3,6,2,4,5,1,2,5,4,3,1,6,1,2,5,6,4,3,4,1,3,2,6,5,5,4,6,1,3,2],"ssol":null,"meta":{"variants":["regsum","irregular"],"difficulty":"medium"}},{"v":3,"title":"X-Sums on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,3,0,0,4,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":6,"c":1,"val":9},{"kind":"xs","r":2,"c":6,"val":3},{"kind":"xs","r":3,"c":6,"val":13},{"kind":"xs","r":-1,"c":2,"val":6},{"kind":"xs","r":-1,"c":3,"val":1},{"kind":"xs","r":-1,"c":5,"val":10},{"kind":"xs","r":5,"c":-1,"val":1}],"olines":[{"type":"whisper","kind":"xs","cells":[[-1,1],[-1,2],[-1,3]],"diff":5}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,6,2,1,4,3,3,1,4,2,6,5,4,5,3,6,1,2,6,2,1,5,3,4,2,4,6,3,5,1,1,3,5,4,2,6],"ssol":null,"meta":{"variants":["outxsum"],"difficulty":"medium"}},{"v":3,"title":"Sandwich on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,6,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":6,"c":1,"val":3},{"kind":"sw","r":-1,"c":2,"val":7},{"kind":"sw","r":-1,"c":3,"val":0},{"kind":"sw","r":-1,"c":4,"val":3},{"kind":"sw","r":1,"c":6,"val":12},{"kind":"sw","r":5,"c":6,"val":5}],"olines":[{"type":"thermo","kind":"sw","cells":[[-1,0],[-1,1],[-1,2]]}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,4,6,2,1,5,2,1,5,4,3,6,4,3,2,5,6,1,5,6,1,3,4,2,6,5,4,1,2,3,1,2,3,6,5,4],"ssol":null,"meta":{"variants":["outsandwich"],"difficulty":"medium"}},{"v":3,"title":"Region Sums + Thermo + X-Sums on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[9,3,4]},{"type":"thermo","cells":[31,30,24]},{"type":"regsum","cells":[35,34,33,27,20,19,13,18]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":-1,"c":4,"val":21},{"kind":"xs","r":-1,"c":3,"val":9},{"kind":"xs","r":5,"c":-1,"val":12},{"kind":"xs","r":3,"c":-1,"val":1},{"kind":"xs","r":6,"c":0,"val":13},{"kind":"xs","r":6,"c":1,"val":1},{"kind":"xs","r":6,"c":2,"val":20},{"kind":"xs","r":6,"c":3,"val":6},{"kind":"xs","r":6,"c":4,"val":10}],"olines":[{"type":"whisper","kind":"xs","cells":[[5,-1],[4,-1],[3,-1],[2,-1]],"diff":5}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,4,1,3,6,2,3,2,6,1,4,5,2,6,4,5,1,3,1,5,3,6,2,4,6,3,2,4,5,1,4,1,5,2,3,6],"ssol":null,"meta":{"variants":["regsum","thermo","outxsum"],"difficulty":"hard"}}];</script>
+<script>/* ===== UI ===== */
+(function () {
+'use strict';
+const X = window.SX;
+const { N, NN, ix, rowOf, colOf, bit } = X;
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const CELL = 60, RING = 54, W = 6 * CELL + 2 * RING;
+const cx = i => RING + (colOf(i) + .5) * CELL, cy = i => RING + (rowOf(i) + .5) * CELL;
+const gx = c => RING + c * CELL, gy = r => RING + r * CELL;
+const inCell = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+
+const app = {
+  puzzle: null, tab: 'play', tool: 'given', sel: new Set(), selCage: -1, selRing: null,
+  model: null, solInfo: null, play: null, drag: null, paint: 0, showConflicts: true, autoClear: true,
+  genSel: new Set(['littlekiller', 'xsum']), genDiff: 'medium', whisperDiff: 4, busy: false,
+  paintCol: 1, selMark: -1, olType: 'thermo', olKind: 'xs', olDiff: 5
+};
+const PAL = ['Clear', 'Shade', 'Land', 'Red', 'Amber', 'Green', 'Blue', 'Purple'];
+
+/* ---------- puzzle helpers ---------- */
+function normalize(o) {
+  const b = X.newPuzzle();
+  const p = Object.assign(b, o || {});
+  p.opts = Object.assign(X.newPuzzle().opts, (o && o.opts) || {});
+  const arr36 = (a, d) => Array.isArray(a) && a.length === NN ? a.map(v => +v || 0) : new Array(NN).fill(d);
+  p.regions = Array.isArray(o && o.regions) && o.regions.length === NN ? o.regions.map(Number) : X.stdRegions();
+  p.givens = arr36(o && o.givens, 0); p.parity = arr36(o && o.parity, 0);
+  p.marks = arr36(o && o.marks, 0); p.mval = arr36(o && o.mval, 0); p.paint = arr36(o && o.paint, 0);
+  if (!o || (o.v || 1) < 3) p.paint = p.paint.map(x => x >= 1 && x <= 7 ? 1 << x : 0);
+  p.v = 3;
+  p.ssol = Array.isArray(o && o.ssol) && o.ssol.length === NN ? o.ssol : null;
+  p.cages = ((o && o.cages) || []).filter(c => Array.isArray(c.cells) && c.cells.length && c.cells.every(i => i >= 0 && i < NN));
+  p.lines = ((o && o.lines) || []).filter(l => Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(i => i >= 0 && i < NN));
+  p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN);
+  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'sw', 'sk'].includes(c.kind));
+  const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
+  p.olines = ((o && o.olines) || []).filter(l => ['thermo', 'arrow', 'whisper', 'renban', 'palindrome'].includes(l.type) && ['xs', 'sw', 'sk'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
+  p.title = String((o && o.title) || ''); p.sol = Array.isArray(o && o.sol) && o.sol.length === NN ? o.sol : null;
+  p.meta = (o && o.meta) || null;
+  return p;
+}
+const hashOf = p => JSON.stringify([p.regions, p.givens, p.opts, p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines]);
+const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
+const getModel = () => app.model || (app.model = X.compile(app.puzzle));
+function getSol() {
+  if (app.solInfo) return app.solInfo;
+  const p = app.puzzle, us = X.usesShade(p);
+  if (p.sol && (!us || p.ssol) && X.verify(p, p.sol, us ? p.ssol : undefined).length === 0) return app.solInfo = { sol: p.sol, shade: p.ssol, count: 1 };
+  const r = X.solvePuzzle(p, { limit: 2, maxNodes: 1500000, model: getModel() });
+  return app.solInfo = { sol: r.sols[0] || null, shade: (r.shades && r.shades[0]) || null, count: r.count, aborted: r.aborted };
+}
+function effGrid() {
+  const p = app.puzzle, P = app.play, g = new Int8Array(NN);
+  for (let i = 0; i < NN; i++) g[i] = p.givens[i] || (P ? P.vals[i] : 0);
+  return g;
+}
+
+function effShade() {
+  const p = app.puzzle, P = app.play, sg = new Int8Array(NN);
+  for (let i = 0; i < NN; i++) {
+    const pc = p.paint[i], pl = P ? P.col[i] : 0;
+    if (p.marks[i] === 2 || (pc & 2)) sg[i] = 2;
+    else if (p.marks[i] === 1 || (pc & 4)) sg[i] = 1;
+    else if (pl & 2) sg[i] = 2;
+    else if (pl & 4) sg[i] = 1;
+  }
+  return sg;
+}
+const shadeFinal = () => Array.from(effShade(), v => v === 2 ? 1 : 0);
+
+function variantLabels(p) {
+  const L = [], o = p.opts, has = new Set();
+  if (!isStd(p)) L.push('Irregular');
+  if (o.diag) L.push('Diagonal'); if (o.antiKnight) L.push('Anti-knight'); if (o.antiKing) L.push('Anti-king');
+  if (o.disjoint) L.push('Disjoint groups');
+  if (p.cages.length) L.push('Killer');
+  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum' };
+  p.lines.forEach(l => has.add(nm[l.type]));
+  has.forEach(x => x && L.push(x));
+  const e = new Set(p.edges.map(x => x.t));
+  if (e.has('cons')) L.push('Consecutive'); if (e.has('white') || e.has('black')) L.push('Kropki'); if (e.has('X') || e.has('V')) L.push('XV');
+  if (p.parity.some(x => x)) L.push('Even/Odd');
+  const nk = p.marks.some(x => x) || o.nkLand || o.nkWater;
+  if (nk) L.push('Nurikabe');
+  if (o.shadeWhisper) L.push('Shaded whispers');
+  if (!nk && !o.shadeWhisper && X.usesShade(p)) L.push('Shading');
+  const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
+  if (p.olines.length) L.push('Outside lines');
+  if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper');
+  return L;
+}
+function rulesFor(p) {
+  const o = p.opts, R = [];
+  R.push(`Fill the grid with 1–6 so no digit repeats in any row, column or ${isStd(p) ? '2×3 box' : 'outlined region'}.`);
+  if (o.diag) R.push('Both long diagonals also contain 1–6 exactly once.');
+  if (o.antiKnight) R.push('Cells a chess knight’s move apart never hold the same digit.');
+  if (o.antiKing) R.push('Cells touching at a side or corner never hold the same digit.');
+  if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
+  if (p.cages.length) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
+  const lt = new Set(p.lines.map(l => l.type));
+  if (lt.has('thermo')) R.push('Thermometers: digits strictly increase from the bulb to the tip.');
+  if (lt.has('arrow')) R.push('Arrows: the digit in the circle equals the sum of the digits along the arrow.');
+  if (lt.has('whisper')) R.push(`German whispers (green): neighboring digits on the line differ by at least ${o.whisperDiff || 4}.`);
+  if (lt.has('renban')) R.push('Renban (purple): the line holds a set of consecutive digits, in any order, with no repeats.');
+  if (lt.has('palindrome')) R.push('Palindrome (blue): the line reads the same in both directions.');
+  if (lt.has('regsum')) R.push('Region sum lines (coral): cut the line wherever it crosses a region border. Every stretch inside one region has the same digit sum.');
+  if (lt.has('between')) R.push('Between lines (gold): digits on the line lie strictly between the digits in its two end circles.');
+  const et = new Set(p.edges.map(e => e.t));
+  if (et.has('cons') || o.nonconsec) R.push('Bars between cells: those digits are consecutive.' + (o.nonconsec ? ' Every consecutive pair is marked; unmarked neighbors are never consecutive.' : ''));
+  if (et.has('white') || et.has('black') || o.kropkiNeg) R.push('White dot: digits differ by 1. Black dot: one digit is double the other (1 and 2 use black).' + (o.kropkiNeg ? ' Every such pair is marked.' : ''));
+  if (et.has('X') || et.has('V') || o.xvNeg) R.push('X: neighboring digits sum to 10. V: neighboring digits sum to 5.' + (o.xvNeg ? ' Every such pair is marked.' : ''));
+  if (p.parity.some(x => x)) R.push('Grey squares hold even digits. Grey circles hold odd digits.');
+  const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
+  if (ck.has('lk')) R.push('Little Killer (arrows): digits along the diagonal in the arrow’s direction sum to the clue. Digits may repeat.');
+  if (ck.has('xs')) R.push('X-Sums (X): if the digit nearest the clue is n, the first n digits in that line sum to the clue.');
+  if (ck.has('sw')) R.push('Sandwich (S): digits between the 1 and the 6 in that row or column sum to the clue.');
+  if (ck.has('sk')) R.push('Skyscraper (▲): the clue counts the digits visible from that side; a larger digit hides smaller ones behind it.');
+  if (p.olines.length) {
+    R.push('Outside lines: squares outside the grid joined by a line hold clues (marked X, S or ▲) whose values are not all shown. Work the values out from the grid. Hidden values obey the line’s rule:');
+    const ot = new Set(p.olines.map(l => l.type));
+    if (ot.has('thermo')) R.push('Thermo: the clue values strictly increase from the bulb to the tip.');
+    if (ot.has('arrow')) R.push('Arrow: the clue in the circle equals the sum of the clues along the arrow.');
+    if (ot.has('whisper')) R.push(`Whisper: neighboring clue values differ by at least ${Array.from(new Set(p.olines.filter(l => l.type === 'whisper').map(l => l.diff || 4))).join(' or ')}.`);
+    if (ot.has('renban')) R.push('Renban: the clue values are consecutive numbers in any order, with no repeats.');
+    if (ot.has('palindrome')) R.push('Palindrome: the clue values read the same in both directions.');
+  }
+  if (X.usesShade(p)) {
+    R.push('Shading: also color cells with the Shade color. Digits go in every cell, shaded or not. Shaded cells that share an edge form a region; unshaded cells that share an edge form an island.');
+    if (p.marks.some(x => x === 1)) R.push('Circled cells are unshaded. A circled digit equals the number of cells in its island, or the fixed number shown in the corner.');
+    if (p.marks.some(x => x === 2)) R.push('Squared cells are shaded. A squared digit equals the number of cells in its shaded region, or the fixed number shown in the corner.');
+    if (o.waterConn) R.push('All shaded cells form one edge-connected region.');
+    if (o.noPool) R.push('No 2×2 block is entirely shaded.');
+    if (o.nkLand) R.push('Every island contains exactly one circle.');
+    if (o.nkWater) R.push('Every shaded region contains exactly one square.');
+    if (o.shadeWhisper) R.push(`Shaded whispers: shaded cells that share an edge differ by at least ${o.whisperDiff || 4}. The shaded cells trace German whisper lines.`);
+    if (p.paint.some(x => x & 2)) R.push('Cells that start shaded are given.');
+    if (p.paint.some(x => x & 4)) R.push('Cells that start with the Land color are unshaded.');
+    R.push('Optional: mark cells you know are unshaded with the Land color.');
+  }
+  return R;
+}
+
+/* ---------- persistence ---------- */
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+
+/* ---------- play state ---------- */
+function resetPlay() {
+  app.ringSel = null;
+  app.play = { vals: new Array(NN).fill(0), cands: new Array(NN).fill(0), col: new Array(NN).fill(0), ring: {}, undo: [], redo: [], pencil: false,
+    elapsed: 0, started: false, solved: false, revealed: false, usedReveal: false, hints: 0, recorded: false, wrong: new Set(), hash: hashOf(app.puzzle) };
+}
+function snapshot() { const P = app.play; return { vals: P.vals.slice(), cands: P.cands.slice(), col: P.col.slice(), ring: JSON.parse(JSON.stringify(P.ring)) }; }
+function pushUndo() { const P = app.play; P.started = true; P.undo.push(snapshot()); if (P.undo.length > 300) P.undo.shift(); P.redo = []; }
+function undo() {
+  const P = app.play; if (!P.undo.length) return;
+  P.redo.push(snapshot()); const s = P.undo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.solved = false; P.wrong.clear(); renderAll();
+}
+function redo() {
+  const P = app.play; if (!P.redo.length) return;
+  P.undo.push(snapshot()); const s = P.redo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; renderAll();
+}
+function fmtTime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function flash(text, kind) { const m = $('#msg'); m.textContent = text || ''; m.className = 'msg ' + (kind || ''); }
+
+function afterPlayChange() {
+  const P = app.play, p = app.puzzle;
+  P.wrong.clear();
+  const g = effGrid(), us = X.usesShade(p);
+  if (g.every(v => v)) {
+    const errs = X.verify(p, Array.from(g), us ? shadeFinal() : undefined);
+    if (!errs.length) {
+      P.solved = true;
+      const rec = !P.recorded && !P.usedReveal ? recordSolve() : null;
+      P.recorded = true;
+      flash('Solved in ' + fmtTime(P.elapsed) + '.' + (rec && rec.isBest ? ' Best time for this puzzle.' : '') + (P.usedReveal ? ' Not saved to history: the solution was shown.' : ''), 'ok');
+    }
+    else {
+      const sol = us ? getSol() : null;
+      const dErr = us && sol && sol.shade ? X.verify(p, Array.from(g), sol.shade) : errs;
+      flash(dErr.length ? 'The grid is full but breaks a rule. Conflicts are highlighted.' : 'The digits are complete. The shading does not satisfy the rules yet.', 'warn');
+    }
+  } else if ($('#msg').className.includes('ok') || $('#msg').className.includes('warn')) flash('');
+  renderAll();
+}
+
+function applyColor(k) {
+  if (app.tab === 'edit') return;
+  const P = app.play, p = app.puzzle;
+  if (P.solved && !P.revealed) return;
+  let cells = Array.from(app.sel);
+  if (k === 1 || k === 2) cells = cells.filter(i => !p.marks[i] && !(p.paint[i] & 6));
+  if (!cells.length) return;
+  pushUndo();
+  if (k === 0) cells.forEach(i => { P.col[i] = 0; });
+  else {
+    const all = cells.every(i => (P.col[i] >> k) & 1);
+    cells.forEach(i => {
+      if (all) P.col[i] &= ~(1 << k);
+      else { P.col[i] |= 1 << k; if (k === 1) P.col[i] &= ~(1 << 2); if (k === 2) P.col[i] &= ~(1 << 1); }
+    });
+  }
+  P.solved = false; P.revealed = false;
+  afterPlayChange();
+}
+
+function enterDigit(d) {
+  if (app.tab === 'edit') return editDigit(d);
+  if (app.ringSel) return ringPad(d);
+  const P = app.play, p = app.puzzle;
+  if (P.solved && !P.revealed) return;
+  const cells = Array.from(app.sel).filter(i => !p.givens[i]);
+  if (!cells.length) return;
+  pushUndo();
+  if (P.pencil && d) {
+    const t = cells.filter(i => !P.vals[i]);
+    const all = t.length && t.every(i => P.cands[i] & bit(d));
+    t.forEach(i => { P.cands[i] = all ? P.cands[i] & ~bit(d) : P.cands[i] | bit(d); });
+  } else if (d) {
+    const same = cells.every(i => P.vals[i] === d);
+    cells.forEach(i => {
+      if (same) P.vals[i] = 0;
+      else {
+        P.vals[i] = d; P.cands[i] = 0;
+        if (app.autoClear) for (const j of getModel().peers[i]) if (!P.vals[j] && !p.givens[j]) P.cands[j] &= ~bit(d);
+      }
+    });
+  } else cells.forEach(i => { if (P.vals[i]) P.vals[i] = 0; else P.cands[i] = 0; });
+  P.solved = false; P.revealed = false;
+  afterPlayChange();
+}
+
+function editDigit(d) {
+  if (app.tool !== 'given') return;
+  const p = app.puzzle; const cells = Array.from(app.sel);
+  if (!cells.length) return;
+  cells.forEach(i => { p.givens[i] = d; });
+  touch();
+}
+
+/* ---------- edit bookkeeping ---------- */
+function touch(keepPanel) {
+  const p = app.puzzle; p.sol = null; p.ssol = null; app.model = null; app.solInfo = null; app.uniq = null;
+  lsSet('sx6.current', p);
+  renderBoard(); renderMeta(); if (!keepPanel) renderEditAux();
+}
+
+function loadPuzzle(o, tab) {
+  app.puzzle = normalize(o); app.model = null; app.solInfo = null; app.sel.clear(); app.selCage = -1; app.selRing = null; app.uniq = null;
+  resetPlay(); restoreProgress(); lsSet('sx6.current', app.puzzle);
+  $('#ptitleInput').value = app.puzzle.title || '';
+  flash('');
+  if (tab) setTab(tab); else renderAll();
+}
+
+/* ---------- board drawing ---------- */
+const COL = { regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
+const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
+
+function cageOutline(cells) {
+  const set = new Set(cells), d = 4; let out = '';
+  const has = (r, c) => inCell(r, c) && set.has(ix(r, c));
+  for (const i of cells) {
+    const r = rowOf(i), c = colOf(i), x0 = gx(c), y0 = gy(r), x1 = x0 + CELL, y1 = y0 + CELL;
+    const end = (nOk, dOk, base, sign) => nOk ? (dOk ? base - sign * d : base) : base + sign * d; // sign +1 = low end
+    if (!has(r - 1, c)) { // top
+      const a = end(has(r, c - 1), has(r - 1, c - 1), x0, 1), b = end(has(r, c + 1), has(r - 1, c + 1), x1, -1);
+      out += `M${a},${y0 + d}L${b},${y0 + d}`;
+    }
+    if (!has(r + 1, c)) {
+      const a = end(has(r, c - 1), has(r + 1, c - 1), x0, 1), b = end(has(r, c + 1), has(r + 1, c + 1), x1, -1);
+      out += `M${a},${y1 - d}L${b},${y1 - d}`;
+    }
+    if (!has(r, c - 1)) {
+      const a = end(has(r - 1, c), has(r - 1, c - 1), y0, 1), b = end(has(r + 1, c), has(r + 1, c - 1), y1, -1);
+      out += `M${x0 + d},${a}L${x0 + d},${b}`;
+    }
+    if (!has(r, c + 1)) {
+      const a = end(has(r - 1, c), has(r - 1, c + 1), y0, 1), b = end(has(r + 1, c), has(r + 1, c + 1), y1, -1);
+      out += `M${x1 - d},${a}L${x1 - d},${b}`;
+    }
+  }
+  return out;
+}
+
+function arrowHeadXY(ax, ay, bx, by) { // triangle at b pointing away from a
+  const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+  const s = 11, px = bx, py = by, qx = px - ux * s, qy = py - uy * s;
+  return `${px + ux * 4},${py + uy * 4} ${qx - uy * 7},${qy + ux * 7} ${qx + uy * 7},${qy - ux * 7}`;
+}
+const arrowHead = (a, b) => arrowHeadXY(cx(a), cy(a), cx(b), cy(b));
+
+const ARROW = { '1,1': '↘', '1,-1': '↙', '-1,1': '↗', '-1,-1': '↖' };
+const TAG = { xs: 'X', sw: 'S', sk: '▲' };
+
+function ringRect(r, c) {
+  const x = c < 0 ? 0 : c >= N ? RING + N * CELL : gx(c), w = (c < 0 || c >= N) ? RING : CELL;
+  const y = r < 0 ? 0 : r >= N ? RING + N * CELL : gy(r), h = (r < 0 || r >= N) ? RING : CELL;
+  return { x, y, w, h };
+}
+
+const cellMask = (i, editing) => {
+  const p = app.puzzle, P = app.play;
+  return (p.paint[i] || 0) | (p.marks[i] === 2 ? 2 : 0) | ((!editing && P) ? P.col[i] : 0);
+};
+function colorSvg(mask, x, y, id) {
+  const ks = []; for (let k = 1; k <= 7; k++) if ((mask >> k) & 1) ks.push(k);
+  if (!ks.length) return '';
+  if (ks.length === 1) return `<rect class="col col${ks[0]}" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`;
+  const mx = x + CELL / 2, my = y + CELL / 2, R = CELL, n = ks.length;
+  let o = `<clipPath id="cl${id}"><rect x="${x}" y="${y}" width="${CELL}" height="${CELL}"/></clipPath><g clip-path="url(#cl${id})">`;
+  ks.forEach((k, j) => {
+    const a0 = -Math.PI / 2 + 2 * Math.PI * j / n, a1 = -Math.PI / 2 + 2 * Math.PI * (j + 1) / n;
+    o += `<path class="col col${k}" d="M${mx},${my}L${(mx + R * Math.cos(a0)).toFixed(1)},${(my + R * Math.sin(a0)).toFixed(1)}A${R},${R} 0 0 1 ${(mx + R * Math.cos(a1)).toFixed(1)},${(my + R * Math.sin(a1)).toFixed(1)}Z"/>`;
+  });
+  return o + '</g>';
+}
+
+function renderBoard() {
+  const p = app.puzzle, P = app.play, editing = app.tab === 'edit';
+  const g = effGrid();
+  const bad = (app.showConflicts && !editing) ? X.conflicts(p, getModel(), g) : new Set();
+  const badS = (app.showConflicts && !editing) ? X.shadeConflicts(getModel(), g, effShade()) : new Set();
+  const sol = (P && P.showSol) ? getSol().sol : null;
+  const tint = !isStd(p) || (editing && app.tool === 'region');
+  let s = `<rect class="bd" x="${RING}" y="${RING}" width="${N * CELL}" height="${N * CELL}"/>`;
+
+  for (let i = 0; i < NN; i++) {
+    const x = gx(colOf(i)), y = gy(rowOf(i));
+    if (tint) s += `<rect class="rg rg${p.regions[i] % 6}" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`;
+    s += colorSvg(cellMask(i, editing), x, y, i);
+    if ((bad.has(i) && g[i]) || badS.has(i)) s += `<rect class="bad" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`;
+    if (P && P.wrong.has(i)) s += `<rect class="wrong" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`;
+    if (editing && app.selCage >= 0 && p.cages[app.selCage] && p.cages[app.selCage].cells.includes(i)) s += `<rect class="hl" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`;
+    if (app.sel.has(i) && (!editing || app.tool === 'given')) s += `<rect class="sel" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`;
+  }
+  if (p.opts.diag) {
+    s += `<line class="diag" x1="${RING}" y1="${RING}" x2="${RING + N * CELL}" y2="${RING + N * CELL}"/>`;
+    s += `<line class="diag" x1="${RING + N * CELL}" y1="${RING}" x2="${RING}" y2="${RING + N * CELL}"/>`;
+  }
+  for (let i = 0; i < NN; i++) if (p.parity[i]) {
+    s += p.parity[i] === 2
+      ? `<rect class="par" x="${cx(i) - 19}" y="${cy(i) - 19}" width="38" height="38" rx="3"/>`
+      : `<circle class="par" cx="${cx(i)}" cy="${cy(i)}" r="21"/>`;
+  }
+  // thin grid
+  for (let k = 0; k <= N; k++) {
+    s += `<line class="gl" x1="${gx(k)}" y1="${RING}" x2="${gx(k)}" y2="${RING + N * CELL}"/>`;
+    s += `<line class="gl" x1="${RING}" y1="${gy(k)}" x2="${RING + N * CELL}" y2="${gy(k)}"/>`;
+  }
+  // lines
+  const drawLine = (type, cells, preview) => {
+    const col = preview ? 'var(--accent)' : COL[type], L = cells.length;
+    let o = '';
+    if (type === 'thermo') {
+      o += `<polyline class="ln thermo" style="stroke:${col}" points="${pts(cells)}"/>`;
+      o += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
+    } else if (type === 'arrow' && L >= 2) {
+      const dx0 = cx(cells[1]) - cx(cells[0]), dy0 = cy(cells[1]) - cy(cells[0]), l0 = Math.hypot(dx0, dy0) || 1;
+      const sx = cx(cells[0]) + dx0 / l0 * 23, sy = cy(cells[0]) + dy0 / l0 * 23;
+      o += `<polyline class="ln arrow" style="stroke:${col}" points="${sx.toFixed(1)},${sy.toFixed(1)} ${pts(cells.slice(1))}"/>`;
+      if (L >= 2) o += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
+      o += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
+    } else if (type === 'between') {
+      o += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
+      [cells[0], cells[L - 1]].forEach(c => { o += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
+    } else if (type !== 'arrow') o += `<polyline class="ln ${type}" style="stroke:${col}" points="${pts(cells)}"/>`;
+    return o;
+  };
+  p.lines.forEach(l => { s += drawLine(l.type, l.cells); });
+  if (app.drag && app.drag.kind === 'line' && app.drag.path.length) s += drawLine(app.tool, app.drag.path, true);
+
+  // cages
+  p.cages.forEach((cg, k) => {
+    s += `<path class="cage${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
+    if (cg.sum != null && cg.sum !== '') {
+      const first = Math.min(...cg.cells), x = gx(colOf(first)), y = gy(rowOf(first));
+      const t = String(cg.sum);
+      s += `<rect class="cbg" x="${x + 3}" y="${y + 3}" width="${t.length * 7 + 5}" height="13"/>`;
+      s += `<text class="csum" x="${x + 6}" y="${y + 13}">${t}</text>`;
+    }
+  });
+  if (app.drag && app.drag.kind === 'cage') s += `<path class="cage on" d="${cageOutline(app.drag.cells)}"/>`;
+
+  // region borders
+  let rb = '';
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const i = ix(r, c);
+    if (c + 1 < N && p.regions[i] !== p.regions[ix(r, c + 1)]) rb += `M${gx(c + 1)},${gy(r)}L${gx(c + 1)},${gy(r + 1)}`;
+    if (r + 1 < N && p.regions[i] !== p.regions[ix(r + 1, c)]) rb += `M${gx(c)},${gy(r + 1)}L${gx(c + 1)},${gy(r + 1)}`;
+  }
+  s += `<path class="thick" d="${rb}"/><rect class="thick" fill="none" x="${RING}" y="${RING}" width="${N * CELL}" height="${N * CELL}"/>`;
+
+  // circle / square markers
+  for (let i = 0; i < NN; i++) if (p.marks[i]) {
+    const x = cx(i), y = cy(i);
+    s += p.marks[i] === 1 ? `<circle class="mkc" cx="${x}" cy="${y}" r="25"/>` : `<rect class="mks" x="${x - 24}" y="${y - 24}" width="48" height="48" rx="5"/>`;
+    if (p.mval[i]) s += `<text class="mkn" x="${gx(colOf(i)) + CELL - 5}" y="${gy(rowOf(i)) + 14}">${p.mval[i]}</text>`;
+  }
+  // digits
+  for (let i = 0; i < NN; i++) {
+    const x = cx(i), y = cy(i);
+    if (p.givens[i]) s += `<text class="gv" x="${x}" y="${y + 1}">${p.givens[i]}</text>`;
+    else if (P && P.vals[i]) s += `<text class="ev" x="${x}" y="${y + 1}">${P.vals[i]}</text>`;
+    else if (sol && sol[i]) s += `<text class="sv" x="${x}" y="${y + 1}">${sol[i]}</text>`;
+    else if (P && P.cands[i] && !editing) {
+      for (let d = 1; d <= 6; d++) if (P.cands[i] & bit(d))
+        s += `<text class="cd" x="${gx(colOf(i)) + CELL * (0.22 + 0.28 * ((d - 1) % 3))}" y="${gy(rowOf(i)) + CELL * (0.38 + 0.28 * (((d - 1) / 3) | 0))}">${d}</text>`;
+    }
+  }
+  // edge markers
+  const groups = {};
+  p.edges.forEach(e => { const k = Math.min(e.a, e.b) + ',' + Math.max(e.a, e.b); (groups[k] = groups[k] || []).push(e); });
+  Object.values(groups).forEach(list => {
+    list.forEach((e, n) => {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b), horiz = rowOf(a) === rowOf(b);
+      let x = horiz ? gx(colOf(b)) : cx(a), y = horiz ? cy(a) : gy(rowOf(b));
+      const off = (n - (list.length - 1) / 2) * 20;
+      if (horiz) y += off; else x += off;
+      if (e.t === 'cons') s += horiz ? `<rect class="bar" x="${x - 10}" y="${y - 3.5}" width="20" height="7" rx="3"/>` : `<rect class="bar" x="${x - 3.5}" y="${y - 10}" width="7" height="20" rx="3"/>`;
+      else if (e.t === 'white') s += `<circle class="dotw" cx="${x}" cy="${y}" r="8"/>`;
+      else if (e.t === 'black') s += `<circle class="dotb" cx="${x}" cy="${y}" r="8"/>`;
+      else s += `<circle class="xvbg" cx="${x}" cy="${y}" r="9.5"/><text class="xv" x="${x}" y="${y + 1}">${e.t}</text>`;
+    });
+  });
+  // lines through outside squares
+  const ringPt = ([r, c]) => { const rc = ringRect(r, c); return [rc.x + rc.w / 2, rc.y + rc.h / 2]; };
+  const drawOLine = (ol, preview) => {
+    const P0 = ol.cells.map(ringPt), L = P0.length, col = preview ? 'var(--accent)' : COL[ol.type];
+    const fmt = q => q[0].toFixed(1) + ',' + q[1].toFixed(1);
+    let o = '';
+    if (ol.type === 'thermo') {
+      o += `<polyline class="ln thermo" style="stroke:${col};stroke-width:10" points="${P0.map(fmt).join(' ')}"/>`;
+      o += `<circle class="bulb" style="fill:${col}" cx="${P0[0][0]}" cy="${P0[0][1]}" r="25"/>`;
+    } else if (ol.type === 'arrow') {
+      if (L >= 2) {
+        const dx = P0[1][0] - P0[0][0], dy = P0[1][1] - P0[0][1], l = Math.hypot(dx, dy) || 1;
+        const st = [P0[0][0] + dx / l * 25, P0[0][1] + dy / l * 25];
+        const [px, py] = P0[L - 2], [qx, qy] = P0[L - 1], dl = Math.hypot(qx - px, qy - py) || 1;
+        const off = Math.abs(qx - px) > Math.abs(qy - py) ? 25 : 22;
+        const ex = qx - (qx - px) / dl * off, ey = qy - (qy - py) / dl * off;
+        const body = P0.slice(1, L - 1).map(fmt).concat(fmt([ex, ey])).join(' ');
+        o += `<polyline class="ln arrow" style="stroke:${col};stroke-width:3.5" points="${fmt(st)} ${body}"/>`;
+        o += `<polygon style="fill:${col}" points="${arrowHeadXY(px, py, ex, ey)}"/>`;
+      }
+      o += `<circle class="abulb" style="stroke:${col};fill:var(--cell)" cx="${P0[0][0]}" cy="${P0[0][1]}" r="24"/>`;
+    } else o += `<polyline class="ln ${ol.type}" style="stroke:${col};stroke-width:${ol.type === 'whisper' ? 6 : 10}" points="${P0.map(fmt).join(' ')}"/>`;
+    return o;
+  };
+  p.olines.forEach(ol => { s += drawOLine(ol); });
+  if (app.drag && app.drag.kind === 'oline') s += drawOLine({ type: app.olType, kind: app.olKind, cells: app.drag.cells }, true);
+  // ring clues
+  p.clues.forEach(cl => {
+    if (p.olines.some(ol => ol.cells.some(([r, c]) => r === cl.r && c === cl.c))) return;
+    const rc = ringRect(cl.r, cl.c), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
+    if (cl.kind === 'lk') {
+      s += `<text class="rval" x="${mx - cl.dc * 6}" y="${my - cl.dr * 6 + 6}">${esc(cl.val)}</text>`;
+      s += `<text class="rtag lk" x="${mx + cl.dc * 12}" y="${my + cl.dr * 12 + 6}">${ARROW[cl.dr + ',' + cl.dc]}</text>`;
+    } else {
+      s += `<text class="rtag" x="${rc.x + 5}" y="${rc.y + 13}">${TAG[cl.kind]}</text>`;
+      s += `<text class="rval" x="${mx}" y="${my + 6}">${esc(cl.val)}</text>`;
+    }
+  });
+  p.olines.forEach(ol => ol.cells.forEach(([r, c], k) => {
+    const rc = ringRect(r, c), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2, key = r + ',' + c;
+    const bulb = k === 0 && (ol.type === 'thermo' || ol.type === 'arrow');
+    const bw = bulb ? 32 : 40, bh = bulb ? 26 : 34;
+    const given = p.clues.find(q => q.r === r && q.c === c);
+    const ent = !editing && P && P.ring[key] ? P.ring[key] : null;
+    let exact = null;
+    if (!editing) { const rg = X.clueRange(ol.kind, X.clueSeq({ kind: ol.kind, r, c }), g); if (rg && rg[0] === rg[1]) exact = rg[0]; }
+    const wrongE = !given && ent && ent.v && ((exact != null && ent.v !== exact) || P.wrong.has(key));
+    s += `<rect class="obox${wrongE ? ' bad' : ''}" style="stroke:${COL[ol.type]}" x="${mx - bw / 2}" y="${my - bh / 2}" width="${bw}" height="${bh}" rx="6"/>`;
+    if (!editing && app.ringSel && app.ringSel.r === r && app.ringSel.c === c)
+      s += `<rect class="ringsel" x="${mx - bw / 2 - 4}" y="${my - bh / 2 - 4}" width="${bw + 8}" height="${bh + 8}" rx="9"/>`;
+    s += `<text class="rtag sm" x="${rc.x + 3}" y="${rc.y + 9}">${TAG[ol.kind]}</text>`;
+    if (given) s += `<text class="rval" x="${mx}" y="${my + 6}">${esc(given.val)}</text>`;
+    else if (ent && ent.v) s += `<text class="rval ent" x="${mx}" y="${my + 6}">${ent.v}</text>`;
+    else {
+      if (exact != null) s += `<text class="rval live" x="${mx}" y="${my + 6}">${exact}</text>`;
+      else if (ent && ent.c.length) {
+        const marks = ent.c.slice(0, bulb ? 6 : 9), rows = Math.ceil(marks.length / 3), big = marks.length <= 3;
+        marks.forEach((n, j) => {
+          s += `<text class="rcd${big ? ' lg' : ''}" x="${mx - 13 + (j % 3) * 13}" y="${(my - (rows - 1) * 5.25 + 3.6 + Math.floor(j / 3) * 10.5).toFixed(1)}">${n}</text>`;
+        });
+      }
+    }
+  }));
+  if (editing && app.tool === 'clue' && app.selRing) {
+    const rc = ringRect(app.selRing.r, app.selRing.c);
+    s += `<rect class="ringsel" x="${rc.x + 2}" y="${rc.y + 2}" width="${rc.w - 4}" height="${rc.h - 4}" rx="4"/>`;
+  }
+  if (editing && (app.tool === 'clue' || app.tool === 'oline')) {
+    // faint ring guides
+    for (let k = 0; k < N; k++) [[-1, k], [N, k], [k, -1], [k, N]].forEach(([r, c]) => {
+      const rc = ringRect(r, c); s += `<rect class="ringg" x="${rc.x + 3}" y="${rc.y + 3}" width="${rc.w - 6}" height="${rc.h - 6}" rx="4"/>`;
+    });
+    [[-1, -1], [-1, N], [N, -1], [N, N]].forEach(([r, c]) => { const rc = ringRect(r, c); s += `<rect class="ringg" x="${rc.x + 3}" y="${rc.y + 3}" width="${rc.w - 6}" height="${rc.h - 6}" rx="4"/>`; });
+  }
+  const showRing = editing && (app.tool === 'clue' || app.tool === 'oline');
+  const side = { t: showRing, b: showRing, l: showRing, r: showRing };
+  const flag = (r, c) => { if (r < 0) side.t = true; if (r >= N) side.b = true; if (c < 0) side.l = true; if (c >= N) side.r = true; };
+  p.clues.forEach(cl => flag(cl.r, cl.c)); p.olines.forEach(ol => ol.cells.forEach(([r, c]) => flag(r, c)));
+  const mt = side.t ? RING : 8, mb = side.b ? RING : 8, ml = side.l ? RING : 8, mr = side.r ? RING : 8;
+  app.view = { x: RING - ml, y: RING - mt, w: N * CELL + ml + mr, h: N * CELL + mt + mb };
+  const el = $('#board');
+  el.setAttribute('viewBox', `${app.view.x} ${app.view.y} ${app.view.w} ${app.view.h}`);
+  el.innerHTML = s;
+  renderPalette(); renderRingBar();
+}
+
+/* ---------- header, rules, panels ---------- */
+function renderMeta() {
+  const p = app.puzzle;
+  $('#ptitle').textContent = p.title || 'Untitled puzzle';
+  const labels = variantLabels(p);
+  $('#pchips').innerHTML = labels.length ? labels.map(l => `<span class="chip">${esc(l)}</span>`).join('') : '<span class="chip">Classic</span>';
+  $('#rules').innerHTML = rulesFor(p).map(r => `<li>${esc(r)}</li>`).join('');
+  const t = app.play ? app.play.elapsed : 0; $('#timer').textContent = fmtTime(t);
+  $('#pencilBtn').setAttribute('aria-pressed', app.play && app.play.pencil ? 'true' : 'false');
+  $('#pencilBtn').classList.toggle('on', !!(app.play && app.play.pencil));
+  renderRingBar();
+  $('#undoBtn').disabled = !app.play || !app.play.undo.length; $('#redoBtn').disabled = !app.play || !app.play.redo.length;
+  const gv = p.givens.filter(x => x).length;
+  $('#pstat').textContent = `${gv} given${gv === 1 ? '' : 's'}` + (p.meta && p.meta.difficulty ? ' · ' + ({ easy: 'relaxed', medium: 'standard', hard: 'minimal' }[p.meta.difficulty] || '') : '');
+}
+
+const TOOLS = [
+  { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['region', 'Region']] },
+  { g: 'Sums', t: [['cage', 'Killer cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue']] },
+  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum']] },
+  { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
+  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)']] },
+  { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)']] },
+  { g: 'Clean up', t: [['erase', 'Eraser']] }
+];
+const OPTS = [['optDiag', 'diag'], ['optKnight', 'antiKnight'], ['optKing', 'antiKing'], ['optDisjoint', 'disjoint'], ['optNonconsec', 'nonconsec'], ['optKropki', 'kropkiNeg'], ['optXV', 'xvNeg'],
+  ['optWater', 'waterConn'], ['optPool', 'noPool'], ['optNkLand', 'nkLand'], ['optNkWater', 'nkWater'], ['optShadeWhisper', 'shadeWhisper']];
+const HINTS = {
+  given: 'Select cells, then type 1–6. Backspace clears.',
+  even: 'Click or drag to mark cells even.', odd: 'Click or drag to mark cells odd.',
+  region: 'Pick a region, then click or drag cells to assign them. Each region needs six cells.',
+  cage: 'Drag across neighboring cells to draw a cage, then type its sum. Click a cage to edit it.',
+  arrow: 'Drag from the circle along the arrow’s path. The circle equals the sum along the arrow.',
+  clue: 'Click a square outside the grid, then choose the clue type and value.',
+  thermo: 'Drag from the bulb to the tip. Digits increase along the line.',
+  whisper: 'Drag along the line. Neighbors differ by at least the whisper minimum below.',
+  renban: 'Drag along the line. Its digits are consecutive in any order.',
+  palindrome: 'Drag along the line. It reads the same both ways.',
+  between: 'Drag from one end circle to the other (three cells or more).',
+  cons: 'Click the border between two cells.', white: 'Click the border between two cells.', black: 'Click the border between two cells.',
+  X: 'Click the border between two cells.', V: 'Click the border between two cells.',
+  regsum: 'Drag along the line across region borders. Each stretch inside one region has the same digit sum.',
+  oline: 'Drag along the squares outside the grid on one side. Choose the line type and clue type below. The clue values under the line stay hidden and must follow its rule.',
+  paint: 'Pick a color, then click or drag across cells.',
+  mkc: 'Click a cell to circle it. A circled digit equals the size of its island of unshaded cells. Enter a number below to fix the size instead.',
+  mks: 'Click a cell to square it. A squared digit equals the size of its shaded region. Enter a number below to fix the size instead.',
+  erase: 'Click a cell to remove the line, cage or mark on it. Click a border or an outside clue to remove it.'
+};
+
+function buildToolbox() {
+  $('#tools').innerHTML = TOOLS.map(gr => `<div class="tgroup"><div class="tlabel">${gr.g}</div><div class="tbtns">${
+    gr.t.map(([id, lab]) => `<button class="tbtn" data-tool="${id}" aria-pressed="false"><i class="sw sw-${id}"></i>${lab}</button>`).join('')}</div></div>`).join('');
+  buildPalettes();
+  $('#regionSwatches').innerHTML = [0, 1, 2, 3, 4, 5].map(k => `<button class="rsw rg${k}" data-rg="${k}" aria-label="Region ${k + 1}"><span></span></button>`).join('');
+}
+
+function buildPalettes() {
+  const sw = k => `<button class="csw c${k}" data-col="${k}" title="${PAL[k]}" aria-label="${PAL[k]}"><span>${k === 1 ? 'S' : k === 2 ? 'L' : ''}</span></button>`;
+  $('#paintSwatches').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(sw).join('');
+  $('#colorSwatches').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(sw).join('') + '<button class="csw clr" data-col="0" title="Clear color" aria-label="Clear color"><span>×</span></button>';
+}
+
+function renderEditAux() {
+  const p = app.puzzle;
+  $$('.tbtn').forEach(b => { const on = b.dataset.tool === app.tool; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  $('#toolHint').textContent = HINTS[app.tool] || '';
+  $('#regionBox').hidden = app.tool !== 'region';
+  $('#paintBox').hidden = app.tool !== 'paint';
+  $('#olBox').hidden = app.tool !== 'oline';
+  $('#olType').value = app.olType; $('#olKind').value = app.olKind; $('#olDiff').value = app.olDiff;
+  $('#olDiffWrap').hidden = app.olType !== 'whisper';
+  $$('#paintSwatches .csw').forEach(b => b.classList.toggle('on', +b.dataset.col === app.paintCol));
+  const mkOn = (app.tool === 'mkc' || app.tool === 'mks') && app.selMark >= 0 && p.marks[app.selMark];
+  $('#markBox').hidden = !mkOn;
+  if (mkOn && document.activeElement !== $('#markVal')) $('#markVal').value = p.mval[app.selMark] || '';
+  $$('.rsw').forEach(b => b.classList.toggle('on', +b.dataset.rg === app.paint));
+  const sizes = [0, 0, 0, 0, 0, 0]; p.regions.forEach(r => sizes[r % 6]++);
+  const okSizes = sizes.every(v => v === 6);
+  $('#regionWarn').textContent = okSizes ? 'All six regions have six cells.' : 'Region sizes: ' + sizes.join(', ') + '. Each needs 6.';
+  $('#regionWarn').className = 'small ' + (okSizes ? 'okc' : 'warnc');
+  $('#cageBox').hidden = !(app.tool === 'cage' && app.selCage >= 0 && p.cages[app.selCage]);
+  if (!$('#cageBox').hidden) { const cg = p.cages[app.selCage]; const inp = $('#cageSum'); if (document.activeElement !== inp) inp.value = cg.sum == null ? '' : cg.sum; }
+  $('#ringBox').hidden = !(app.tool === 'clue' && app.selRing);
+  if (!$('#ringBox').hidden) renderRingEditor();
+  $('#whisperRow').hidden = false;
+  $('#whisperDiff').value = p.opts.whisperDiff || 4;
+  OPTS.forEach(([id, k]) => { $('#' + id).checked = !!p.opts[k]; });
+  $('#uniqOut').textContent = app.uniq ? app.uniq.text : '';
+  $('#uniqOut').className = 'result ' + (app.uniq ? app.uniq.kind : '');
+}
+
+function ringOptions(r, c) {
+  const out = [];
+  const side = r === -1 ? 'T' : r === N ? 'B' : c === -1 ? 'L' : 'R';
+  const corner = (r < 0 || r >= N) && (c < 0 || c >= N);
+  if (!corner) {
+    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' });
+  }
+  for (const dr of [-1, 1]) for (const dc of [-1, 1]) {
+    if (!inCell(r + dr, c + dc)) continue;
+    const seq = X.clueSeq({ kind: 'lk', r, c, dr, dc });
+    if (seq.length >= 1) out.push({ kind: 'lk', dr, dc, label: 'Little Killer ' + ARROW[dr + ',' + dc] });
+  }
+  return out;
+}
+function renderRingEditor() {
+  const { r, c } = app.selRing, p = app.puzzle;
+  const opts = ringOptions(r, c);
+  const cur = p.clues.find(k => k.r === r && k.c === c);
+  const sel = $('#ringKind');
+  sel.innerHTML = opts.map((o, i) => `<option value="${i}">${o.label}</option>`).join('');
+  if (cur) { const i = opts.findIndex(o => o.kind === cur.kind && (o.kind !== 'lk' || (o.dr === cur.dr && o.dc === cur.dc))); if (i >= 0) sel.value = i; $('#ringVal').value = cur.val; }
+  else $('#ringVal').value = '';
+  sel._opts = opts;
+}
+function applyRing() {
+  const p = app.puzzle, { r, c } = app.selRing, sel = $('#ringKind'), o = sel._opts[+sel.value];
+  const v = $('#ringVal').value.trim();
+  p.clues = p.clues.filter(k => !(k.r === r && k.c === c));
+  if (v !== '' && o) { const cl = { kind: o.kind, r, c, val: +v }; if (o.kind === 'lk') { cl.dr = o.dr; cl.dc = o.dc; } p.clues.push(cl); }
+  touch(true);
+}
+
+function renderAll() { renderBoard(); renderMeta(); renderEditAux(); saveProgress(); }
+
+/* ---------- outside clue notes ---------- */
+const KIND_RANGE = { xs: [1, 21], sw: [0, 14], sk: [1, 6] };
+const KIND_NAME = { xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper' };
+function noteCell(r, c) {
+  const p = app.puzzle;
+  if (p.clues.some(q => q.r === r && q.c === c)) return null;
+  for (const ol of p.olines) if (ol.cells.some(([a, b]) => a === r && b === c)) return { kind: ol.kind };
+  return null;
+}
+function outsideCells() {
+  const p = app.puzzle, out = [];
+  p.olines.forEach(ol => ol.cells.forEach(([r, c]) => { if (noteCell(r, c) && !out.some(o => o[0] === r && o[1] === c)) out.push([r, c, ol.kind]); }));
+  return out;
+}
+const solValue = (kind, r, c, sol) => sol ? X.outVal(kind, X.clueSeq({ kind, r, c }), sol) : null;
+function ringLabel(r, c, kind) {
+  const side = r === -1 ? 'top of column ' + (c + 1) : r === N ? 'bottom of column ' + (c + 1) : c === -1 ? 'left of row ' + (r + 1) : 'right of row ' + (r + 1);
+  return `${KIND_NAME[kind]} clue, ${side}`;
+}
+function renderRingBar() {
+  const bar = $('#ringBar'), rs = app.ringSel, info = rs && app.tab === 'play' ? noteCell(rs.r, rs.c) : null;
+  if (rs && !info) app.ringSel = null;
+  bar.hidden = !info;
+  if (!info) return;
+  const rg = KIND_RANGE[info.kind];
+  $('#rnLabel').textContent = ringLabel(rs.r, rs.c, info.kind);
+  $('#rnHint').textContent = `Type a number from ${rg[0]} to ${rg[1]}. Enter ${app.play.pencil ? 'toggles a pencil mark' : 'sets the value'}. Pencil marks show until you set a value.`;
+}
+function renderPalette() {
+  const P = app.play, cells = Array.from(app.sel);
+  $$('#colorSwatches .csw').forEach(b => {
+    const k = +b.dataset.col; if (!k) return;
+    b.classList.toggle('on', !!(P && cells.length && cells.every(i => (cellMask(i, false) >> k) & 1)));
+  });
+}
+function ringApply(mode) {
+  const rs = app.ringSel, info = rs && noteCell(rs.r, rs.c); if (!info) return;
+  const inp = $('#rnVal'), v = parseInt(inp.value, 10), rg = KIND_RANGE[info.kind];
+  if (isNaN(v) || v < rg[0] || v > rg[1]) { flash(`${KIND_NAME[info.kind]} clues run from ${rg[0]} to ${rg[1]}.`, 'warn'); return; }
+  const P = app.play, key = rs.r + ',' + rs.c;
+  pushUndo();
+  const e = P.ring[key] || (P.ring[key] = { v: 0, c: [] });
+  if (mode === 'pencil') { const j = e.c.indexOf(v); if (j >= 0) e.c.splice(j, 1); else { e.c.push(v); e.c.sort((a, b) => a - b); } }
+  else e.v = e.v === v ? 0 : v;
+  if (!e.v && !e.c.length) delete P.ring[key];
+  inp.value = ''; P.wrong.clear(); flash(''); renderAll();
+}
+function ringClear() {
+  const rs = app.ringSel; if (!rs) return;
+  const P = app.play, key = rs.r + ',' + rs.c; if (!P.ring[key]) return;
+  pushUndo(); delete P.ring[key]; P.wrong.clear(); renderAll();
+}
+function ringType(ch) { const inp = $('#rnVal'); inp.value = (inp.value.length >= 2 ? '' : inp.value) + ch; }
+function ringPad(d) { if (d === 0) { const inp = $('#rnVal'); inp.value = inp.value.slice(0, -1); } else ringType(String(d)); }
+
+/* ---------- tabs ---------- */
+function setTab(t) {
+  app.tab = t;
+  $$('#tabs button').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  $$('.tabpane').forEach(pn => pn.hidden = pn.id !== 'tab-' + t);
+  if (t === 'play' && app.play.hash !== hashOf(app.puzzle)) { resetPlay(); restoreProgress(); }
+  if (t !== 'edit') { app.drag = null; }
+  document.body.dataset.tab = t;
+  if (t === 'library') renderLibrary();
+  if (t === 'history') renderHistory();
+  renderAll();
+}
+
+/* ---------- pointer interaction ---------- */
+const svg = () => $('#board');
+function toSvg(e) {
+  const r = svg().getBoundingClientRect(), v = app.view || { x: 0, y: 0, w: W, h: W };
+  return { x: v.x + (e.clientX - r.left) * (v.w / r.width), y: v.y + (e.clientY - r.top) * (v.h / r.height) };
+}
+function hit(x, y) {
+  const c = x < RING ? -1 : x >= RING + N * CELL ? N : Math.floor((x - RING) / CELL);
+  const r = y < RING ? -1 : y >= RING + N * CELL ? N : Math.floor((y - RING) / CELL);
+  return { r, c, fx: (x - RING) / CELL, fy: (y - RING) / CELL };
+}
+function edgeAt(fx, fy) {
+  if (fx < 0 || fy < 0 || fx > N || fy > N) return null;
+  const rx = Math.round(fx), ry = Math.round(fy), dx = Math.abs(fx - rx), dy = Math.abs(fy - ry);
+  let best = null;
+  if (rx >= 1 && rx <= N - 1 && dx < 0.3) { const r = Math.floor(fy); if (r >= 0 && r < N) best = { a: ix(r, rx - 1), b: ix(r, rx), d: dx }; }
+  if (ry >= 1 && ry <= N - 1 && dy < 0.3) { const c = Math.floor(fx); if (c >= 0 && c < N) { const k = { a: ix(ry - 1, c), b: ix(ry, c), d: dy }; if (!best || k.d < best.d) best = k; } }
+  return best;
+}
+function setPaint(i, k, add) {
+  const p = app.puzzle;
+  if (add) { p.paint[i] |= 1 << k; if (k === 1) p.paint[i] &= ~(1 << 2); if (k === 2) p.paint[i] &= ~(1 << 1); }
+  else p.paint[i] &= ~(1 << k);
+}
+const adj8 = (a, b) => a !== b && Math.abs(rowOf(a) - rowOf(b)) <= 1 && Math.abs(colOf(a) - colOf(b)) <= 1;
+const adj4 = (a, b) => Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
+const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum'];
+
+function onDown(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  try { svg().setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  const { x, y } = toSvg(e), h = hit(x, y), p = app.puzzle;
+  const inG = inCell(h.r, h.c), i = inG ? ix(h.r, h.c) : -1;
+  if (app.tab !== 'edit' || app.tool === 'given') {
+    if (!inG) {
+      if (app.tab !== 'edit' && h.r >= -1 && h.r <= N && h.c >= -1 && h.c <= N && noteCell(h.r, h.c)) {
+        app.ringSel = { r: h.r, c: h.c }; app.sel.clear(); renderAll(); $('#rnVal').focus();
+      }
+      return;
+    }
+    app.ringSel = null;
+    if (!(e.shiftKey || e.ctrlKey || e.metaKey)) app.sel.clear();
+    app.sel.add(i); app.drag = { kind: 'select' }; renderBoard(); return;
+  }
+  const t = app.tool;
+  if (t === 'even' || t === 'odd') {
+    if (!inG) return; const want = t === 'even' ? 2 : 1; const val = p.parity[i] === want ? 0 : want;
+    app.drag = { kind: 'parity', val }; p.parity[i] = val; touch(true);
+  } else if (t === 'paint') {
+    if (!inG) return;
+    const add = !((p.paint[i] >> app.paintCol) & 1);
+    app.drag = { kind: 'paint', add, k: app.paintCol }; setPaint(i, app.paintCol, add); touch(true);
+  } else if (t === 'mkc' || t === 'mks') {
+    if (!inG) return; const want = t === 'mkc' ? 1 : 2;
+    if (p.marks[i] === want) { p.marks[i] = 0; p.mval[i] = 0; app.selMark = -1; }
+    else { p.marks[i] = want; p.mval[i] = 0; app.selMark = i; }
+    touch();
+    if (app.selMark >= 0) { const inp = $('#markVal'); inp.focus(); inp.select(); }
+  } else if (t === 'region') {
+    if (!inG) return; app.drag = { kind: 'region' }; p.regions[i] = app.paint; touch();
+  } else if (t === 'cage') {
+    if (!inG) return;
+    const k = p.cages.findIndex(cg => cg.cells.includes(i));
+    if (k >= 0) { app.selCage = k; app.drag = null; renderBoard(); renderEditAux(); const inp = $('#cageSum'); inp.focus(); inp.select(); return; }
+    app.selCage = -1; app.drag = { kind: 'cage', cells: [i] }; renderBoard(); renderEditAux();
+  } else if (LINE_TOOLS.includes(t)) {
+    if (!inG) return; app.drag = { kind: 'line', path: [i] }; renderBoard();
+  } else if (['cons', 'white', 'black', 'X', 'V'].includes(t)) {
+    const ed = edgeAt(h.fx, h.fy); if (!ed) return;
+    const k = p.edges.findIndex(m => Math.min(m.a, m.b) === ed.a && Math.max(m.a, m.b) === ed.b && m.t === t);
+    if (k >= 0) p.edges.splice(k, 1);
+    else {
+      if (t === 'X' || t === 'V') p.edges = p.edges.filter(m => !(Math.min(m.a, m.b) === ed.a && Math.max(m.a, m.b) === ed.b && (m.t === 'X' || m.t === 'V')));
+      p.edges.push({ a: ed.a, b: ed.b, t });
+    }
+    touch(true);
+  } else if (t === 'oline') {
+    if (inG || h.r < -1 || h.r > N || h.c < -1 || h.c > N) return;
+    if ((h.r < 0 || h.r >= N) === (h.c < 0 || h.c >= N)) return;
+    app.drag = { kind: 'oline', cells: [[h.r, h.c]] }; renderBoard();
+  } else if (t === 'clue') {
+    if (inG || (h.r < -1 || h.r > N || h.c < -1 || h.c > N)) return;
+    app.selRing = { r: h.r, c: h.c }; renderBoard(); renderEditAux();
+    const inp = $('#ringVal'); if (inp) { inp.focus(); inp.select(); }
+  } else if (t === 'erase') {
+    const ed = edgeAt(h.fx, h.fy);
+    if (ed && ed.d < 0.22) {
+      const before = p.edges.length;
+      p.edges = p.edges.filter(m => !(Math.min(m.a, m.b) === ed.a && Math.max(m.a, m.b) === ed.b));
+      if (p.edges.length !== before) { touch(true); return; }
+    }
+    if (inG) {
+      let k = -1; for (let n = p.lines.length - 1; n >= 0; n--) if (p.lines[n].cells.includes(i)) { k = n; break; }
+      if (k >= 0) { p.lines.splice(k, 1); touch(true); return; }
+      k = p.cages.findIndex(cg => cg.cells.includes(i));
+      if (k >= 0) { p.cages.splice(k, 1); app.selCage = -1; touch(); return; }
+      if (p.parity[i]) { p.parity[i] = 0; touch(true); return; }
+      if (p.marks[i]) { p.marks[i] = 0; p.mval[i] = 0; app.selMark = -1; touch(); return; }
+      if (p.paint[i]) { p.paint[i] = 0; touch(true); return; }
+    } else if (h.r >= -1 && h.r <= N && h.c >= -1 && h.c <= N) {
+      const before = p.clues.length; p.clues = p.clues.filter(k => !(k.r === h.r && k.c === h.c));
+      if (p.clues.length !== before) { touch(true); return; }
+      const b2 = p.olines.length; p.olines = p.olines.filter(ol => !ol.cells.some(([r, c]) => r === h.r && c === h.c));
+      if (p.olines.length !== b2) touch(true);
+    }
+  }
+}
+function onMove(e) {
+  const d = app.drag; if (!d) return;
+  const { x, y } = toSvg(e), h = hit(x, y), p = app.puzzle;
+  if (d.kind === 'oline') {
+    const cells = d.cells, last = cells[cells.length - 1];
+    let cand = null;
+    if ((last[0] < 0 || last[0] >= N) && h.r === last[0] && h.c >= 0 && h.c < N && Math.abs(h.c - last[1]) === 1) cand = [h.r, h.c];
+    else if ((last[1] < 0 || last[1] >= N) && h.c === last[1] && h.r >= 0 && h.r < N && Math.abs(h.r - last[0]) === 1) cand = [h.r, h.c];
+    if (!cand) return;
+    const same = q => q[0] === cand[0] && q[1] === cand[1];
+    if (cells.length >= 2 && same(cells[cells.length - 2])) cells.pop();
+    else if (!cells.some(same)) cells.push(cand); else return;
+    renderBoard(); return;
+  }
+  if (!inCell(h.r, h.c)) return;
+  const i = ix(h.r, h.c);
+  if (d.kind === 'select') { if (!app.sel.has(i)) { app.sel.add(i); renderBoard(); } }
+  else if (d.kind === 'parity') { if (p.parity[i] !== d.val) { p.parity[i] = d.val; touch(true); } }
+  else if (d.kind === 'region') { if (p.regions[i] !== app.paint) { p.regions[i] = app.paint; touch(); } }
+  else if (d.kind === 'paint') { const before = p.paint[i]; setPaint(i, d.k, d.add); if (p.paint[i] !== before) touch(true); }
+  else if (d.kind === 'line') {
+    const path = d.path, last = path[path.length - 1];
+    if (i === last) return;
+    if (path.length >= 2 && i === path[path.length - 2]) path.pop();
+    else if (!path.includes(i) && adj8(last, i)) path.push(i); else return;
+    renderBoard();
+  } else if (d.kind === 'cage') {
+    if (d.cells.includes(i)) return;
+    if (p.cages.some(cg => cg.cells.includes(i))) return;
+    if (d.cells.some(c => adj4(c, i))) { d.cells.push(i); renderBoard(); }
+  }
+}
+function onUp() {
+  const d = app.drag; app.drag = null; if (!d) return;
+  const p = app.puzzle;
+  if (d.kind === 'line') {
+    const need = app.tool === 'between' ? 3 : 2;
+    if (d.path.length >= need) { p.lines.push({ type: app.tool, cells: d.path.slice() }); touch(true); }
+    else { renderBoard(); if (d.path.length && app.tool === 'between') flash('Between lines need at least three cells.', 'warn'); }
+  } else if (d.kind === 'oline') {
+    if (d.cells.length >= 2) { p.olines.push({ type: app.olType, kind: app.olKind, cells: d.cells.map(c => c.slice()), diff: app.olType === 'whisper' ? app.olDiff : undefined }); touch(true); }
+    else renderBoard();
+  } else if (d.kind === 'cage') {
+    p.cages.push({ cells: d.cells.slice(), sum: null }); app.selCage = p.cages.length - 1; touch();
+    const inp = $('#cageSum'); inp.focus(); inp.select();
+  }
+}
+
+/* ---------- play controls ---------- */
+function checkPlay() {
+  const P = app.play, info = getSol(), g = effGrid();
+  P.wrong.clear();
+  if (g.every(v => v)) return afterPlayChange();
+  if (info.sol && info.count === 1) {
+    for (let i = 0; i < NN; i++) if (P.vals[i] && !app.puzzle.givens[i] && P.vals[i] !== info.sol[i]) P.wrong.add(i);
+    const p = app.puzzle;
+    if (X.usesShade(p) && info.shade) for (let i = 0; i < NN; i++) {
+      if (p.marks[i] || (p.paint[i] & 6)) continue;
+      if (((P.col[i] & 2) && !info.shade[i]) || ((P.col[i] & 4) && info.shade[i])) P.wrong.add(i);
+    }
+    outsideCells().forEach(([r, c, kind]) => { const e = P.ring[r + ',' + c]; if (e && e.v) { const v = solValue(kind, r, c, info.sol); if (v != null && v !== e.v) P.wrong.add(r + ',' + c); } });
+    flash(P.wrong.size ? `${P.wrong.size} entr${P.wrong.size === 1 ? 'y is' : 'ies are'} wrong.` : 'No mistakes so far.', P.wrong.size ? 'warn' : 'ok');
+  } else {
+    const bad = X.conflicts(app.puzzle, getModel(), g);
+    flash(bad.size ? 'Some digits break a rule. They are highlighted.' : 'No rule broken so far. This puzzle has no single solution to compare against.', bad.size ? 'warn' : '');
+  }
+  renderAll();
+}
+function hint() {
+  const P = app.puzzle && app.play, info = getSol();
+  if (!info.sol) return flash('This puzzle has no solution to draw a hint from.', 'warn');
+  let cells = Array.from(app.sel).filter(i => !app.puzzle.givens[i] && P.vals[i] !== info.sol[i]);
+  if (!cells.length) cells = [...Array(NN).keys()].filter(i => !app.puzzle.givens[i] && P.vals[i] !== info.sol[i]);
+  if (!cells.length) return;
+  const i = cells[Math.floor(Math.random() * cells.length)];
+  pushUndo(); P.hints = (P.hints || 0) + 1; P.vals[i] = info.sol[i]; P.cands[i] = 0; app.sel = new Set([i]); afterPlayChange();
+}
+function reveal() {
+  const P = app.play, info = getSol();
+  if (!info.sol) return flash('This puzzle has no solution.', 'warn');
+  pushUndo(); P.vals = info.sol.map((v, i) => app.puzzle.givens[i] ? 0 : v); P.cands.fill(0);
+  if (X.usesShade(app.puzzle) && info.shade) P.col = P.col.map((m, i) => (m & ~6) | (info.shade[i] ? 2 : 0));
+  outsideCells().forEach(([r, c, kind]) => { const v = solValue(kind, r, c, info.sol); if (v != null) P.ring[r + ',' + c] = { v, c: [] }; });
+  P.solved = true; P.revealed = true; P.usedReveal = true; P.wrong.clear();
+  flash('Solution shown.', ''); renderAll();
+}
+function restart() { resetPlay(); flash(''); renderAll(); saveProgress(); }
+
+/* ---------- edit actions ---------- */
+function checkUnique() {
+  const p = app.puzzle;
+  const r = X.solvePuzzle(p, { limit: 2, maxNodes: 3000000, model: getModel() });
+  let res;
+  if (r.count === 1 && !r.aborted) res = { kind: 'ok', text: 'One solution. This puzzle is valid.' };
+  else if (r.count >= 2) res = { kind: 'warn', text: 'More than one solution. Add clues or givens.' };
+  else if (r.aborted) res = { kind: 'warn', text: 'Search limit reached. The puzzle probably has many solutions. Add clues.' };
+  else res = { kind: 'err', text: 'No solution. The clues contradict each other.' };
+  app.uniq = res; app.solInfo = null; renderEditAux(); return r;
+}
+function addGivens() {
+  const p = app.puzzle; let r = X.solvePuzzle(p, { limit: 2, maxNodes: 3000000, model: getModel() });
+  if (r.count === 0) { app.uniq = { kind: 'err', text: r.aborted ? 'Search limit reached. Add clues first.' : 'No solution. The clues contradict each other.' }; return renderEditAux(); }
+  if (r.count === 1 && !r.aborted) { app.uniq = { kind: 'ok', text: 'Already unique. No givens needed.' }; return renderEditAux(); }
+  const sol = r.sols[0]; let guard = 0;
+  while (r.count >= 2 && guard++ < NN) {
+    const rest = [...Array(NN).keys()].filter(i => !p.givens[i]); if (!rest.length) break;
+    const i = rest[Math.floor(Math.random() * rest.length)]; p.givens[i] = sol[i];
+    app.model = null; r = X.solvePuzzle(p, { limit: 2, maxNodes: 3000000, model: getModel() });
+  }
+  touch(); checkUnique();
+}
+function trimGivens() {
+  const p = app.puzzle; let r = X.solvePuzzle(p, { limit: 2, maxNodes: 3000000, model: getModel() });
+  if (r.count !== 1 || r.aborted) { app.uniq = { kind: 'warn', text: 'Trimming needs a puzzle with exactly one solution.' }; return renderEditAux(); }
+  const gv = X.shuffle(p.givens.map((v, i) => v ? i : -1).filter(i => i >= 0), Math.random);
+  let removed = 0;
+  for (const i of gv) {
+    const keep = p.givens[i]; p.givens[i] = 0; app.model = null;
+    const q = X.solvePuzzle(p, { limit: 2, maxNodes: 300000, model: getModel() });
+    if (q.count === 1 && !q.aborted) removed++; else p.givens[i] = keep;
+  }
+  app.model = null; touch(); checkUnique();
+  app.uniq.text += removed ? ` Removed ${removed} redundant given${removed === 1 ? '' : 's'}.` : ' No givens were redundant.'; renderEditAux();
+}
+
+/* ---------- generator panel ---------- */
+function buildGenerator() {
+  const groups = {};
+  X.VARIANTS.forEach(v => (groups[v.group] = groups[v.group] || []).push(v));
+  $('#genChips').innerHTML = Object.keys(groups).map(g => `<fieldset class="vgroup"><legend>${g}</legend><div class="chipset">${
+    groups[g].map(v => `<label class="vchip"><input type="checkbox" data-v="${v.k}"><span>${v.label}</span></label>`).join('')}</div></fieldset>`).join('');
+  $$('#genChips input').forEach(inp => inp.addEventListener('change', () => toggleVariant(inp.dataset.v, inp.checked)));
+  syncGen();
+}
+const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking']];
+function clash(a, b, set) {
+  if ((a === 'nurikabe' && b === 'shadeline') || (a === 'shadeline' && b === 'nurikabe')) return true;
+  if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
+  if (set.has('irregular')) return false;
+  return SOFT.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
+}
+function toggleVariant(k, on) {
+  const S = app.genSel, note = [];
+  if (on) {
+    S.add(k);
+    Array.from(S).forEach(o => { if (o !== k && clash(k, o, S)) { S.delete(o); note.push(X.VLABEL[o]); } });
+  } else S.delete(k);
+  $('#genNote').textContent = note.length ? `${X.VLABEL[k]} cannot combine with ${note.join(', ')} on this grid, so ${note.join(', ')} was switched off.` : '';
+  syncGen();
+}
+function syncGen() {
+  $$('#genChips input').forEach(inp => { inp.checked = app.genSel.has(inp.dataset.v); });
+  $('#genCount').textContent = app.genSel.size ? app.genSel.size + ' selected' : 'Classic (nothing selected)';
+  $('#genWhisper').hidden = !(app.genSel.has('whisper') || app.genSel.has('shadeline'));
+}
+function feasibleMix(sel) {
+  const s = new Set(sel);
+  if (!s.has('irregular')) {
+    if (s.has('diag') && (s.has('antiknight') || s.has('antiking') || s.has('disjoint'))) return false;
+    if (s.has('antiknight') && s.has('antiking')) return false;
+  }
+  return !(s.has('disjoint') && s.has('irregular')) && !(s.has('nurikabe') && s.has('shadeline'));
+}
+function runGenerate(list) {
+  if (app.busy) return;
+  if (!feasibleMix(list)) { $('#genStatus').textContent = 'No valid grid exists for that mix of grid rules.'; return; }
+  app.busy = true; $('#genBtn').disabled = true; $('#surpriseBtn').disabled = true;
+  $('#genStatus').textContent = 'Building and checking for a single solution…';
+  setTimeout(() => {
+    const t0 = Date.now();
+    let q = null;
+    try { q = X.generate({ variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff }, null, 9000); } catch (err) { q = null; }
+    app.busy = false; $('#genBtn').disabled = false; $('#surpriseBtn').disabled = false;
+    if (!q) { $('#genStatus').textContent = 'Could not build that mix. Try again, or remove a variant.'; return; }
+    $('#genStatus').textContent = `Done in ${((Date.now() - t0) / 1000).toFixed(1)} s. One solution, verified.`;
+    loadPuzzle(q, 'play');
+  }, 40);
+}
+function surprise() {
+  const all = X.VARIANTS.map(v => v.k); let pickSet;
+  for (let g = 0; g < 200; g++) {
+    const n = 2 + Math.floor(Math.random() * 2);
+    pickSet = X.shuffle(all.slice(), Math.random).slice(0, n);
+    if (feasibleMix(pickSet)) break;
+  }
+  app.genSel = new Set(pickSet); syncGen(); runGenerate(pickSet);
+}
+const PRESETS = [
+  ['Little Killer + X-Sums', ['littlekiller', 'xsum']], ['Thermo + Even/Odd', ['thermo', 'evenodd']],
+  ['Kropki + XV', ['kropki', 'xv']], ['Killer + Diagonal', ['killer', 'diag']],
+  ['Whispers + Renban', ['whisper', 'renban']], ['Arrow + Sandwich', ['arrow', 'sandwich']],
+  ['Nurikabe', ['nurikabe']], ['Shaded whispers', ['shadeline']], ['Nurikabe + Killer', ['nurikabe', 'killer']],
+  ['Region sums + Thermo', ['regsum', 'thermo']], ['X-sums on lines', ['outxsum']], ['Sandwich on lines', ['outsandwich']]
+];
+
+/* ---------- history and saved progress ---------- */
+const HKEY = 'sx6.history', HPKEY = 'sx6.hpuz', PKEY = 'sx6.progress';
+function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); }
+const pid = p => fnv(hashOf(p));
+const loadHist = () => { const h = lsGet(HKEY, []); return Array.isArray(h) ? h : []; };
+function fmtDate(ms) {
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function recordSolve() {
+  const p = app.puzzle, P = app.play, id = pid(p), hist = loadHist();
+  const prior = hist.filter(r => r.id === id && !r.hints).map(r => r.t);
+  const rec = { id, title: p.title || 'Untitled puzzle', t: P.elapsed, at: Date.now(), hints: P.hints || 0 };
+  hist.unshift(rec); lsSet(HKEY, hist.slice(0, 1000));
+  const hp = lsGet(HPKEY, {}); hp[id] = { p: X.clonePuzzle(p), at: rec.at };
+  Object.keys(hp).sort((a, b) => hp[b].at - hp[a].at).slice(100).forEach(k => delete hp[k]);
+  lsSet(HPKEY, hp);
+  return { isBest: !rec.hints && prior.length > 0 && rec.t < Math.min(...prior) };
+}
+function histGroups() {
+  const map = new Map();
+  loadHist().forEach(r => { if (!map.has(r.id)) map.set(r.id, []); map.get(r.id).push(r); });
+  return Array.from(map, ([id, recs]) => {
+    const clean = recs.filter(r => !r.hints), pool = clean.length ? clean : recs;
+    return { id, recs, best: Math.min(...pool.map(r => r.t)), bestClean: clean.length > 0, title: recs[0].title, last: recs[0].at };
+  }).sort((a, b) => b.last - a.last);
+}
+function bestMap() { const m = {}; histGroups().forEach(g => { m[g.id] = g; }); return m; }
+function renderHistory() {
+  const groups = histGroups(), total = groups.reduce((a, g) => a + g.recs.length, 0);
+  $('#histSummary').textContent = total ? `${total} solve${total === 1 ? '' : 's'} across ${groups.length} puzzle${groups.length === 1 ? '' : 's'}.` : '';
+  $('#histList').innerHTML = groups.length ? groups.map(g => {
+    const bi = g.recs.findIndex(r => r.t === g.best && (!!r.hints) === (!g.bestClean));
+    return `<li class="hcard"><details><summary><span class="hmain"><span class="ltitle">${esc(g.title)}</span>
+      <span class="lsub">Best ${fmtTime(g.best)}${g.bestClean ? '' : ' (with hints)'} · ${g.recs.length} solve${g.recs.length === 1 ? '' : 's'} · last ${fmtDate(g.last)}</span></span></summary>
+      <ul class="hrec">${g.recs.map((r, i) => `<li><span>${fmtDate(r.at)}</span><b>${fmtTime(r.t)}</b><span class="hnote">${i === bi ? 'best' : (r.hints ? r.hints + ' hint' + (r.hints === 1 ? '' : 's') : '')}</span></li>`).join('')}</ul>
+      <div class="row"><button class="btn" data-hplay="${g.id}">Play again</button><button class="btn quiet" data-hdel="${g.id}">Remove</button></div></details></li>`;
+  }).join('') : '<li class="empty">No solves yet. Finish a puzzle and its time appears here.</li>';
+  $('#histClear').hidden = !groups.length;
+}
+function replayById(id) {
+  const hp = lsGet(HPKEY, {});
+  let q = hp[id] && hp[id].p;
+  if (!q) q = (window.SX_LIB || []).concat(lsGet('sx6.saved', [])).find(p => pid(normalize(p)) === id);
+  if (!q) return flash('That puzzle is no longer stored on this device.', 'warn');
+  loadPuzzle(q, 'play');
+}
+const emptyPlay = P => !P.vals.some(x => x) && !P.cands.some(x => x) && !P.col.some(x => x) && !Object.keys(P.ring).length && !P.elapsed;
+function saveProgress() {
+  const P = app.play, p = app.puzzle;
+  if (!P || !p || P.hash !== hashOf(p)) return;
+  const id = pid(p), all = lsGet(PKEY, {});
+  if (P.solved || emptyPlay(P)) { if (all[id]) { delete all[id]; lsSet(PKEY, all); } return; }
+  all[id] = { vals: P.vals, cands: P.cands, col: P.col, ring: P.ring, elapsed: P.elapsed, hints: P.hints, usedReveal: P.usedReveal, pencil: P.pencil, at: Date.now() };
+  Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(12).forEach(k => delete all[k]);
+  lsSet(PKEY, all);
+}
+function restoreProgress() {
+  const P = app.play, sv = lsGet(PKEY, {})[pid(app.puzzle)];
+  if (!sv || !Array.isArray(sv.vals) || sv.vals.length !== NN) return;
+  P.vals = sv.vals; P.cands = Array.isArray(sv.cands) && sv.cands.length === NN ? sv.cands : P.cands;
+  P.col = Array.isArray(sv.col) && sv.col.length === NN ? sv.col : P.col; P.ring = sv.ring || {};
+  P.started = true; P.elapsed = sv.elapsed || 0; P.hints = sv.hints || 0; P.usedReveal = !!sv.usedReveal; P.pencil = !!sv.pencil;
+}
+
+/* ---------- library ---------- */
+function puzzleCard(p, i, kind, bests) {
+  const labels = variantLabels(p), gv = p.givens.filter(x => x).length, bg = bests && bests[pid(p)];
+  return `<li class="lcard"><div class="lmain"><div class="ltitle">${esc(p.title || 'Untitled')}</div>
+    <div class="lsub">${gv} given${gv === 1 ? '' : 's'}${p.meta && p.meta.difficulty ? ' · ' + ({ easy: 'relaxed', medium: 'standard', hard: 'minimal' }[p.meta.difficulty]) : ''}${bg ? ' · Best ' + fmtTime(bg.best) : ''}</div></div>
+    <div class="lact"><button class="btn" data-${kind}="${i}">Play</button>${kind === 'saved' ? `<button class="btn quiet" data-del="${i}" aria-label="Delete ${esc(p.title || 'puzzle')}">Delete</button>` : ''}</div></li>`;
+}
+function renderLibrary() {
+  const lib = window.SX_LIB || [], saved = lsGet('sx6.saved', []);
+  const bests = bestMap();
+  $('#libList').innerHTML = lib.map((p, i) => puzzleCard(p, i, 'lib', bests)).join('');
+  $('#savedList').innerHTML = saved.length ? saved.map((p, i) => puzzleCard(p, i, 'saved', bests)).join('') : '<li class="empty">Nothing saved yet. Save the current puzzle to keep it in this browser.</li>';
+}
+
+/* ---------- wiring ---------- */
+function bind() {
+  const sv = svg();
+  sv.addEventListener('pointerdown', onDown); sv.addEventListener('pointermove', onMove);
+  sv.addEventListener('pointerup', onUp); sv.addEventListener('pointercancel', onUp);
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+  $('#pad').addEventListener('click', e => { const b = e.target.closest('button[data-d]'); if (b) enterDigit(+b.dataset.d); });
+  $('#pencilBtn').addEventListener('click', () => { app.play.pencil = !app.play.pencil; renderMeta(); });
+  $('#undoBtn').addEventListener('click', undo); $('#redoBtn').addEventListener('click', redo);
+  $('#checkBtn').addEventListener('click', checkPlay); $('#hintBtn').addEventListener('click', hint);
+  $('#revealBtn').addEventListener('click', reveal); $('#restartBtn').addEventListener('click', restart);
+  $('#showConf').addEventListener('change', e => { app.showConflicts = e.target.checked; renderBoard(); });
+  $('#autoClear').addEventListener('change', e => { app.autoClear = e.target.checked; });
+  $('#rnSet').addEventListener('click', () => ringApply('set'));
+  $('#rnPencil').addEventListener('click', () => ringApply('pencil'));
+  $('#rnClear').addEventListener('click', ringClear);
+  $('#rnVal').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); ringApply(app.play.pencil ? 'pencil' : 'set'); }
+    else if ((e.key === 'c' || e.key === 'p') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); app.play.pencil = !app.play.pencil; renderMeta(); }
+    else if (e.key === 'Escape') { app.ringSel = null; e.target.blur(); renderAll(); }
+  });
+  $('#colorSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-col]'); if (b) applyColor(+b.dataset.col); });
+  $('#paintSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-col]'); if (b) { app.paintCol = +b.dataset.col; renderEditAux(); } });
+  $('#olType').addEventListener('change', e => { app.olType = e.target.value; renderEditAux(); });
+  $('#olKind').addEventListener('change', e => { app.olKind = e.target.value; });
+  $('#olDiff').addEventListener('input', e => { app.olDiff = Math.max(1, Math.min(20, +e.target.value || 4)); });
+  $('#markVal').addEventListener('input', e => { const i = app.selMark; if (i < 0) return; const v = e.target.value.trim(); app.puzzle.mval[i] = v === '' ? 0 : Math.max(1, Math.min(36, +v)); touch(true); });
+  $('#tools').addEventListener('click', e => {
+    const b = e.target.closest('button[data-tool]'); if (!b) return;
+    app.tool = b.dataset.tool; app.drag = null; if (app.tool !== 'cage') app.selCage = -1; if (app.tool !== 'clue') app.selRing = null; if (app.tool !== 'mkc' && app.tool !== 'mks') app.selMark = -1;
+    renderAll();
+  });
+  $('#regionSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-rg]'); if (b) { app.paint = +b.dataset.rg; renderEditAux(); } });
+  $('#resetRegions').addEventListener('click', () => { app.puzzle.regions = X.stdRegions(); touch(); });
+  $('#cageSum').addEventListener('input', e => { const cg = app.puzzle.cages[app.selCage]; if (!cg) return; const v = e.target.value.trim(); cg.sum = v === '' ? null : +v; touch(true); });
+  $('#cageSum').addEventListener('keydown', e => { if (e.key === 'Enter') { app.selCage = -1; renderAll(); } });
+  $('#cageDel').addEventListener('click', () => { app.puzzle.cages.splice(app.selCage, 1); app.selCage = -1; touch(); });
+  $('#ringKind').addEventListener('change', applyRing); $('#ringVal').addEventListener('input', applyRing);
+  $('#ringDel').addEventListener('click', () => { $('#ringVal').value = ''; applyRing(); });
+  $('#ptitleInput').addEventListener('input', e => { app.puzzle.title = e.target.value; lsSet('sx6.current', app.puzzle); renderMeta(); });
+  OPTS.forEach(([id, k]) => $('#' + id).addEventListener('change', e => { app.puzzle.opts[k] = e.target.checked; touch(true); }));
+  $('#whisperDiff').addEventListener('change', e => { app.puzzle.opts.whisperDiff = +e.target.value; touch(true); });
+  $('#uniqBtn').addEventListener('click', checkUnique); $('#addGivensBtn').addEventListener('click', addGivens); $('#trimBtn').addEventListener('click', trimGivens);
+  $('#clearGivens').addEventListener('click', () => { app.puzzle.givens.fill(0); touch(); });
+  $('#clearAll').addEventListener('click', () => { const t = app.puzzle.title; loadPuzzle(Object.assign(X.newPuzzle(), { title: t }), 'edit'); });
+  $('#playBtn').addEventListener('click', () => setTab('play'));
+  $('#editBtn').addEventListener('click', () => setTab('edit'));
+  // generator
+  $$('#genDiff input').forEach(r => r.addEventListener('change', () => { app.genDiff = r.value; }));
+  $('#whisperGen').addEventListener('change', e => { app.whisperDiff = +e.target.value; });
+  $('#genBtn').addEventListener('click', () => runGenerate(Array.from(app.genSel)));
+  $('#surpriseBtn').addEventListener('click', surprise);
+  $('#presets').innerHTML = PRESETS.map((pr, i) => `<button class="btn quiet" data-pre="${i}">${pr[0]}</button>`).join('');
+  $('#presets').addEventListener('click', e => { const b = e.target.closest('button[data-pre]'); if (b) { app.genSel = new Set(PRESETS[+b.dataset.pre][1]); syncGen(); } });
+  // library
+  $('#tab-library').addEventListener('click', e => {
+    const lib = window.SX_LIB || [], saved = lsGet('sx6.saved', []);
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.lib !== undefined) loadPuzzle(lib[+b.dataset.lib], 'play');
+    else if (b.dataset.saved !== undefined) loadPuzzle(saved[+b.dataset.saved], 'play');
+    else if (b.dataset.del !== undefined) { saved.splice(+b.dataset.del, 1); lsSet('sx6.saved', saved); renderLibrary(); }
+  });
+  $('#saveBtn').addEventListener('click', () => {
+    const saved = lsGet('sx6.saved', []); const q = X.clonePuzzle(app.puzzle);
+    if (!q.title) q.title = 'My puzzle ' + (saved.length + 1);
+    saved.unshift(q); const ok = lsSet('sx6.saved', saved); $('#ioMsg').textContent = ok ? 'Saved to this browser.' : 'Could not save. Browser storage is unavailable.'; renderLibrary();
+  });
+  $('#exportBtn').addEventListener('click', () => { const q = X.clonePuzzle(app.puzzle); if (!q.sol) { const s = getSol(); if (s.sol && s.count === 1) q.sol = s.sol; } $('#ioText').value = JSON.stringify(q); $('#ioMsg').textContent = 'Copy this text to keep or share the puzzle.'; $('#ioText').select(); });
+  $('#importBtn').addEventListener('click', () => {
+    try { const o = JSON.parse($('#ioText').value); if (!o || !Array.isArray(o.givens) || !Array.isArray(o.regions)) throw new Error('bad'); loadPuzzle(o, 'play'); $('#ioMsg').textContent = 'Puzzle loaded.'; }
+    catch (err) { $('#ioMsg').textContent = 'That text is not a puzzle exported from this page.'; }
+  });
+  $('#newBlank').addEventListener('click', () => loadPuzzle(X.newPuzzle(), 'edit'));
+  // keyboard
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input,textarea,select')) return;
+    if (app.tab !== 'play' && app.tab !== 'edit') return;
+    const k = e.key;
+    if (app.tab === 'play' && app.ringSel) {
+      if (/^[0-9]$/.test(k)) { e.preventDefault(); $('#rnVal').focus(); ringType(k); return; }
+      if (k === 'Backspace' || k === 'Delete') { e.preventDefault(); ringPad(0); return; }
+      if (k === 'Enter') { e.preventDefault(); ringApply(app.play.pencil ? 'pencil' : 'set'); return; }
+    }
+    if (/^[1-6]$/.test(k)) { enterDigit(+k); e.preventDefault(); }
+    else if (k === 'Backspace' || k === 'Delete' || k === '0') { enterDigit(0); e.preventDefault(); }
+    else if (k.startsWith('Arrow')) {
+      e.preventDefault();
+      const cur = app.sel.size ? Array.from(app.sel).pop() : 0; let r = rowOf(cur), c = colOf(cur);
+      if (k === 'ArrowUp') r = Math.max(0, r - 1); if (k === 'ArrowDown') r = Math.min(N - 1, r + 1);
+      if (k === 'ArrowLeft') c = Math.max(0, c - 1); if (k === 'ArrowRight') c = Math.min(N - 1, c + 1);
+      if (!e.shiftKey) app.sel.clear(); app.sel.add(ix(r, c)); renderBoard();
+    } else if ((k === 'c' || k === 'p') && !e.ctrlKey && !e.metaKey) { if (app.tab !== 'edit') { app.play.pencil = !app.play.pencil; renderMeta(); } }
+    else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+    else if (k.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey && app.tab === 'play') { applyColor(1); }
+    else if (k === 'Escape') { app.ringSel = null; app.sel.clear(); app.selCage = -1; renderAll(); }
+  });
+  $('#tab-history').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.hplay) replayById(b.dataset.hplay);
+    else if (b.dataset.hdel) { lsSet(HKEY, loadHist().filter(r => r.id !== b.dataset.hdel)); renderHistory(); }
+    else if (b.id === 'histClear') {
+      if (app.histConfirm) { lsSet(HKEY, []); lsSet(HPKEY, {}); app.histConfirm = false; renderHistory(); }
+      else { app.histConfirm = true; b.textContent = 'Tap again to clear all'; setTimeout(() => { app.histConfirm = false; b.textContent = 'Clear all history'; }, 4000); }
+    }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveProgress(); });
+  window.addEventListener('pagehide', saveProgress);
+  setInterval(() => {
+    if (document.visibilityState !== 'visible' || app.tab !== 'play' || !app.play || !app.play.started || app.play.solved) return;
+    app.play.elapsed++; $('#timer').textContent = fmtTime(app.play.elapsed);
+    if (app.play.elapsed % 10 === 0) saveProgress();
+  }, 1000);
+}
+
+function init() {
+  buildToolbox(); buildGenerator(); bind();
+  const cur = lsGet('sx6.current', null);
+  const lib = window.SX_LIB || [];
+  loadPuzzle(cur && cur.givens ? cur : (lib[1] || lib[0] || X.newPuzzle()), 'play');
+  window.__sx = { app, loadPuzzle, setTab, enterDigit };
+}
+init();
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
