@@ -19,7 +19,7 @@
   --accent:#1f4fd1; --accent-ink:#ffffff; --entry:#1f4fd1; --given:#151d27;
   --sel:rgba(31,79,209,.16); --errbg:rgba(201,48,39,.18); --wrongbg:rgba(201,48,39,.34);
   --err:#b8281f; --ok:#1c7a45; --warn:#94560a; --diag:rgba(21,29,39,.14); --par:#d3dae2;
-  --thermo:#b3bcc7; --arrow:#7c8896; --whisper:#3aa05f; --renban:#b56fd0; --pal:#4b9cd8; --between:#d39b2a; --regsum:#e0705c;
+  --thermo:#b3bcc7; --arrow:#7c8896; --whisper:#3aa05f; --renban:#b56fd0; --pal:#4b9cd8; --between:#d39b2a; --regsum:#e0705c; --parity:#8d7b6a; --entropic:#e58fb2;
   --rg0:#e6eefb; --rg1:#fbeadf; --rg2:#e4f3e6; --rg3:#f6e6f1; --rg4:#f8f2d4; --rg5:#dff2f2;
   --c1:#a3abb7; --c2:#f3e9b8; --c3:#f0b3ae; --c4:#f4cf85; --c5:#b5dcae; --c6:#b4cdf3; --c7:#d9bdea; --c8:#8fd0c9;
   --font:'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -30,7 +30,7 @@
     --accent:#7ba4ff; --accent-ink:#0b1420; --entry:#8db0ff; --given:#f1f5f9;
     --sel:rgba(123,164,255,.24); --errbg:rgba(255,120,110,.22); --wrongbg:rgba(255,120,110,.42);
     --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
-    --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a;
+    --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a; --parity:#b9a591; --entropic:#f0a3c2;
     --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
     --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f; --c8:#2f6b63;
   }
@@ -40,7 +40,7 @@
   --accent:#7ba4ff; --accent-ink:#0b1420; --entry:#8db0ff; --given:#f1f5f9;
   --sel:rgba(123,164,255,.24); --errbg:rgba(255,120,110,.22); --wrongbg:rgba(255,120,110,.42);
   --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
-  --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a;
+  --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a; --parity:#b9a591; --entropic:#f0a3c2;
   --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
   --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
 }
@@ -140,6 +140,9 @@ textarea{width:100%;resize:vertical;font:12px/1.4 ui-monospace,Menlo,Consolas,mo
 .sw-odd{background:var(--par);border-radius:50%}
 .sw-region{background:linear-gradient(90deg,var(--rg0) 33%,var(--rg1) 33% 66%,var(--rg2) 66%);border:1px solid var(--rule)}
 .sw-cage{border:1.5px dashed var(--ink);border-radius:2px}
+.sw-parity{height:8px;top:3px;background:var(--parity);border-radius:4px}
+.sw-entropic{height:8px;top:3px;background:var(--entropic);border-radius:4px}
+.sw-lrule{border:2px solid var(--muted);border-radius:3px;background:linear-gradient(90deg,var(--thermo) 50%,var(--whisper) 50%)}
 .sw-quad{border:2px solid var(--ink);border-radius:50%;background:var(--surface)}
 .sw-arrow{border:2px solid var(--arrow);border-radius:50%}
 .sw-clue::before{content:'↘';position:absolute;inset:-4px 0 0 0;font-size:15px}
@@ -187,6 +190,13 @@ textarea{width:100%;resize:vertical;font:12px/1.4 ui-monospace,Menlo,Consolas,mo
 .sw-mkc{border:2px solid var(--ink);border-radius:50%}
 .sw-mks{border:2px solid var(--ink);border-radius:3px}
 
+/* line rules and counts */
+.cnt{display:inline-flex;align-items:center;gap:6px;margin:4px 12px 0 0}
+.cnt input{width:74px}
+.cnt span{font-size:14px}
+#lineExtraBox,#lineRuleBox,#olExtraBox,#genDual,#genLines{margin-top:12px}
+#genLines details{margin-top:6px}
+
 /* history */
 .hcard{border-bottom:1px solid var(--rule)}
 .hcard summary{list-style:none;cursor:pointer;padding:10px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -223,7 +233,8 @@ details.about p{margin:8px 0 0}
 .par{fill:var(--par)}
 .ln{fill:none;stroke-linecap:round;stroke-linejoin:round}
 .ln.thermo{stroke-width:15} .ln.arrow{stroke-width:4.5} .ln.whisper{stroke-width:8}
-.ln.regsum{stroke-width:9;opacity:.9} .ln.renban{stroke-width:14;opacity:.55} .ln.palindrome{stroke-width:14;opacity:.55} .ln.between{stroke-width:4}
+.ln.regsum{stroke-width:9;opacity:.9} .ln.parity{stroke-width:12;opacity:.9} .ln.entropic{stroke-width:12;opacity:.9}
+.lsel{fill:none;stroke:var(--accent);stroke-width:32;opacity:.22;stroke-linecap:round;stroke-linejoin:round} .ln.renban{stroke-width:14;opacity:.55} .ln.palindrome{stroke-width:14;opacity:.55} .ln.between{stroke-width:4}
 .abulb{fill:none;stroke-width:3.5} .ebulb{fill:none;stroke-width:3.5}
 .cage{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85;stroke-linecap:butt}
 .cage.on{stroke:var(--accent);stroke-width:2.6;opacity:1}
@@ -349,6 +360,20 @@ details.about p{margin:8px 0 0}
         <label for="whisperGen" style="font-weight:700">Whispers differ by at least</label>
         <select id="whisperGen"><option value="3">3</option><option value="4" selected>4</option></select>
       </div>
+      <div id="genDual" hidden>
+        <div class="tlabel">Duality lines: rules allowed in a combination</div>
+        <div class="chipset" id="dualChips"></div>
+        <div class="inline"><label for="dualMax" style="font-weight:700">Most rules on one line</label>
+          <select id="dualMax"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
+        <p id="dualNote" class="small"></p>
+      </div>
+      <div id="genLines" hidden>
+        <div class="tlabel">How many lines</div>
+        <div class="inline" style="margin-top:6px"><label for="genDensity" style="font-weight:700">Density</label>
+          <select id="genDensity"><option value="sparse">Sparse</option><option value="normal" selected>Normal</option><option value="dense">Dense</option></select></div>
+        <div id="genCounts"></div>
+        <p class="small">A number fixes that many lines of the type and keeps every one of them. Auto lets the generator drop lines it does not need. Dense keeps every line it places. Sparse allows at most two lines per type.</p>
+      </div>
       <div class="row">
         <button id="genBtn" class="btn primary">Generate puzzle</button>
         <button id="surpriseBtn" class="btn">Surprise me</button>
@@ -378,7 +403,7 @@ details.about p{margin:8px 0 0}
       <div id="olBox" class="inline" hidden>
         <select id="olType" aria-label="Line type">
           <option value="thermo">Thermo</option><option value="arrow">Arrow</option><option value="whisper">Whisper</option>
-          <option value="renban">Renban</option><option value="palindrome">Palindrome</option>
+          <option value="renban">Renban</option><option value="palindrome">Palindrome</option><option value="parity">Parity</option>
         </select>
         <select id="olKind" aria-label="Clue type">
           <option value="xs">X-sums</option><option value="sw">Sandwich</option><option value="sk">Skyscraper</option>
@@ -389,6 +414,20 @@ details.about p{margin:8px 0 0}
         <label for="cageSum" style="font-weight:700">Cage sum</label>
         <input id="cageSum" type="number" min="1" max="21" inputmode="numeric">
         <button id="cageDel" class="btn quiet">Delete cage</button>
+      </div>
+      <div id="lineExtraBox" hidden>
+        <div class="tlabel">Also apply (duality line)</div>
+        <div class="chipset" id="lineExtraChips"></div>
+        <p id="lineExtraNote" class="small"></p>
+      </div>
+      <div id="lineRuleBox" hidden>
+        <div class="tlabel">Rules on this line</div>
+        <div class="chipset" id="lineRuleChips"></div>
+        <p id="lineRuleNote" class="small"></p>
+      </div>
+      <div id="olExtraBox" hidden>
+        <div class="tlabel">Also apply to the clue values</div>
+        <div class="chipset" id="olExtraChips"></div>
       </div>
       <div id="quadBox" class="inline" hidden>
         <label for="quadVal" style="font-weight:700">Digits</label>
@@ -710,26 +749,121 @@ function clueRange(kind, seq, g) {
   if (cnt === 0) return [1, 6];
   return [cnt, cnt + Math.min(6 - max, N - k)];
 }
+const LINE_RULES = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'regsum', 'parity', 'entropic'];
+const OL_RULES = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'parity'];
+const lineTypes = ln => { const a = [ln.type]; (ln.also || []).forEach(t => { if (t && !a.includes(t)) a.push(t); }); return a; };
+const grpOf = d => (d - 1) >> 1;
+
+/* equal-sum split of a digit sequence into >= 2 consecutive runs, each run with distinct digits */
+function splitEqual(v) {
+  const n = v.length;
+  for (let f = 1; f < n; f++) {
+    let s0 = 0, seen = 0, ok = true;
+    for (let i = 0; i < f; i++) { if (seen & bit(v[i])) { ok = false; break; } seen |= bit(v[i]); s0 += v[i]; }
+    if (!ok) break;
+    let acc = 0; seen = 0;
+    for (let i = f; i < n && ok; i++) {
+      if (seen & bit(v[i])) { ok = false; break; }
+      seen |= bit(v[i]); acc += v[i];
+      if (acc === s0) { acc = 0; seen = 0; } else if (acc > s0) ok = false;
+    }
+    if (ok && acc === 0) return true;
+  }
+  return false;
+}
+
+/* Line-only rule test on a digit sequence v for the rule list `types`.
+   complete=false: v is a prefix; checks the constraints that involve its last cell (ctx.L = target length if known).
+   complete=true: v is the whole line; checks every rule. ctx: { wd, L, cells, regions, minRuns, maxRuns } */
+function lineOK(types, v, complete, ctx) {
+  ctx = ctx || {};
+  const n = v.length, wd = +ctx.wd || 4;
+  if (!complete) {
+    const j = n - 1, Lt = ctx.L || 0;
+    for (const t of types) {
+      if (t === 'thermo' && j > 0 && !(v[j] > v[j - 1])) return false;
+      else if (t === 'whisper' && j > 0 && Math.abs(v[j] - v[j - 1]) < wd) return false;
+      else if (t === 'parity' && j > 0 && (v[j] + v[j - 1]) % 2 === 0) return false;
+      else if (t === 'entropic' && (!Lt || Lt >= 3)) {
+        if (j > 0 && grpOf(v[j]) === grpOf(v[j - 1])) return false;
+        if (j > 1 && grpOf(v[j]) === grpOf(v[j - 2])) return false;
+      } else if (t === 'palindrome' && Lt && j > (Lt - 1) / 2 && v[j] !== v[Lt - 1 - j]) return false;
+      else if (t === 'renban') {
+        let mn = 9, mx = 0;
+        for (let a = 0; a <= j; a++) { if (a < j && v[a] === v[j]) return false; if (v[a] < mn) mn = v[a]; if (v[a] > mx) mx = v[a]; }
+        if (mx - mn > (Lt || 6) - 1) return false;
+      } else if (t === 'between' && j > 0 && (!Lt || Lt >= 3) && v[j] === v[0]) return false;
+      else if (t === 'arrow' && j > 0) { let s0 = 0; for (let a = 1; a <= j; a++) s0 += v[a]; if (s0 > v[0]) return false; }
+    }
+    return true;
+  }
+  for (const t of types) {
+    if (t === 'thermo') { for (let k = 0; k + 1 < n; k++) if (!(v[k] < v[k + 1])) return false; }
+    else if (t === 'whisper') { for (let k = 0; k + 1 < n; k++) if (Math.abs(v[k] - v[k + 1]) < wd) return false; }
+    else if (t === 'parity') { for (let k = 0; k + 1 < n; k++) if ((v[k] + v[k + 1]) % 2 === 0) return false; }
+    else if (t === 'entropic') { if (n >= 3) for (let k = 0; k + 2 < n; k++) if (new Set([grpOf(v[k]), grpOf(v[k + 1]), grpOf(v[k + 2])]).size !== 3) return false; }
+    else if (t === 'palindrome') { for (let k = 0; k < n; k++) if (v[k] !== v[n - 1 - k]) return false; }
+    else if (t === 'renban') { if (new Set(v).size !== n || Math.max(...v) - Math.min(...v) !== n - 1) return false; }
+    else if (t === 'between') {
+      if (n >= 3) { const lo = Math.min(v[0], v[n - 1]), hi = Math.max(v[0], v[n - 1]); for (let k = 1; k < n - 1; k++) if (!(v[k] > lo && v[k] < hi)) return false; }
+    } else if (t === 'arrow') {
+      if (n >= 2) { let s0 = 0; for (let k = 1; k < n; k++) s0 += v[k]; if (s0 !== v[0]) return false; }
+    } else if (t === 'regsum') {
+      if (ctx.cells && ctx.regions) {
+        const runs = regRuns(ctx.cells, ctx.regions);
+        if (runs.length < (ctx.minRuns || 1) || runs.length > (ctx.maxRuns || 99)) return false;
+        const pos = {}; ctx.cells.forEach((c, i) => { pos[c] = i; });
+        const sums = runs.map(r => r.reduce((a, c) => a + v[pos[c]], 0));
+        if (new Set(sums).size > 1) return false;
+      } else if (!splitEqual(v)) return false;
+    }
+  }
+  return true;
+}
+
+/* Does any digit sequence satisfy every rule on a line of L cells?  With `cells`/`regions`, uses the real
+   cells (row, column and region peers must differ, region sum runs come from the regions). */
+function lineFeasible(types, L, wd, cells, regions, cap) {
+  const v = [], ctx = { wd, L, cells, regions }; let nodes = 0, found = false; cap = cap || 300000;
+  const peer = (a, b) => rowOf(a) === rowOf(b) || colOf(a) === colOf(b) || regions[a] === regions[b];
+  (function rec() {
+    if (found || nodes > cap) return;
+    if (v.length === L) { if (lineOK(types, v, true, ctx)) found = true; return; }
+    for (let d = 1; d <= 6 && !found; d++) {
+      v.push(d); nodes++;
+      let ok = lineOK(types, v, false, ctx);
+      if (ok && cells && regions) for (let a = 0; a < v.length - 1; a++) if (v[a] === d && peer(cells[a], cells[v.length - 1])) { ok = false; break; }
+      if (ok) rec();
+      v.pop();
+    }
+  })();
+  return found || nodes > cap;
+}
+
 function chkOLine(g, ol, seqs) {
   const R = [];
   for (const sq of seqs) { const r = clueRange(ol.kind, sq, g); if (!r) return false; R.push(r); }
-  const k = R.length, t = ol.type, exact = R.every(r => r[0] === r[1]);
-  if (t === 'thermo') {
-    let m = R[0][0]; if (m > R[0][1]) return false;
-    for (let i = 1; i < k; i++) { m = Math.max(R[i][0], m + 1); if (m > R[i][1]) return false; }
-  } else if (t === 'whisper') {
-    const d = +ol.diff || 4;
-    for (let i = 0; i + 1 < k; i++) if (Math.max(R[i + 1][1] - R[i][0], R[i][1] - R[i + 1][0]) < d) return false;
-  } else if (t === 'arrow') {
-    let lo = 0, hi = 0; for (let i = 1; i < k; i++) { lo += R[i][0]; hi += R[i][1]; }
-    if (R[0][0] > hi || R[0][1] < lo) return false;
-  } else if (t === 'palindrome') {
-    for (let i = 0; i < (k >> 1); i++) { const a = R[i], b = R[k - 1 - i]; if (Math.max(a[0], b[0]) > Math.min(a[1], b[1])) return false; }
-  } else if (t === 'renban') {
-    const known = R.filter(r => r[0] === r[1]).map(r => r[0]);
-    if (new Set(known).size !== known.length) return false;
-    if (known.length && Math.max(...known) - Math.min(...known) > k - 1) return false;
-    if (exact && Math.max(...known) - Math.min(...known) !== k - 1) return false;
+  const k = R.length, exact = R.every(r => r[0] === r[1]);
+  for (const t of lineTypes(ol)) {
+    if (t === 'thermo') {
+      let m = R[0][0]; if (m > R[0][1]) return false;
+      for (let i = 1; i < k; i++) { m = Math.max(R[i][0], m + 1); if (m > R[i][1]) return false; }
+    } else if (t === 'whisper') {
+      const d = +ol.diff || 4;
+      for (let i = 0; i + 1 < k; i++) if (Math.max(R[i + 1][1] - R[i][0], R[i][1] - R[i + 1][0]) < d) return false;
+    } else if (t === 'arrow') {
+      let lo = 0, hi = 0; for (let i = 1; i < k; i++) { lo += R[i][0]; hi += R[i][1]; }
+      if (R[0][0] > hi || R[0][1] < lo) return false;
+    } else if (t === 'palindrome') {
+      for (let i = 0; i < (k >> 1); i++) { const a = R[i], b = R[k - 1 - i]; if (Math.max(a[0], b[0]) > Math.min(a[1], b[1])) return false; }
+    } else if (t === 'renban') {
+      const known = R.filter(r => r[0] === r[1]).map(r => r[0]);
+      if (new Set(known).size !== known.length) return false;
+      if (known.length && Math.max(...known) - Math.min(...known) > k - 1) return false;
+      if (exact && Math.max(...known) - Math.min(...known) !== k - 1) return false;
+    } else if (t === 'parity') {
+      for (let i = 0; i + 1 < k; i++) if (R[i][0] === R[i][1] && R[i + 1][0] === R[i + 1][1] && (R[i][0] + R[i + 1][0]) % 2 === 0) return false;
+    }
   }
   return true;
 }
@@ -786,24 +920,25 @@ function compile(p) {
   const wd = +o.whisperDiff || 4;
   for (const ln of p.lines) {
     const cs = ln.cells, L = cs.length;
-    if (ln.type === 'thermo') {
+    for (const ty of lineTypes(ln)) {
+    if (ty === 'thermo') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
       for (let k = 0; k < L; k++) {
         let m = 0; for (let d = 1; d <= 6; d++) if (d >= k + 1 && d <= 6 - (L - 1 - k)) m |= bit(d);
         cand0[cs[k]] &= m;
       }
-    } else if (ln.type === 'whisper') {
+    } else if (ty === 'whisper') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => Math.abs(a - b) >= wd);
-    } else if (ln.type === 'palindrome') {
+    } else if (ty === 'palindrome') {
       for (let k = 0; k < (L >> 1); k++) addBin(cs[k], cs[L - 1 - k], (a, b) => a === b);
-    } else if (ln.type === 'renban') {
+    } else if (ty === 'renban') {
       distinct(cs); addGroup(cs, g => chkRenban(g, cs));
-    } else if (ln.type === 'between') {
+    } else if (ty === 'between') {
       if (L >= 3) {
         for (let k = 1; k < L - 1; k++) cand0[cs[k]] &= (bit(2) | bit(3) | bit(4) | bit(5));
         addGroup(cs, g => chkBetween(g, cs));
       }
-    } else if (ln.type === 'regsum') {
+    } else if (ty === 'regsum') {
       const runs = regRuns(cs, p.regions);
       if (runs.length >= 2) addGroup(cs, g => chkRegSum(g, runs));
       if (ln.ring) {
@@ -820,13 +955,21 @@ function compile(p) {
           });
         }
       }
-    } else if (ln.type === 'arrow') {
+    } else if (ty === 'arrow') {
       if (L >= 2) {
         const tl = L - 1; let mc = 0, mt = 0;
         for (let d = 1; d <= 6; d++) { if (d >= tl) mc |= bit(d); if (d <= 6 - (tl - 1)) mt |= bit(d); }
         cand0[cs[0]] &= mc; for (let k = 1; k < L; k++) cand0[cs[k]] &= mt;
         addGroup(cs, g => chkArrow(g, cs));
       }
+    } else if (ty === 'parity') {
+      for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => (a + b) % 2 === 1);
+    } else if (ty === 'entropic') {
+      if (L >= 3) {
+        for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => grpOf(a) !== grpOf(b));
+        for (let k = 0; k + 2 < L; k++) addBin(cs[k], cs[k + 2], (a, b) => grpOf(a) !== grpOf(b));
+      }
+    }
     }
   }
   // pair markers
@@ -1136,17 +1279,18 @@ function verify(p, g, sh) {
   }
   for (const ln of p.lines) {
     const v = ln.cells.map(c => g[c]), L = v.length;
-    if (ln.type === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(v[k] < v[k + 1])) errs.push('thermo'); }
-    else if (ln.type === 'whisper') { for (let k = 0; k + 1 < L; k++) if (Math.abs(v[k] - v[k + 1]) < (+o.whisperDiff || 4)) errs.push('whisper'); }
-    else if (ln.type === 'palindrome') { for (let k = 0; k < L; k++) if (v[k] !== v[L - 1 - k]) errs.push('palindrome'); }
-    else if (ln.type === 'renban') { if (new Set(v).size !== L || Math.max(...v) - Math.min(...v) !== L - 1) errs.push('renban'); }
-    else if (ln.type === 'between') {
+    for (const ty of lineTypes(ln)) {
+    if (ty === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(v[k] < v[k + 1])) errs.push('thermo'); }
+    else if (ty === 'whisper') { for (let k = 0; k + 1 < L; k++) if (Math.abs(v[k] - v[k + 1]) < (+o.whisperDiff || 4)) errs.push('whisper'); }
+    else if (ty === 'palindrome') { for (let k = 0; k < L; k++) if (v[k] !== v[L - 1 - k]) errs.push('palindrome'); }
+    else if (ty === 'renban') { if (new Set(v).size !== L || Math.max(...v) - Math.min(...v) !== L - 1) errs.push('renban'); }
+    else if (ty === 'between') {
       const lo = Math.min(v[0], v[L - 1]), hi = Math.max(v[0], v[L - 1]);
       for (let k = 1; k < L - 1; k++) if (!(v[k] > lo && v[k] < hi)) errs.push('between');
-    } else if (ln.type === 'arrow') {
+    } else if (ty === 'arrow') {
       let s = 0; for (let k = 1; k < L; k++) s += v[k];
       if (s !== v[0]) errs.push('arrow');
-    } else if (ln.type === 'regsum') {
+    } else if (ty === 'regsum') {
       const sums = regRuns(ln.cells, p.regions).map(run => run.reduce((a, c) => a + g[c], 0));
       if (new Set(sums).size > 1) errs.push('regsum');
       else if (ln.ring) {
@@ -1157,6 +1301,9 @@ function verify(p, g, sh) {
         const v = seq.length === N ? outVal(kind, seq, g) : null;
         if (v == null || v !== sums[0]) errs.push('regsum ring');
       }
+    }
+    else if (ty === 'parity') { for (let k = 0; k + 1 < L; k++) if ((v[k] + v[k + 1]) % 2 === 0) errs.push('parity'); }
+    else if (ty === 'entropic') { if (L >= 3) for (let k = 0; k + 2 < L; k++) if (new Set([grpOf(v[k]), grpOf(v[k + 1]), grpOf(v[k + 2])]).size !== 3) errs.push('entropic'); }
     }
   }
   const has = { cons: new Set(), white: new Set(), black: new Set(), X: new Set(), V: new Set() };
@@ -1198,11 +1345,14 @@ function verify(p, g, sh) {
   for (const ol of (p.olines || [])) {
     const vals = ol.cells.map(([r, c]) => outVal(ol.kind, clueSeq({ kind: ol.kind, r, c }), g)), L = vals.length;
     if (vals.some(v => v == null)) { errs.push('outside line'); continue; }
-    if (ol.type === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(vals[k] < vals[k + 1])) errs.push('outside thermo'); }
-    else if (ol.type === 'whisper') { for (let k = 0; k + 1 < L; k++) if (Math.abs(vals[k] - vals[k + 1]) < (+ol.diff || 4)) errs.push('outside whisper'); }
-    else if (ol.type === 'arrow') { let s = 0; for (let k = 1; k < L; k++) s += vals[k]; if (s !== vals[0]) errs.push('outside arrow'); }
-    else if (ol.type === 'renban') { if (new Set(vals).size !== L || Math.max(...vals) - Math.min(...vals) !== L - 1) errs.push('outside renban'); }
-    else if (ol.type === 'palindrome') { for (let k = 0; k < L; k++) if (vals[k] !== vals[L - 1 - k]) errs.push('outside palindrome'); }
+    for (const ty of lineTypes(ol)) {
+      if (ty === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(vals[k] < vals[k + 1])) errs.push('outside thermo'); }
+      else if (ty === 'whisper') { for (let k = 0; k + 1 < L; k++) if (Math.abs(vals[k] - vals[k + 1]) < (+ol.diff || 4)) errs.push('outside whisper'); }
+      else if (ty === 'arrow') { let s0 = 0; for (let k = 1; k < L; k++) s0 += vals[k]; if (s0 !== vals[0]) errs.push('outside arrow'); }
+      else if (ty === 'renban') { if (new Set(vals).size !== L || Math.max(...vals) - Math.min(...vals) !== L - 1) errs.push('outside renban'); }
+      else if (ty === 'palindrome') { for (let k = 0; k < L; k++) if (vals[k] !== vals[L - 1 - k]) errs.push('outside palindrome'); }
+      else if (ty === 'parity') { for (let k = 0; k + 1 < L; k++) if ((vals[k] + vals[k + 1]) % 2 === 0) errs.push('outside parity'); }
+    }
   }
   if (usesShade(p)) verifyShade(p, g, sh || new Array(NN).fill(0), errs);
   return errs;
@@ -1283,7 +1433,7 @@ function conflicts(p, model, grid) {
 const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper' };
 
 root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
-  stdRegions, newPuzzle, usesShade, clueRange, outVal, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
+  stdRegions, newPuzzle, usesShade, clueRange, outVal, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, OL_RULES, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -1313,6 +1463,9 @@ const VARIANTS = [
   { k: 'palindrome', label: 'Palindrome', group: 'Lines' },
   { k: 'between', label: 'Between lines', group: 'Lines' },
   { k: 'regsum', label: 'Region sum lines', group: 'Lines' },
+  { k: 'parity', label: 'Parity lines', group: 'Lines' },
+  { k: 'entropic', label: 'Entropic lines', group: 'Lines' },
+  { k: 'duality', label: 'Duality lines', group: 'Lines' },
   { k: 'nonconsecutive', label: 'Non-consecutive', group: 'Grid rules' },
   { k: 'consecutive', label: 'Consecutive', group: 'Pair clues' },
   { k: 'kropki', label: 'Kropki', group: 'Pair clues' },
@@ -1328,7 +1481,7 @@ const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const MIN_KEEP = { killer: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, nurikabe: 0, shadeline: 0, regsum: 1, nonconsecutive: 0,
-  outxsum: 1, outsandwich: 1, outsky: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, quad: 2 };
+  outxsum: 1, outsandwich: 1, outsky: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 
 function randomRegions(rng) {
   for (let attempt = 0; attempt < 800; attempt++) {
@@ -1390,13 +1543,13 @@ function clueValue(cl, sol) {
 function sampleLines(sol, rng, o) {
   const lines = [], used = new Set();
   for (let a = 0; a < o.attempts && lines.length < o.max; a++) {
-    const L = o.minL + Math.floor(rng() * (o.maxL - o.minL + 1));
+    const L = o.lens ? pick(o.lens, rng) : o.minL + Math.floor(rng() * (o.maxL - o.minL + 1));
     const start = Math.floor(rng() * NN);
     if (used.has(start)) continue;
     const path = [start], inPath = new Set(path);
     while (path.length < L) {
       const last = path[path.length - 1];
-      const opts = nbr8[last].filter(j => !inPath.has(j) && !used.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j)));
+      const opts = nbr8[last].filter(j => !inPath.has(j) && !used.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
       if (!opts.length) break;
       const j = pick(opts, rng); path.push(j); inPath.add(j);
     }
@@ -1470,7 +1623,23 @@ function makeShadeLine(sol, rng, wd) {
   return null;
 }
 
-const OL_TYPES = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome'];
+const _cf = new Map();
+function comboLens(types, wd) {
+  const key = types.join('+') + '|' + wd;
+  if (!_cf.has(key)) { const ls = []; for (let L = 3; L <= 7; L++) if (S.lineFeasible(types, L, wd)) ls.push(L); _cf.set(key, ls); }
+  return _cf.get(key);
+}
+/* every set of 2..maxK allowed rules that has a valid fill on some line length 3-7 */
+function dualCombos(allowed, maxK, wd) {
+  const rules = S.LINE_RULES.filter(r => allowed.includes(r)), out = [];
+  const rec = (i, cur) => {
+    if (cur.length >= 2) { const ls = comboLens(cur, wd); if (!ls.length) return; out.push({ types: cur.slice(), lens: ls }); }
+    if (cur.length >= maxK) return;
+    for (let j = i; j < rules.length; j++) { cur.push(rules[j]); rec(j + 1, cur); cur.pop(); }
+  };
+  rec(0, []); return out;
+}
+const OL_TYPES = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'parity'];
 function sideCell(side, i) { return side === 0 ? [-1, i] : side === 1 ? [N, i] : side === 2 ? [i, -1] : [i, N]; }
 function outOK(type, v, d) {
   const L = v.length, sum = a => a.reduce((x, y) => x + y, 0);
@@ -1478,27 +1647,29 @@ function outOK(type, v, d) {
   if (type === 'whisper') return v.every((x, i) => i === 0 || Math.abs(x - v[i - 1]) >= d);
   if (type === 'arrow') return v[0] === sum(v.slice(1));
   if (type === 'renban') return new Set(v).size === L && Math.max(...v) - Math.min(...v) === L - 1;
+  if (type === 'parity') return v.every((x, i) => i === 0 || (x + v[i - 1]) % 2 === 1);
   return v.every((x, i) => x === v[L - 1 - i]);
 }
-function sampleOutLines(kind, sol, rng, usedRing, max) {
+function sampleOutLines(kind, sol, rng, usedRing, max, dual) {
   const lines = [];
   for (let a = 0; a < 5000 && lines.length < max; a++) {
     const side = Math.floor(rng() * 4), type = pick(OL_TYPES, rng);
-    const L = type === 'arrow' ? 3 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 3);
+    const also = dual && rng() < 0.5 ? [pick(OL_TYPES.filter(t => t !== type), rng)] : [], types = [type].concat(also);
+    const L = types.includes('arrow') ? 3 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 3);
     const start = Math.floor(rng() * (N - L + 1));
     let cells = []; for (let k = 0; k < L; k++) cells.push(sideCell(side, start + k));
     if (rng() < 0.5) cells.reverse();
     if (cells.some(([r, c]) => usedRing.has(r + ',' + c))) continue;
     const vals = cells.map(([r, c]) => clueValue({ kind, r, c }, sol));
     const diff = kind === 'sk' ? 3 : 5;
-    if (!outOK(type, vals, diff)) continue;
+    if (!types.every(t => outOK(t, vals, diff))) continue;
     cells.forEach(([r, c]) => usedRing.add(r + ',' + c));
-    lines.push({ type, kind, cells, vals, diff: type === 'whisper' ? diff : undefined });
+    lines.push({ type, also: also.length ? also : undefined, kind, cells, vals, diff: types.includes('whisper') ? diff : undefined });
   }
   return lines;
 }
 
-function buildPool(V, sol, rng, neg, whisperDiff, regions) {
+function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const items = [];
   const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
   const usedRing = new Set();
@@ -1517,37 +1688,38 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions) {
     });
   }
 
-  if (V.has('thermo')) {
-    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 6, attempts: 1200,
-      prefixOK: v => v.length < 2 || v[v.length - 1] > v[v.length - 2], finalOK: () => true })
-      .forEach(cs => add('thermo', p => p.lines.push({ type: 'thermo', cells: cs.slice() })));
-  }
-  if (V.has('arrow')) {
-    sampleLines(sol, rng, { minL: 3, maxL: 4, max: 4, attempts: 3000,
-      prefixOK: v => sum(v.slice(1)) <= v[0], finalOK: v => v[0] >= 3 && sum(v.slice(1)) === v[0] })
-      .forEach(cs => add('arrow', p => p.lines.push({ type: 'arrow', cells: cs.slice() })));
-  }
-  if (V.has('renban')) {
-    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 5, attempts: 3000,
-      prefixOK: v => new Set(v).size === v.length && Math.max(...v) - Math.min(...v) <= 4 && Math.max(...v) - Math.min(...v) <= v.length + 1,
-      finalOK: v => new Set(v).size === v.length && Math.max(...v) - Math.min(...v) === v.length - 1 })
-      .forEach(cs => add('renban', p => p.lines.push({ type: 'renban', cells: cs.slice() })));
-  }
-  if (V.has('whisper')) {
-    sampleLines(sol, rng, { minL: 3, maxL: 6, max: 5, attempts: 4000,
-      prefixOK: v => v.length < 2 || Math.abs(v[v.length - 1] - v[v.length - 2]) >= whisperDiff, finalOK: () => true })
-      .forEach(cs => add('whisper', p => p.lines.push({ type: 'whisper', cells: cs.slice() })));
-  }
-  if (V.has('palindrome')) {
-    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 4, attempts: 6000,
-      prefixOK: () => true, finalOK: v => v.every((x, k) => x === v[v.length - 1 - k]) })
-      .forEach(cs => add('palindrome', p => p.lines.push({ type: 'palindrome', cells: cs.slice() })));
-  }
-  if (V.has('between')) {
-    sampleLines(sol, rng, { minL: 3, maxL: 5, max: 4, attempts: 6000,
-      prefixOK: () => true,
-      finalOK: v => { const lo = Math.min(v[0], v[v.length - 1]), hi = Math.max(v[0], v[v.length - 1]); return v.slice(1, -1).every(x => x > lo && x < hi); } })
-      .forEach(cs => add('between', p => p.lines.push({ type: 'between', cells: cs.slice() })));
+  const counts = (spec && spec.counts) || {}, dens = (spec && spec.density) || 'normal', wdv = whisperDiff;
+  const capOf = (key, dflt) => counts[key] != null ? counts[key] : dens === 'sparse' ? Math.min(2, dflt) : dens === 'dense' ? Math.ceil(dflt * 1.5) : dflt;
+  const lk = key => counts[key] != null || dens === 'dense';
+  const plain = (key, minL, maxL, dflt, att, extra) => {
+    if (!V.has(key)) return;
+    const types = [key];
+    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att,
+      prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(types, v, true, { wd: wdv }) && (!extra || extra(v)) })
+      .forEach(cs => add(key, p => p.lines.push({ type: key, cells: cs.slice() }), lk(key)));
+  };
+  plain('thermo', 3, 5, 6, 1200);
+  plain('arrow', 3, 4, 4, 3000, v => v[0] >= 3);
+  plain('renban', 3, 5, 5, 3000);
+  plain('whisper', 3, 6, 5, 4000);
+  plain('palindrome', 3, 5, 4, 9000);
+  plain('between', 3, 5, 4, 6000);
+  plain('parity', 3, 7, 5, 2000);
+  plain('entropic', 3, 7, 5, 3000);
+
+  if (V.has('duality')) {
+    const allowed = spec && spec.dualityRules && spec.dualityRules.length ? spec.dualityRules : S.LINE_RULES;
+    const combos = dualCombos(allowed, (spec && spec.dualityMax) || 3, wdv);
+    for (let i = 0; combos.length && i < capOf('duality', 3); i++) {
+      for (let t = 0; t < 6; t++) {
+        const types = pick(combos, rng).types, cb = combos.find(c => c.types === types);
+        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000,
+          prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
+          finalOK: (v, cells) => S.lineOK(types, v, true, { wd: wdv, cells, regions, minRuns: 2, maxRuns: 4 }) && (!types.includes('arrow') || v[0] >= 3) });
+        if (got.length) { const cs = got[0]; add('duality', p => p.lines.push({ type: types[0], also: types.slice(1), cells: cs.slice() }), lk('duality')); break; }
+      }
+    }
   }
 
   if (V.has('regsum')) {
@@ -1557,7 +1729,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions) {
       if (c === 0) cands.push([r, -1]); if (c === N - 1) cands.push([r, N]);
       return cands;
     };
-    sampleLines(sol, rng, { minL: 4, maxL: 8, max: 5, attempts: 9000,
+    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000,
       prefixOK: () => true,
       finalOK: (v, cells) => { const runs = S.regRuns(cells, regions); if (runs.length < 2 || runs.length > 4) return false;
         const sums = runs.map(r => r.reduce((a, c) => a + sol[c], 0)); return sums.every(x => x === sums[0]); } })
@@ -1584,14 +1756,14 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions) {
           const ln = { type: 'regsum', cells: cs.slice() };
           if (ring) { ln.ring = ring.slice(); p.clues.push({ kind: ringKind, r: ring[0], c: ring[1], val: revealRing ? ringVal : '' }); }
           p.lines.push(ln);
-        });
+        }, lk('regsum'));
       });
   }
   const nOutV = ['outxsum', 'outsandwich', 'outsky'].filter(k => V.has(k)).length;
   [['outxsum', 'xs'], ['outsandwich', 'sw'], ['outsky', 'sk']].forEach(([variant, kind]) => {
     if (!V.has(variant)) return;
-    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1][nOutV]);
-    lines.forEach(ln => add(variant, p => p.olines.push({ type: ln.type, kind: ln.kind, cells: ln.cells.map(c => c.slice()), diff: ln.diff })));
+    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1][nOutV], V.has('duality'));
+    lines.forEach(ln => add(variant, p => p.olines.push({ type: ln.type, also: ln.also, kind: ln.kind, cells: ln.cells.map(c => c.slice()), diff: ln.diff })));
     lines.forEach(ln => ln.cells.forEach(([r, c], k) => add(variant + '-c', p => p.clues.push({ kind, r, c, val: ln.vals[k] }))));
     let n = 0;
     for (const cl of shuffle(ringSlots(kind), rng)) {
@@ -1698,15 +1870,17 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     base.marks[sl.path[0]] = 2; base.mval[sl.path[0]] = sl.path.length;
     ssol = sl.sh;
   }
-  const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions);
+  const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec);
   if (ssol) {
     const kind = V.has('nurikabe') ? 'nurikabe' : 'shadeline';
     for (let i = 0; i < NN; i++) if (!base.marks[i]) add2(items, kind, i, ssol[i] ? 1 : 2);
   }
   const usedVariants = Array.from(V).filter(k => MIN_KEEP[k] !== undefined);
+  const exact = spec.counts || {};
   for (const k of usedVariants) {
-    const need = Math.min(MIN_KEEP[k], 2);
-    if (items.filter(it => it.variant === k).length < need) return null;
+    const have = items.filter(it => it.variant === k).length;
+    if (exact[k] != null) { if (have < exact[k]) return null; continue; }
+    if (have < Math.min(MIN_KEEP[k], 2)) return null;
   }
   const hasItems = items.length > 0;
   const g0 = hasItems ? { easy: 8, medium: 3, hard: 0 }[diff] : { easy: 16, medium: 12, hard: 0 }[diff];
@@ -1767,11 +1941,11 @@ function generate(spec, seed, budgetMs) {
   return null;
 }
 
-root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
+root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
 root.SX.randomRegions = randomRegions;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
-<script>window.SX_LIB = [{"v":4,"title":"Classic","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[2,3,5,6,0,0,0,4,0,0,0,5,1,6,3,0,5,0,5,0,0,0,0,0,0,5,0,2,0,0,3,0,0,5,0,6],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":[],"difficulty":"easy"}},{"v":4,"title":"Little Killer + X-Sums","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,6,0,0,0,0,0,0,0,1,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":3,"dr":1,"dc":-1,"val":10},{"kind":"lk","r":-1,"c":5,"dr":1,"dc":-1,"val":20},{"kind":"lk","r":1,"c":-1,"dr":1,"dc":1,"val":16},{"kind":"lk","r":-1,"c":-1,"dr":1,"dc":1,"val":24},{"kind":"lk","r":6,"c":5,"dr":-1,"dc":-1,"val":20},{"kind":"xs","r":-1,"c":4,"val":21},{"kind":"xs","r":4,"c":-1,"val":21}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,1,2,4,6,3,3,4,6,1,2,5,4,6,5,2,3,1,1,2,3,5,4,6,6,5,4,3,1,2,2,3,1,6,5,4],"ssol":null,"meta":{"variants":["littlekiller","xsum"],"difficulty":"medium"}},{"v":4,"title":"Killer + Diagonal","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,6,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[12,18,6],"sum":10},{"cells":[33,27,28],"sum":8},{"cells":[32,26],"sum":7}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,4,2,6,4,3,2,6,1,5,1,6,5,3,4,2,2,4,6,1,5,3,3,5,1,2,6,4],"ssol":null,"meta":{"variants":["killer","diag"],"difficulty":"medium"}},{"v":4,"title":"Thermo + Even/Odd","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,6,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[0,6,12]},{"type":"thermo","cells":[32,31,26]}],"edges":[],"parity":[0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,2,1,0,0,0,2,0,0,2,0,0,0,2,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":null,"meta":{"variants":["thermo","evenodd"],"difficulty":"medium"}},{"v":4,"title":"Arrow + Kropki","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":true,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"arrow","cells":[25,24,31]}],"edges":[{"a":0,"b":1,"t":"white"},{"a":1,"b":7,"t":"white"},{"a":2,"b":3,"t":"white"},{"a":3,"b":9,"t":"black"},{"a":4,"b":10,"t":"black"},{"a":5,"b":11,"t":"white"},{"a":9,"b":10,"t":"white"},{"a":9,"b":15,"t":"white"},{"a":13,"b":14,"t":"black"},{"a":14,"b":15,"t":"white"},{"a":14,"b":20,"t":"white"},{"a":15,"b":16,"t":"white"},{"a":16,"b":22,"t":"white"},{"a":17,"b":23,"t":"white"},{"a":18,"b":24,"t":"white"},{"a":19,"b":20,"t":"black"},{"a":21,"b":27,"t":"black"},{"a":22,"b":23,"t":"black"},{"a":22,"b":28,"t":"black"},{"a":24,"b":25,"t":"white"},{"a":24,"b":30,"t":"white"},{"a":25,"b":26,"t":"white"},{"a":27,"b":28,"t":"white"},{"a":28,"b":34,"t":"white"},{"a":31,"b":32,"t":"black"},{"a":33,"b":34,"t":"white"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":["arrow","kropki"],"difficulty":"medium"}},{"v":4,"title":"XV + Consecutive","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":true,"kropkiNeg":false,"xvNeg":true,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":0,"b":1,"t":"cons"},{"a":0,"b":6,"t":"cons"},{"a":2,"b":3,"t":"cons"},{"a":4,"b":10,"t":"cons"},{"a":6,"b":12,"t":"cons"},{"a":8,"b":9,"t":"cons"},{"a":9,"b":15,"t":"cons"},{"a":10,"b":16,"t":"cons"},{"a":11,"b":17,"t":"cons"},{"a":12,"b":18,"t":"cons"},{"a":13,"b":14,"t":"cons"},{"a":19,"b":20,"t":"cons"},{"a":20,"b":26,"t":"cons"},{"a":21,"b":27,"t":"cons"},{"a":22,"b":23,"t":"cons"},{"a":22,"b":28,"t":"cons"},{"a":24,"b":30,"t":"cons"},{"a":25,"b":31,"t":"cons"},{"a":26,"b":27,"t":"cons"},{"a":27,"b":33,"t":"cons"},{"a":28,"b":34,"t":"cons"},{"a":29,"b":35,"t":"cons"},{"a":0,"b":1,"t":"V"},{"a":3,"b":4,"t":"X"},{"a":4,"b":5,"t":"V"},{"a":6,"b":7,"t":"X"},{"a":8,"b":14,"t":"V"},{"a":11,"b":17,"t":"V"},{"a":14,"b":15,"t":"V"},{"a":20,"b":26,"t":"V"},{"a":22,"b":28,"t":"V"},{"a":23,"b":29,"t":"X"},{"a":31,"b":32,"t":"X"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,2,5,6,4,1,4,6,1,2,5,3,5,3,4,1,6,2,6,1,2,5,3,4,1,5,3,4,2,6,2,4,6,3,1,5],"ssol":null,"meta":{"variants":["xv","consecutive"],"difficulty":"hard"}},{"v":4,"title":"German Whispers + Renban","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[6,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"renban","cells":[14,21,15,10]},{"type":"renban","cells":[20,26,19]},{"type":"whisper","cells":[11,16,21]},{"type":"whisper","cells":[32,25,24]},{"type":"whisper","cells":[6,7,0,1]},{"type":"whisper","cells":[35,28,23]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["whisper","renban"],"difficulty":"medium"}},{"v":4,"title":"Sandwich + Skyscraper","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,2,0,3,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":-1,"c":0,"val":0},{"kind":"sw","r":4,"c":-1,"val":0},{"kind":"sw","r":6,"c":1,"val":9},{"kind":"sw","r":-1,"c":2,"val":11},{"kind":"sk","r":3,"c":6,"val":2},{"kind":"sk","r":-1,"c":1,"val":3},{"kind":"sk","r":-1,"c":5,"val":2},{"kind":"sk","r":5,"c":-1,"val":4},{"kind":"sk","r":-1,"c":4,"val":1}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":null,"meta":{"variants":["sandwich","skyscraper"],"difficulty":"medium"}},{"v":4,"title":"Anti-knight + Kropki","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":true,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":true,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":0,"b":1,"t":"white"},{"a":0,"b":6,"t":"black"},{"a":2,"b":3,"t":"white"},{"a":2,"b":8,"t":"white"},{"a":3,"b":9,"t":"white"},{"a":5,"b":11,"t":"black"},{"a":8,"b":9,"t":"white"},{"a":10,"b":11,"t":"white"},{"a":13,"b":14,"t":"black"},{"a":13,"b":19,"t":"white"},{"a":14,"b":15,"t":"white"},{"a":14,"b":20,"t":"white"},{"a":15,"b":21,"t":"white"},{"a":16,"b":17,"t":"white"},{"a":16,"b":22,"t":"white"},{"a":18,"b":19,"t":"white"},{"a":18,"b":24,"t":"white"},{"a":19,"b":25,"t":"white"},{"a":20,"b":21,"t":"white"},{"a":21,"b":22,"t":"black"},{"a":21,"b":27,"t":"black"},{"a":22,"b":28,"t":"black"},{"a":24,"b":25,"t":"white"},{"a":27,"b":28,"t":"black"},{"a":28,"b":29,"t":"white"},{"a":30,"b":31,"t":"white"},{"a":31,"b":32,"t":"black"},{"a":34,"b":35,"t":"white"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,4,1,6,5,3,2,1,4,2,3,5,6,6,5,3,2,4,1,5,6,1,4,2,3,3,2,4,1,6,5],"ssol":null,"meta":{"variants":["antiknight","kropki"],"difficulty":"hard"}},{"v":4,"title":"Irregular + Killer","regions":[2,2,2,5,5,5,2,2,2,5,5,5,3,3,3,1,1,1,3,0,0,1,1,4,3,0,0,4,1,4,3,0,0,4,4,4],"givens":[0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,4,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[26,25,20,31],"sum":13},{"cells":[1,2,7,0],"sum":14},{"cells":[4,5,10],"sum":9},{"cells":[14,13,8],"sum":8},{"cells":[30,24],"sum":7},{"cells":[28,34],"sum":10}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[1,4,6,2,3,5,2,3,5,4,1,6,6,2,1,3,5,4,5,6,4,1,2,3,4,1,3,5,6,2,3,5,2,6,4,1],"ssol":null,"meta":{"variants":["irregular","killer"],"difficulty":"medium"}},{"v":4,"title":"Palindrome + Between + Thermo","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[32,27,26]},{"type":"thermo","cells":[1,6,0]},{"type":"thermo","cells":[21,14,8]},{"type":"thermo","cells":[12,18,19,13]},{"type":"palindrome","cells":[24,18,13,8,1]},{"type":"palindrome","cells":[9,10,16]},{"type":"palindrome","cells":[32,33,28]},{"type":"between","cells":[24,30,25]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["palindrome","between","thermo"],"difficulty":"medium"}},{"v":4,"title":"Disjoint Groups + XV","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":true,"nonconsec":false,"kropkiNeg":false,"xvNeg":true,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":1,"b":2,"t":"V"},{"a":4,"b":10,"t":"X"},{"a":6,"b":7,"t":"V"},{"a":6,"b":12,"t":"V"},{"a":7,"b":13,"t":"V"},{"a":9,"b":10,"t":"V"},{"a":9,"b":15,"t":"V"},{"a":10,"b":16,"t":"V"},{"a":12,"b":13,"t":"V"},{"a":15,"b":16,"t":"V"},{"a":19,"b":20,"t":"V"},{"a":24,"b":30,"t":"V"},{"a":26,"b":32,"t":"V"},{"a":28,"b":34,"t":"V"},{"a":29,"b":35,"t":"V"},{"a":30,"b":31,"t":"X"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,4,1,3,6,2,3,2,6,1,4,5,2,3,5,4,1,6,6,1,4,2,5,3,1,5,3,6,2,4,4,6,2,5,3,1],"ssol":null,"meta":{"variants":["disjoint","xv"],"difficulty":"medium"}},{"v":4,"title":"Anti-king + Little Killer + Sandwich","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":true,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":3,"dr":1,"dc":-1,"val":9},{"kind":"lk","r":-1,"c":5,"dr":1,"dc":-1,"val":20},{"kind":"lk","r":4,"c":-1,"dr":-1,"dc":1,"val":17},{"kind":"sw","r":-1,"c":4,"val":0},{"kind":"sw","r":2,"c":-1,"val":14}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,3,6,2,1,5,1,2,4,5,3,6,6,5,3,1,4,2,3,4,2,6,5,1,5,6,1,4,2,3],"ssol":null,"meta":{"variants":["antiking","littlekiller","sandwich"],"difficulty":"medium"}},{"v":4,"title":"Diagonal + Little Killer + X-Sums","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":2,"dr":1,"dc":1,"val":9},{"kind":"lk","r":4,"c":-1,"dr":-1,"dc":1,"val":16},{"kind":"lk","r":6,"c":3,"dr":-1,"dc":-1,"val":15},{"kind":"xs","r":-1,"c":5,"val":12},{"kind":"xs","r":6,"c":5,"val":10},{"kind":"xs","r":-1,"c":3,"val":14}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,5,1,2,3,4,1,6,2,5,6,5,2,4,3,1,1,3,4,2,5,6,5,2,6,1,4,3],"ssol":null,"meta":{"variants":["diag","littlekiller","xsum"],"difficulty":"hard"}},{"v":4,"title":"Arrow + Thermo + Renban + Even/Odd","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[6,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[32,27,26]},{"type":"thermo","cells":[21,14,8]},{"type":"arrow","cells":[13,14,8]},{"type":"arrow","cells":[29,22,21]},{"type":"renban","cells":[15,22,27,26,25]}],"edges":[],"parity":[0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["arrow","thermo","renban","evenodd"],"difficulty":"medium"}},{"v":4,"title":"Nurikabe","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,1,0,0,1],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,4,0,0,0,0,0,0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,2,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":[0,0,1,0,0,0,0,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,0,1,0],"meta":{"variants":["nurikabe"],"difficulty":"medium"}},{"v":4,"title":"Shaded Whispers","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[2,0,0,3,0,0,0,0,0,0,5,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":true},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":[0,1,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"meta":{"variants":["shadeline"],"difficulty":"medium"}},{"v":4,"title":"Nurikabe + Killer","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[29,35,34],"sum":12},{"cells":[19,13,7],"sum":14},{"cells":[0,6,12,18],"sum":14},{"cells":[21,20],"sum":8}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,2,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":[1,1,0,1,1,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,0],"meta":{"variants":["nurikabe","killer"],"difficulty":"medium"}},{"v":4,"title":"Shaded Whispers + Diagonal","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":true},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,2,0,0,0,0,0,0,0,0],"sol":[2,1,4,5,6,3,5,3,6,1,2,4,3,6,5,4,1,2,4,2,1,6,3,5,1,5,3,2,4,6,6,4,2,3,5,1],"ssol":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"meta":{"variants":["shadeline","diag"],"difficulty":"hard"}},{"v":4,"title":"Nurikabe + Thermo","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[10,3,9,4]},{"type":"thermo","cells":[18,19,26]},{"type":"thermo","cells":[2,7,8,13]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":[1,1,0,1,1,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,0],"meta":{"variants":["nurikabe","thermo"],"difficulty":"hard"}},{"v":4,"title":"Region Sum Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"regsum","cells":[14,20,25,31],"ring":[6,1]},{"type":"regsum","cells":[5,10,9,2,7,0],"ring":[0,-1]},{"type":"regsum","cells":[3,4,11,16,17,23,22]},{"type":"regsum","cells":[15,21,28,29]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":6,"c":1,"val":5},{"kind":"xs","r":0,"c":-1,"val":""}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,5,1,3,6,4,3,4,6,1,2,5,5,1,3,2,4,6,4,6,2,5,3,1,1,3,4,6,5,2,6,2,5,4,1,3],"ssol":null,"meta":{"variants":["regsum"],"difficulty":"medium"}},{"v":4,"title":"Region Sums + Irregular","regions":[5,5,1,3,3,3,5,5,1,3,3,3,5,1,1,4,4,4,5,1,1,2,2,4,0,0,0,2,2,4,0,0,0,2,2,4],"givens":[0,0,0,1,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"regsum","cells":[13,8,7,1]},{"type":"regsum","cells":[34,27,26,31]},{"type":"regsum","cells":[23,16,9,3,10]},{"type":"regsum","cells":[18,12,19,14],"ring":[3,-1]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":3,"c":-1,"val":""}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,5,2,1,4,3,1,4,3,2,6,5,2,6,4,3,5,1,3,1,5,6,2,4,4,3,6,5,1,2,5,2,1,4,3,6],"ssol":null,"meta":{"variants":["regsum","irregular"],"difficulty":"medium"}},{"v":4,"title":"X-Sums on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,3,0,0,4,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":6,"c":1,"val":9},{"kind":"xs","r":2,"c":6,"val":3},{"kind":"xs","r":3,"c":6,"val":13},{"kind":"xs","r":-1,"c":2,"val":6},{"kind":"xs","r":-1,"c":3,"val":1},{"kind":"xs","r":-1,"c":5,"val":10},{"kind":"xs","r":5,"c":-1,"val":1}],"olines":[{"type":"whisper","kind":"xs","cells":[[-1,1],[-1,2],[-1,3]],"diff":5}],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,6,2,1,4,3,3,1,4,2,6,5,4,5,3,6,1,2,6,2,1,5,3,4,2,4,6,3,5,1,1,3,5,4,2,6],"ssol":null,"meta":{"variants":["outxsum"],"difficulty":"medium"}},{"v":4,"title":"Sandwich on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,6,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":6,"c":1,"val":3},{"kind":"sw","r":-1,"c":2,"val":7},{"kind":"sw","r":-1,"c":3,"val":0},{"kind":"sw","r":-1,"c":4,"val":3},{"kind":"sw","r":1,"c":6,"val":12},{"kind":"sw","r":5,"c":6,"val":5}],"olines":[{"type":"thermo","kind":"sw","cells":[[-1,0],[-1,1],[-1,2]]}],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,4,6,2,1,5,2,1,5,4,3,6,4,3,2,5,6,1,5,6,1,3,4,2,6,5,4,1,2,3,1,2,3,6,5,4],"ssol":null,"meta":{"variants":["outsandwich"],"difficulty":"medium"}},{"v":4,"title":"Region Sums + Thermo + X-Sums on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[17,16,22]},{"type":"thermo","cells":[27,34,35]},{"type":"regsum","cells":[34,29,23,17]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":6,"c":2,"val":8},{"kind":"xs","r":6,"c":1,"val":1},{"kind":"xs","r":-1,"c":1,"val":13},{"kind":"xs","r":2,"c":-1,"val":1},{"kind":"xs","r":5,"c":-1,"val":6},{"kind":"xs","r":5,"c":6,"val":21},{"kind":"xs","r":4,"c":-1,"val":17}],"olines":[{"type":"whisper","kind":"xs","cells":[[-1,0],[-1,1],[-1,2]],"diff":5}],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":["regsum","thermo","outxsum"],"difficulty":"hard"}},{"v":4,"title":"Quadruples","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,1,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[{"r":5,"c":3,"digits":[3,4]},{"r":5,"c":2,"digits":[2,5,6,4]},{"r":2,"c":4,"digits":[6,3,4,2]},{"r":1,"c":4,"digits":[6,2]},{"r":4,"c":2,"digits":[5,6,6]},{"r":4,"c":1,"digits":[5,1]}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,4,2,1,5,3,5,3,1,6,2,4,2,1,5,4,3,6,4,6,3,2,1,5,1,5,6,3,4,2,3,2,4,5,6,1],"ssol":null,"meta":{"variants":["quad"],"difficulty":"medium"}},{"v":4,"title":"Quadruples + Killer","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[3,4],"sum":8},{"cells":[25,31,32,19],"sum":14},{"cells":[26,27],"sum":9},{"cells":[16,17],"sum":10},{"cells":[23,29,35],"sum":14}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[{"r":3,"c":4,"digits":[1]},{"r":2,"c":4,"digits":[6,3]}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["quad","killer"],"difficulty":"medium"}}];</script>
+<script>window.SX_LIB = [{"v":4,"title":"Classic","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[2,3,5,6,0,0,0,4,0,0,0,5,1,6,3,0,5,0,5,0,0,0,0,0,0,5,0,2,0,0,3,0,0,5,0,6],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":[],"difficulty":"easy"}},{"v":4,"title":"Little Killer + X-Sums","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,6,0,0,0,0,0,0,0,1,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":3,"dr":1,"dc":-1,"val":10},{"kind":"lk","r":-1,"c":5,"dr":1,"dc":-1,"val":20},{"kind":"lk","r":1,"c":-1,"dr":1,"dc":1,"val":16},{"kind":"lk","r":-1,"c":-1,"dr":1,"dc":1,"val":24},{"kind":"lk","r":6,"c":5,"dr":-1,"dc":-1,"val":20},{"kind":"xs","r":-1,"c":4,"val":21},{"kind":"xs","r":4,"c":-1,"val":21}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,1,2,4,6,3,3,4,6,1,2,5,4,6,5,2,3,1,1,2,3,5,4,6,6,5,4,3,1,2,2,3,1,6,5,4],"ssol":null,"meta":{"variants":["littlekiller","xsum"],"difficulty":"medium"}},{"v":4,"title":"Killer + Diagonal","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,6,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[12,18,6],"sum":10},{"cells":[33,27,28],"sum":8},{"cells":[32,26],"sum":7}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,4,2,6,4,3,2,6,1,5,1,6,5,3,4,2,2,4,6,1,5,3,3,5,1,2,6,4],"ssol":null,"meta":{"variants":["killer","diag"],"difficulty":"medium"}},{"v":4,"title":"Thermo + Even/Odd","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,6,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[0,6,12]},{"type":"thermo","cells":[32,31,26]}],"edges":[],"parity":[0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,2,1,0,0,0,2,0,0,2,0,0,0,2,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":null,"meta":{"variants":["thermo","evenodd"],"difficulty":"medium"}},{"v":4,"title":"Arrow + Kropki","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":true,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"arrow","cells":[25,24,31]}],"edges":[{"a":0,"b":1,"t":"white"},{"a":1,"b":7,"t":"white"},{"a":2,"b":3,"t":"white"},{"a":3,"b":9,"t":"black"},{"a":4,"b":10,"t":"black"},{"a":5,"b":11,"t":"white"},{"a":9,"b":10,"t":"white"},{"a":9,"b":15,"t":"white"},{"a":13,"b":14,"t":"black"},{"a":14,"b":15,"t":"white"},{"a":14,"b":20,"t":"white"},{"a":15,"b":16,"t":"white"},{"a":16,"b":22,"t":"white"},{"a":17,"b":23,"t":"white"},{"a":18,"b":24,"t":"white"},{"a":19,"b":20,"t":"black"},{"a":21,"b":27,"t":"black"},{"a":22,"b":23,"t":"black"},{"a":22,"b":28,"t":"black"},{"a":24,"b":25,"t":"white"},{"a":24,"b":30,"t":"white"},{"a":25,"b":26,"t":"white"},{"a":27,"b":28,"t":"white"},{"a":28,"b":34,"t":"white"},{"a":31,"b":32,"t":"black"},{"a":33,"b":34,"t":"white"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":["arrow","kropki"],"difficulty":"medium"}},{"v":4,"title":"XV + Consecutive","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":true,"kropkiNeg":false,"xvNeg":true,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":0,"b":1,"t":"cons"},{"a":0,"b":6,"t":"cons"},{"a":2,"b":3,"t":"cons"},{"a":4,"b":10,"t":"cons"},{"a":6,"b":12,"t":"cons"},{"a":8,"b":9,"t":"cons"},{"a":9,"b":15,"t":"cons"},{"a":10,"b":16,"t":"cons"},{"a":11,"b":17,"t":"cons"},{"a":12,"b":18,"t":"cons"},{"a":13,"b":14,"t":"cons"},{"a":19,"b":20,"t":"cons"},{"a":20,"b":26,"t":"cons"},{"a":21,"b":27,"t":"cons"},{"a":22,"b":23,"t":"cons"},{"a":22,"b":28,"t":"cons"},{"a":24,"b":30,"t":"cons"},{"a":25,"b":31,"t":"cons"},{"a":26,"b":27,"t":"cons"},{"a":27,"b":33,"t":"cons"},{"a":28,"b":34,"t":"cons"},{"a":29,"b":35,"t":"cons"},{"a":0,"b":1,"t":"V"},{"a":3,"b":4,"t":"X"},{"a":4,"b":5,"t":"V"},{"a":6,"b":7,"t":"X"},{"a":8,"b":14,"t":"V"},{"a":11,"b":17,"t":"V"},{"a":14,"b":15,"t":"V"},{"a":20,"b":26,"t":"V"},{"a":22,"b":28,"t":"V"},{"a":23,"b":29,"t":"X"},{"a":31,"b":32,"t":"X"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,2,5,6,4,1,4,6,1,2,5,3,5,3,4,1,6,2,6,1,2,5,3,4,1,5,3,4,2,6,2,4,6,3,1,5],"ssol":null,"meta":{"variants":["xv","consecutive"],"difficulty":"hard"}},{"v":4,"title":"German Whispers + Renban","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,4,0,4,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"renban","cells":[33,34,27]},{"type":"renban","cells":[17,23,22,28]},{"type":"renban","cells":[6,13,8]},{"type":"renban","cells":[7,14,9]},{"type":"whisper","cells":[29,35,34]},{"type":"whisper","cells":[2,1,7,13]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,6,2,1,4,3,3,1,4,2,6,5,4,5,3,6,1,2,6,2,1,5,3,4,2,4,6,3,5,1,1,3,5,4,2,6],"ssol":null,"meta":{"variants":["whisper","renban"],"difficulty":"medium"}},{"v":4,"title":"Sandwich + Skyscraper","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,2,0,3,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":-1,"c":0,"val":0},{"kind":"sw","r":4,"c":-1,"val":0},{"kind":"sw","r":6,"c":1,"val":9},{"kind":"sw","r":-1,"c":2,"val":11},{"kind":"sk","r":3,"c":6,"val":2},{"kind":"sk","r":-1,"c":1,"val":3},{"kind":"sk","r":-1,"c":5,"val":2},{"kind":"sk","r":5,"c":-1,"val":4},{"kind":"sk","r":-1,"c":4,"val":1}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":null,"meta":{"variants":["sandwich","skyscraper"],"difficulty":"medium"}},{"v":4,"title":"Anti-knight + Kropki","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":true,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":true,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":0,"b":1,"t":"white"},{"a":0,"b":6,"t":"black"},{"a":2,"b":3,"t":"white"},{"a":2,"b":8,"t":"white"},{"a":3,"b":9,"t":"white"},{"a":5,"b":11,"t":"black"},{"a":8,"b":9,"t":"white"},{"a":10,"b":11,"t":"white"},{"a":13,"b":14,"t":"black"},{"a":13,"b":19,"t":"white"},{"a":14,"b":15,"t":"white"},{"a":14,"b":20,"t":"white"},{"a":15,"b":21,"t":"white"},{"a":16,"b":17,"t":"white"},{"a":16,"b":22,"t":"white"},{"a":18,"b":19,"t":"white"},{"a":18,"b":24,"t":"white"},{"a":19,"b":25,"t":"white"},{"a":20,"b":21,"t":"white"},{"a":21,"b":22,"t":"black"},{"a":21,"b":27,"t":"black"},{"a":22,"b":28,"t":"black"},{"a":24,"b":25,"t":"white"},{"a":27,"b":28,"t":"black"},{"a":28,"b":29,"t":"white"},{"a":30,"b":31,"t":"white"},{"a":31,"b":32,"t":"black"},{"a":34,"b":35,"t":"white"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,4,1,6,5,3,2,1,4,2,3,5,6,6,5,3,2,4,1,5,6,1,4,2,3,3,2,4,1,6,5],"ssol":null,"meta":{"variants":["antiknight","kropki"],"difficulty":"hard"}},{"v":4,"title":"Irregular + Killer","regions":[2,2,2,5,5,5,2,2,2,5,5,5,3,3,3,1,1,1,3,0,0,1,1,4,3,0,0,4,1,4,3,0,0,4,4,4],"givens":[0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,4,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[26,25,20,31],"sum":13},{"cells":[1,2,7,0],"sum":14},{"cells":[4,5,10],"sum":9},{"cells":[14,13,8],"sum":8},{"cells":[30,24],"sum":7},{"cells":[28,34],"sum":10}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[1,4,6,2,3,5,2,3,5,4,1,6,6,2,1,3,5,4,5,6,4,1,2,3,4,1,3,5,6,2,3,5,2,6,4,1],"ssol":null,"meta":{"variants":["irregular","killer"],"difficulty":"medium"}},{"v":4,"title":"Palindrome + Between + Thermo","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,6,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[6,1,8]},{"type":"thermo","cells":[15,21,27,22]},{"type":"thermo","cells":[2,9,10]},{"type":"palindrome","cells":[33,27,22]},{"type":"palindrome","cells":[18,25,31]},{"type":"palindrome","cells":[14,15,21]},{"type":"palindrome","cells":[12,13,7]},{"type":"between","cells":[27,34,28]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,5,1,2,4,6,4,2,6,3,5,1,2,6,4,1,3,5,1,3,5,4,6,2,6,4,2,5,1,3,5,1,3,6,2,4],"ssol":null,"meta":{"variants":["palindrome","between","thermo"],"difficulty":"medium"}},{"v":4,"title":"Disjoint Groups + XV","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":true,"nonconsec":false,"kropkiNeg":false,"xvNeg":true,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[{"a":1,"b":2,"t":"V"},{"a":4,"b":10,"t":"X"},{"a":6,"b":7,"t":"V"},{"a":6,"b":12,"t":"V"},{"a":7,"b":13,"t":"V"},{"a":9,"b":10,"t":"V"},{"a":9,"b":15,"t":"V"},{"a":10,"b":16,"t":"V"},{"a":12,"b":13,"t":"V"},{"a":15,"b":16,"t":"V"},{"a":19,"b":20,"t":"V"},{"a":24,"b":30,"t":"V"},{"a":26,"b":32,"t":"V"},{"a":28,"b":34,"t":"V"},{"a":29,"b":35,"t":"V"},{"a":30,"b":31,"t":"X"}],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,4,1,3,6,2,3,2,6,1,4,5,2,3,5,4,1,6,6,1,4,2,5,3,1,5,3,6,2,4,4,6,2,5,3,1],"ssol":null,"meta":{"variants":["disjoint","xv"],"difficulty":"medium"}},{"v":4,"title":"Anti-king + Little Killer + Sandwich","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":true,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":3,"dr":1,"dc":-1,"val":9},{"kind":"lk","r":-1,"c":5,"dr":1,"dc":-1,"val":20},{"kind":"lk","r":4,"c":-1,"dr":-1,"dc":1,"val":17},{"kind":"sw","r":-1,"c":4,"val":0},{"kind":"sw","r":2,"c":-1,"val":14}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,3,6,2,1,5,1,2,4,5,3,6,6,5,3,1,4,2,3,4,2,6,5,1,5,6,1,4,2,3],"ssol":null,"meta":{"variants":["antiking","littlekiller","sandwich"],"difficulty":"medium"}},{"v":4,"title":"Diagonal + Little Killer + X-Sums","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"lk","r":-1,"c":2,"dr":1,"dc":1,"val":9},{"kind":"lk","r":4,"c":-1,"dr":-1,"dc":1,"val":16},{"kind":"lk","r":6,"c":3,"dr":-1,"dc":-1,"val":15},{"kind":"xs","r":-1,"c":5,"val":12},{"kind":"xs","r":6,"c":5,"val":10},{"kind":"xs","r":-1,"c":3,"val":14}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,5,1,2,3,4,1,6,2,5,6,5,2,4,3,1,1,3,4,2,5,6,5,2,6,1,4,3],"ssol":null,"meta":{"variants":["diag","littlekiller","xsum"],"difficulty":"hard"}},{"v":4,"title":"Arrow + Thermo + Renban + Even/Odd","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[19,20,13]},{"type":"thermo","cells":[3,4,5]},{"type":"arrow","cells":[13,18,12,19]},{"type":"arrow","cells":[16,23,28]},{"type":"arrow","cells":[27,34,29]},{"type":"renban","cells":[0,7,2]}],"edges":[],"parity":[0,0,0,2,0,0,0,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,5,1,2,4,6,4,2,6,3,5,1,2,6,4,1,3,5,1,3,5,4,6,2,6,4,2,5,1,3,5,1,3,6,2,4],"ssol":null,"meta":{"variants":["arrow","thermo","renban","evenodd"],"difficulty":"medium"}},{"v":4,"title":"Nurikabe","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,1,0,0,1],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,4,0,0,0,0,0,0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,2,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":[0,0,1,0,0,0,0,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,0,1,0],"meta":{"variants":["nurikabe"],"difficulty":"medium"}},{"v":4,"title":"Shaded Whispers","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[2,0,0,3,0,0,0,0,0,0,5,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":true},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0],"sol":[2,1,5,3,6,4,4,6,3,1,5,2,5,2,6,4,1,3,3,4,1,6,2,5,1,5,4,2,3,6,6,3,2,5,4,1],"ssol":[0,1,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"meta":{"variants":["shadeline"],"difficulty":"medium"}},{"v":4,"title":"Nurikabe + Killer","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[29,35,34],"sum":12},{"cells":[19,13,7],"sum":14},{"cells":[0,6,12,18],"sum":14},{"cells":[21,20],"sum":8}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,2,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":[1,1,0,1,1,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,0],"meta":{"variants":["nurikabe","killer"],"difficulty":"medium"}},{"v":4,"title":"Shaded Whispers + Diagonal","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":true,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":true},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,2,0,0,0,0,0,0,0,0],"sol":[2,1,4,5,6,3,5,3,6,1,2,4,3,6,5,4,1,2,4,2,1,6,3,5,1,5,3,2,4,6,6,4,2,3,5,1],"ssol":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"meta":{"variants":["shadeline","diag"],"difficulty":"hard"}},{"v":4,"title":"Nurikabe + Thermo","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":true,"noPool":true,"nkLand":true,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[10,3,9,4]},{"type":"thermo","cells":[18,19,26]},{"type":"thermo","cells":[2,7,8,13]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":[1,1,0,1,1,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,0],"meta":{"variants":["nurikabe","thermo"],"difficulty":"hard"}},{"v":4,"title":"Region Sum Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"regsum","cells":[14,20,25,31],"ring":[6,1]},{"type":"regsum","cells":[5,10,9,2,7,0],"ring":[0,-1]},{"type":"regsum","cells":[3,4,11,16,17,23,22]},{"type":"regsum","cells":[15,21,28,29]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":6,"c":1,"val":5},{"kind":"xs","r":0,"c":-1,"val":""}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,5,1,3,6,4,3,4,6,1,2,5,5,1,3,2,4,6,4,6,2,5,3,1,1,3,4,6,5,2,6,2,5,4,1,3],"ssol":null,"meta":{"variants":["regsum"],"difficulty":"medium"}},{"v":4,"title":"Region Sums + Irregular","regions":[5,5,1,3,3,3,5,5,1,3,3,3,5,1,1,4,4,4,5,1,1,2,2,4,0,0,0,2,2,4,0,0,0,2,2,4],"givens":[0,0,0,1,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"regsum","cells":[13,8,7,1]},{"type":"regsum","cells":[34,27,26,31]},{"type":"regsum","cells":[23,16,9,3,10]},{"type":"regsum","cells":[18,12,19,14],"ring":[3,-1]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":3,"c":-1,"val":""}],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,5,2,1,4,3,1,4,3,2,6,5,2,6,4,3,5,1,3,1,5,6,2,4,4,3,6,5,1,2,5,2,1,4,3,6],"ssol":null,"meta":{"variants":["regsum","irregular"],"difficulty":"medium"}},{"v":4,"title":"X-Sums on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,2,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"xs","r":6,"c":2,"val":21},{"kind":"xs","r":6,"c":3,"val":12},{"kind":"xs","r":2,"c":-1,"val":19},{"kind":"xs","r":3,"c":-1,"val":21},{"kind":"xs","r":-1,"c":3,"val":21},{"kind":"xs","r":0,"c":6,"val":1},{"kind":"xs","r":4,"c":-1,"val":1}],"olines":[{"type":"whisper","kind":"xs","cells":[[2,6],[3,6],[4,6]],"diff":5}],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,2,5,6,4,1,4,6,1,2,5,3,5,3,4,1,6,2,6,1,2,5,3,4,1,5,3,4,2,6,2,4,6,3,1,5],"ssol":null,"meta":{"variants":["outxsum"],"difficulty":"medium"}},{"v":4,"title":"Sandwich on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,5,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":3,"c":6,"val":0},{"kind":"sw","r":6,"c":2,"val":11},{"kind":"sw","r":-1,"c":5,"val":9},{"kind":"sw","r":0,"c":6,"val":3},{"kind":"sw","r":6,"c":1,"val":9},{"kind":"sw","r":1,"c":-1,"val":14}],"olines":[{"type":"thermo","kind":"sw","cells":[[-1,0],[-1,1],[-1,2]]}],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":null,"meta":{"variants":["outsandwich"],"difficulty":"medium"}},{"v":4,"title":"Region Sums + Thermo + X-Sums on Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"thermo","cells":[27,22,23]},{"type":"thermo","cells":[1,7,0]},{"type":"regsum","cells":[21,22,28,27,34],"ring":[6,4]},{"type":"regsum","cells":[30,31,32,33]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[{"kind":"sw","r":6,"c":4,"val":""},{"kind":"xs","r":2,"c":6,"val":1},{"kind":"xs","r":-1,"c":2,"val":8},{"kind":"xs","r":6,"c":0,"val":8}],"olines":[{"type":"whisper","kind":"xs","cells":[[3,-1],[4,-1],[5,-1]],"diff":5}],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[5,1,2,4,6,3,3,4,6,1,2,5,4,6,5,2,3,1,1,2,3,5,4,6,6,5,4,3,1,2,2,3,1,6,5,4],"ssol":null,"meta":{"variants":["regsum","thermo","outxsum"],"difficulty":"hard"}},{"v":4,"title":"Quadruples","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,1,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[{"r":5,"c":3,"digits":[3,4]},{"r":5,"c":2,"digits":[2,5,6,4]},{"r":2,"c":4,"digits":[6,3,4,2]},{"r":1,"c":4,"digits":[6,2]},{"r":4,"c":2,"digits":[5,6,6]},{"r":4,"c":1,"digits":[5,1]}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,4,2,1,5,3,5,3,1,6,2,4,2,1,5,4,3,6,4,6,3,2,1,5,1,5,6,3,4,2,3,2,4,5,6,1],"ssol":null,"meta":{"variants":["quad"],"difficulty":"medium"}},{"v":4,"title":"Quadruples + Killer","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[{"cells":[3,4],"sum":8},{"cells":[25,31,32,19],"sum":14},{"cells":[26,27],"sum":9},{"cells":[16,17],"sum":10},{"cells":[23,29,35],"sum":14}],"lines":[],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[{"r":3,"c":4,"digits":[1]},{"r":2,"c":4,"digits":[6,3]}],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["quad","killer"],"difficulty":"medium"}},{"v":4,"title":"Parity Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,5,0,1,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"parity","cells":[29,28,27,33]},{"type":"parity","cells":[24,30,31]},{"type":"parity","cells":[32,26,25,19,13,14,15]},{"type":"parity","cells":[1,8,2,7,12,18]},{"type":"parity","cells":[17,11,5]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[3,4,6,2,1,5,2,1,5,4,3,6,4,3,2,5,6,1,5,6,1,3,4,2,6,5,4,1,2,3,1,2,3,6,5,4],"ssol":null,"meta":{"variants":["parity"],"difficulty":"medium"}},{"v":4,"title":"Entropic Lines","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,6,1,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"entropic","cells":[32,27,21,14]},{"type":"entropic","cells":[12,7,13,20,25]},{"type":"entropic","cells":[23,22,16,17,11,4,3]},{"type":"entropic","cells":[29,35,34]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[4,2,1,3,6,5,6,3,5,4,2,1,1,6,4,2,5,3,3,5,2,6,1,4,5,4,6,1,3,2,2,1,3,5,4,6],"ssol":null,"meta":{"variants":["entropic"],"difficulty":"medium"}},{"v":4,"title":"Duality: Whisper + Parity + Palindrome","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,6,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"palindrome","also":["parity"],"cells":[31,24,25,20,21]},{"type":"whisper","also":["palindrome"],"cells":[17,22,21,26,27]},{"type":"whisper","also":["palindrome"],"cells":[2,8,13,12,18]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,3,5,6,1,4,6,4,1,3,2,5,1,6,3,4,5,2,5,2,4,1,6,3,4,5,6,2,3,1,3,1,2,5,4,6],"ssol":null,"meta":{"variants":["duality"],"difficulty":"medium"}},{"v":4,"title":"Duality: Renban + Region Sum","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,3,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"renban","also":["regsum"],"cells":[26,31,24,19,20]},{"type":"renban","also":["regsum"],"cells":[5,10,15,22]},{"type":"renban","also":["regsum"],"cells":[3,10,16,15]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[6,2,4,5,3,1,5,1,3,6,4,2,1,5,2,3,6,4,3,4,6,1,2,5,2,6,5,4,1,3,4,3,1,2,5,6],"ssol":null,"meta":{"variants":["duality"],"difficulty":"medium"}},{"v":4,"title":"Duality: Thermo + Parity + Between","regions":[0,0,0,1,1,1,0,0,0,1,1,1,2,2,2,3,3,3,2,2,2,3,3,3,4,4,4,5,5,5,4,4,4,5,5,5],"givens":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"opts":{"diag":false,"antiKnight":false,"antiKing":false,"disjoint":false,"nonconsec":false,"kropkiNeg":false,"xvNeg":false,"whisperDiff":4,"waterConn":false,"noPool":false,"nkLand":false,"nkWater":false,"shadeWhisper":false},"cages":[],"lines":[{"type":"entropic","cells":[12,19,14,13,20,21,27]},{"type":"entropic","cells":[4,5,11]},{"type":"entropic","cells":[8,1,2,3,9]},{"type":"entropic","cells":[15,10,17,16,23]},{"type":"renban","also":["between"],"cells":[26,32,33]},{"type":"thermo","also":["renban","between"],"cells":[33,34,29]}],"edges":[],"parity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"clues":[],"olines":[],"quads":[],"marks":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"mval":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"paint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"sol":[2,1,4,5,6,3,6,3,5,2,4,1,3,4,6,1,2,5,5,2,1,6,3,4,4,5,2,3,1,6,1,6,3,4,5,2],"ssol":null,"meta":{"variants":["duality","entropic"],"difficulty":"hard"}}];</script>
 <script>/* ===== UI ===== */
 (function () {
 'use strict';
@@ -1790,8 +1964,11 @@ const app = {
   puzzle: null, tab: 'play', tool: 'given', sel: new Set(), selCage: -1, selRing: null,
   model: null, solInfo: null, play: null, drag: null, paint: 0, showConflicts: true, autoClear: true,
   genSel: new Set(['littlekiller', 'xsum']), genDiff: 'medium', whisperDiff: 4, busy: false,
-  paintCol: 1, selMark: -1, selQuad: -1, olType: 'thermo', olKind: 'xs', olDiff: 5
+  paintCol: 1, selMark: -1, selQuad: -1, olType: 'thermo', olKind: 'xs', olDiff: 5,
+  extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genCounts: {}
 };
+const RULE_LABEL = { thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
+const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality'];
 const PAL = ['Clear', 'Shade', 'Land', 'Red', 'Amber', 'Green', 'Blue', 'Purple', 'Teal'];
 
 /* ---------- puzzle helpers ---------- */
@@ -1808,11 +1985,17 @@ function normalize(o) {
   p.ssol = Array.isArray(o && o.ssol) && o.ssol.length === NN ? o.ssol : null;
   p.cages = ((o && o.cages) || []).filter(c => Array.isArray(c.cells) && c.cells.length && c.cells.every(i => i >= 0 && i < NN));
   p.lines = ((o && o.lines) || []).filter(l => Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(i => i >= 0 && i < NN));
-  p.lines.forEach(l => { if (l.type !== 'regsum' || !Array.isArray(l.ring) || l.ring.length !== 2) delete l.ring; });
+  p.lines = p.lines.filter(l => X.LINE_RULES.includes(l.type));
+  p.lines.forEach(l => {
+    l.also = Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
+    if (!l.also.length) delete l.also;
+    if (!X.lineTypes(l).includes('regsum') || !Array.isArray(l.ring) || l.ring.length !== 2) delete l.ring;
+  });
   p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN);
   p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'sw', 'sk'].includes(c.kind));
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
-  p.olines = ((o && o.olines) || []).filter(l => ['thermo', 'arrow', 'whisper', 'renban', 'palindrome'].includes(l.type) && ['xs', 'sw', 'sk'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
+  p.olines = ((o && o.olines) || []).filter(l => X.OL_RULES.includes(l.type) && ['xs', 'sw', 'sk'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
+  p.olines.forEach(l => { l.also = Array.from(new Set((l.also || []).filter(t => X.OL_RULES.includes(t) && t !== l.type))); if (!l.also.length) delete l.also; });
   p.quads = ((o && o.quads) || []).filter(q => q.r >= 1 && q.r <= N - 1 && q.c >= 1 && q.c <= N - 1 && Array.isArray(q.digits))
     .map(q => ({ r: q.r, c: q.c, digits: q.digits.filter(d => d >= 1 && d <= 6).slice(0, 4) }));
   p.title = String((o && o.title) || ''); p.sol = Array.isArray(o && o.sol) && o.sol.length === NN ? o.sol : null;
@@ -1854,10 +2037,11 @@ function variantLabels(p) {
   if (o.diag) L.push('Diagonal'); if (o.antiKnight) L.push('Anti-knight'); if (o.antiKing) L.push('Anti-king');
   if (o.disjoint) L.push('Disjoint groups');
   if (p.cages.length) L.push('Killer');
-  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum' };
+  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
   if (p.quads.length) L.push('Quadruples');
-  p.lines.forEach(l => has.add(nm[l.type]));
+  p.lines.forEach(l => X.lineTypes(l).forEach(t => has.add(nm[t])));
   has.forEach(x => x && L.push(x));
+  if (p.lines.some(l => l.also) || p.olines.some(l => l.also)) L.push('Duality lines');
   const e = new Set(p.edges.map(x => x.t));
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (e.has('white') || e.has('black')) L.push('Kropki'); if (e.has('X') || e.has('V')) L.push('XV');
@@ -1879,15 +2063,18 @@ function rulesFor(p) {
   if (o.antiKing) R.push('Cells touching at a side or corner never hold the same digit.');
   if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
   if (p.cages.length) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
-  const lt = new Set(p.lines.map(l => l.type));
+  const lt = new Set(); p.lines.forEach(l => X.lineTypes(l).forEach(t => lt.add(t)));
   if (lt.has('thermo')) R.push('Thermometers: digits strictly increase from the bulb to the tip.');
   if (lt.has('arrow')) R.push('Arrows: the digit in the circle equals the sum of the digits along the arrow.');
   if (lt.has('whisper')) R.push(`German whispers (green): neighboring digits on the line differ by at least ${o.whisperDiff || 4}.`);
   if (lt.has('renban')) R.push('Renban (purple): the line holds a set of consecutive digits, in any order, with no repeats.');
   if (lt.has('palindrome')) R.push('Palindrome (blue): the line reads the same in both directions.');
+  if (lt.has('parity')) R.push('Parity lines (taupe): neighboring digits on the line alternate between odd and even.');
+  if (lt.has('entropic')) R.push('Entropic lines (pink): every three consecutive cells on the line hold one digit from each of 1–2, 3–4 and 5–6.');
+  if (p.lines.some(l => l.also)) R.push('Duality lines (layered colors): a line drawn with several layers obeys every rule shown by its layers at once.');
   if (lt.has('regsum')) {
     R.push('Region sum lines (coral): cut the line wherever it crosses a region border. Every stretch inside one region has the same digit sum.');
-    if (p.lines.some(l => l.type === 'regsum' && l.ring)) R.push('When a region sum line reaches a clue outside the grid, that clue’s value must equal the line’s common sum.');
+    if (p.lines.some(l => X.lineTypes(l).includes('regsum') && l.ring)) R.push('When a region sum line reaches a clue outside the grid, that clue’s value must equal the line’s common sum.');
   }
   if (p.quads.length) R.push('Quadruple clues (small circles at a corner): every digit shown must appear at least once in the four surrounding cells. A repeated digit must appear in two of the four.');
   if (lt.has('between')) R.push('Between lines (gold): digits on the line lie strictly between the digits in its two end circles.');
@@ -1907,7 +2094,8 @@ function rulesFor(p) {
   if (ck.has('sk')) R.push('Skyscraper (▲): the clue counts the digits visible from that side; a larger digit hides smaller ones behind it.');
   if (p.olines.length) {
     R.push('Outside lines: squares outside the grid joined by a line hold clues (marked X, S or ▲) whose values are not all shown. Work the values out from the grid. Hidden values obey the line’s rule:');
-    const ot = new Set(p.olines.map(l => l.type));
+    const ot = new Set(); p.olines.forEach(l => X.lineTypes(l).forEach(t => ot.add(t)));
+    if (ot.has('parity')) R.push('Parity: neighboring clue values alternate between odd and even.');
     if (ot.has('thermo')) R.push('Thermo: the clue values strictly increase from the bulb to the tip.');
     if (ot.has('arrow')) R.push('Arrow: the clue in the circle equals the sum of the clues along the arrow.');
     if (ot.has('whisper')) R.push(`Whisper: neighboring clue values differ by at least ${Array.from(new Set(p.olines.filter(l => l.type === 'whisper').map(l => l.diff || 4))).join(' or ')}.`);
@@ -2048,7 +2236,7 @@ function loadPuzzle(o, tab) {
 }
 
 /* ---------- board drawing ---------- */
-const COL = { regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
+const COL = { parity: 'var(--parity)', entropic: 'var(--entropic)', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
 const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
 
 function cageOutline(cells) {
@@ -2155,25 +2343,34 @@ function renderBoard() {
     s += `<line class="gl" x1="${RING}" y1="${gy(k)}" x2="${RING + N * CELL}" y2="${gy(k)}"/>`;
   }
   // lines
-  const drawLine = (type, cells, preview) => {
-    const col = preview ? 'var(--accent)' : COL[type], L = cells.length;
+  if (editing && app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine]) s += `<polyline class="lsel" points="${pts(p.lines[app.selLine].cells)}"/>`;
+  const LW = { thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, regsum: 9, whisper: 8 };
+  const drawLine = (typesIn, cells, preview) => {
+    const types = Array.isArray(typesIn) ? typesIn : [typesIn], L = cells.length, multi = types.length > 1;
+    const thick = types.filter(t => t !== 'arrow' && t !== 'between').sort((x, y) => LW[y] - LW[x]);
+    const thin = types.filter(t => t === 'arrow' || t === 'between');
     let o = '';
-    if (type === 'thermo') {
-      o += `<polyline class="ln thermo" style="stroke:${col}" points="${pts(cells)}"/>`;
-      o += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
-    } else if (type === 'arrow' && L >= 2) {
-      const dx0 = cx(cells[1]) - cx(cells[0]), dy0 = cy(cells[1]) - cy(cells[0]), l0 = Math.hypot(dx0, dy0) || 1;
-      const sx = cx(cells[0]) + dx0 / l0 * 23, sy = cy(cells[0]) + dy0 / l0 * 23;
-      o += `<polyline class="ln arrow" style="stroke:${col}" points="${sx.toFixed(1)},${sy.toFixed(1)} ${pts(cells.slice(1))}"/>`;
-      if (L >= 2) o += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
-      o += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
-    } else if (type === 'between') {
-      o += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
-      [cells[0], cells[L - 1]].forEach(c => { o += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
-    } else if (type !== 'arrow') o += `<polyline class="ln ${type}" style="stroke:${col}" points="${pts(cells)}"/>`;
+    thick.forEach((type, k) => {
+      const col = preview ? 'var(--accent)' : COL[type], w = multi ? [20, 15, 10, 6, 4][Math.min(k, 4)] : 0;
+      o += `<polyline class="ln ${type}" style="stroke:${col}${w ? ';stroke-width:' + w + ';opacity:1' : ''}" points="${pts(cells)}"/>`;
+      if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
+    });
+    thin.forEach(type => {
+      const col = preview ? 'var(--accent)' : COL[type];
+      if (type === 'between') {
+        o += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
+        [cells[0], cells[L - 1]].forEach(c => { o += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
+      } else if (L >= 2) {
+        const dx0 = cx(cells[1]) - cx(cells[0]), dy0 = cy(cells[1]) - cy(cells[0]), l0 = Math.hypot(dx0, dy0) || 1;
+        const sx = cx(cells[0]) + dx0 / l0 * 23, sy = cy(cells[0]) + dy0 / l0 * 23;
+        o += `<polyline class="ln arrow" style="stroke:${col}" points="${sx.toFixed(1)},${sy.toFixed(1)} ${pts(cells.slice(1))}"/>`;
+        o += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
+        o += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
+      }
+    });
     return o;
   };
-  p.lines.forEach(l => { s += drawLine(l.type, l.cells); });
+  p.lines.forEach(l => { s += drawLine(X.lineTypes(l), l.cells); });
   const drawRegRing = (cells, ring, preview) => {
     const [rr, rc] = ring, rcRect = ringRect(rr, rc), mx = rcRect.x + rcRect.w / 2, my = rcRect.y + rcRect.h / 2;
     const anchor = regRingAnchor(cells, rr, rc), col = preview ? 'var(--accent)' : COL.regsum;
@@ -2181,9 +2378,9 @@ function renderBoard() {
     if (!preview) o += `<rect class="obox" style="stroke:${col}" x="${mx - 20}" y="${my - 17}" width="40" height="34" rx="6"/>`;
     return o;
   };
-  p.lines.forEach(l => { if (l.type === 'regsum' && l.ring) s += drawRegRing(l.cells, l.ring); });
-  if (app.drag && app.drag.kind === 'line' && app.tool === 'regsum' && app.drag.ringEnd) s += drawRegRing(app.drag.path, app.drag.ringEnd, true);
-  if (app.drag && app.drag.kind === 'line' && app.drag.path.length) s += drawLine(app.tool, app.drag.path, true);
+  p.lines.forEach(l => { if (X.lineTypes(l).includes('regsum') && l.ring) s += drawRegRing(l.cells, l.ring); });
+  if (app.drag && app.drag.kind === 'line' && app.drag.ringEnd) s += drawRegRing(app.drag.path, app.drag.ringEnd, true);
+  if (app.drag && app.drag.kind === 'line' && app.drag.path.length) s += drawLine([app.tool], app.drag.path, true);
 
   // cages
   p.cages.forEach((cg, k) => {
@@ -2255,13 +2452,18 @@ function renderBoard() {
   // lines through outside squares
   const ringPt = ([r, c]) => { const rc = ringRect(r, c); return [rc.x + rc.w / 2, rc.y + rc.h / 2]; };
   const drawOLine = (ol, preview) => {
-    const P0 = ol.cells.map(ringPt), L = P0.length, col = preview ? 'var(--accent)' : COL[ol.type];
+    const P0 = ol.cells.map(ringPt), L = P0.length;
     const fmt = q => q[0].toFixed(1) + ',' + q[1].toFixed(1);
+    const types = X.lineTypes(ol), multi = types.length > 1;
+    const thick = types.filter(t => t !== 'arrow').sort((x, y) => (y === 'whisper' ? 0 : 1) - (x === 'whisper' ? 0 : 1));
     let o = '';
-    if (ol.type === 'thermo') {
-      o += `<polyline class="ln thermo" style="stroke:${col};stroke-width:10" points="${P0.map(fmt).join(' ')}"/>`;
-      o += `<circle class="bulb" style="fill:${col}" cx="${P0[0][0]}" cy="${P0[0][1]}" r="25"/>`;
-    } else if (ol.type === 'arrow') {
+    thick.forEach((type, k) => {
+      const col = preview ? 'var(--accent)' : COL[type], w = multi ? [12, 8, 5, 3][Math.min(k, 3)] : (type === 'whisper' ? 6 : 10);
+      o += `<polyline class="ln ${type}" style="stroke:${col};stroke-width:${w}${multi ? ';opacity:1' : ''}" points="${P0.map(fmt).join(' ')}"/>`;
+      if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${P0[0][0]}" cy="${P0[0][1]}" r="25"/>`;
+    });
+    if (types.includes('arrow')) {
+      const col = preview ? 'var(--accent)' : COL.arrow;
       if (L >= 2) {
         const dx = P0[1][0] - P0[0][0], dy = P0[1][1] - P0[0][1], l = Math.hypot(dx, dy) || 1;
         const st = [P0[0][0] + dx / l * 25, P0[0][1] + dy / l * 25];
@@ -2273,7 +2475,7 @@ function renderBoard() {
         o += `<polygon style="fill:${col}" points="${arrowHeadXY(px, py, ex, ey)}"/>`;
       }
       o += `<circle class="abulb" style="stroke:${col};fill:var(--cell)" cx="${P0[0][0]}" cy="${P0[0][1]}" r="24"/>`;
-    } else o += `<polyline class="ln ${ol.type}" style="stroke:${col};stroke-width:${ol.type === 'whisper' ? 6 : 10}" points="${P0.map(fmt).join(' ')}"/>`;
+    }
     return o;
   };
   p.olines.forEach(ol => { s += drawOLine(ol); });
@@ -2361,7 +2563,7 @@ function renderMeta() {
 const TOOLS = [
   { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['region', 'Region']] },
   { g: 'Sums', t: [['cage', 'Killer cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple']] },
-  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum']] },
+  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
   { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)']] },
@@ -2384,6 +2586,9 @@ const HINTS = {
   cons: 'Click the border between two cells.', white: 'Click the border between two cells.', black: 'Click the border between two cells.',
   X: 'Click the border between two cells.', V: 'Click the border between two cells.',
   regsum: 'Drag along the line across region borders. Each stretch inside one region has the same digit sum. Continue the drag one step past the grid edge to link that sum to a hidden outside clue.',
+  parity: 'Drag along the line. Neighboring digits alternate between odd and even.',
+  entropic: 'Drag along the line (three cells or more). Every three consecutive cells hold one digit from each of 1–2, 3–4 and 5–6.',
+  lrule: 'Click a line, then tick the rules it obeys. A line with several rules is a duality line.',
   quad: 'Click a grid intersection (where four cells meet). Type the digits (1–6) that must appear among those four cells. Repeat a digit if it must appear twice.',
   oline: 'Drag along the squares outside the grid on one side. Choose the line type and clue type below. The clue values under the line stay hidden and must follow its rule.',
   paint: 'Pick a color, then click or drag across cells.',
@@ -2427,6 +2632,18 @@ function renderEditAux() {
   if (!$('#cageBox').hidden) { const cg = p.cages[app.selCage]; const inp = $('#cageSum'); if (document.activeElement !== inp) inp.value = cg.sum == null ? '' : cg.sum; }
   $('#ringBox').hidden = !(app.tool === 'clue' && app.selRing);
   if (!$('#ringBox').hidden) renderRingEditor();
+  const isLT = LINE_TOOLS.includes(app.tool);
+  $('#lineExtraBox').hidden = !isLT;
+  if (isLT) {
+    const ex = app.extras.filter(r => r !== app.tool);
+    ruleChips($('#lineExtraChips'), X.LINE_RULES.filter(r => r !== app.tool), ex, 'data-xr');
+    $('#lineExtraNote').textContent = ex.length ? comboNote([app.tool].concat(ex)) : 'Tick rules here to draw a duality line.';
+  }
+  const lrOn = app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine];
+  $('#lineRuleBox').hidden = !lrOn;
+  if (lrOn) { const ln = p.lines[app.selLine]; ruleChips($('#lineRuleChips'), X.LINE_RULES, X.lineTypes(ln), 'data-lr'); $('#lineRuleNote').textContent = `${ln.cells.length} cells. ` + (X.lineTypes(ln).length > 1 ? comboNote(X.lineTypes(ln)) : ''); }
+  $('#olExtraBox').hidden = app.tool !== 'oline';
+  if (app.tool === 'oline') ruleChips($('#olExtraChips'), X.OL_RULES.filter(r => r !== app.olType), app.olExtras, 'data-or');
   $('#quadBox').hidden = !(app.tool === 'quad' && app.selQuad >= 0 && p.quads[app.selQuad]);
   if (!$('#quadBox').hidden) { const inp = $('#quadVal'); if (document.activeElement !== inp) inp.value = p.quads[app.selQuad].digits.join(''); }
   $('#whisperRow').hidden = false;
@@ -2570,7 +2787,18 @@ function setPaint(i, k, add) {
 }
 const adj8 = (a, b) => a !== b && Math.abs(rowOf(a) - rowOf(b)) <= 1 && Math.abs(colOf(a) - colOf(b)) <= 1;
 const adj4 = (a, b) => Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
-const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum'];
+const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic'];
+const curRules = () => { const t = app.tool; return LINE_TOOLS.includes(t) ? [t].concat(app.extras.filter(x => x !== t)) : [t]; };
+const comboCache = {};
+function comboNote(types) {
+  const wd = app.puzzle.opts.whisperDiff || 4, key = types.join('+') + wd;
+  if (!comboCache[key]) { const ls = []; for (let L = 3; L <= 8; L++) if (X.lineFeasible(types, L, wd)) ls.push(L); comboCache[key] = ls; }
+  const ls = comboCache[key];
+  return ls.length ? `Works on lines of ${ls.join(', ')} cells.` : 'No line of 3 to 8 cells satisfies these rules together.';
+}
+function ruleChips(el, rules, checked, attr) {
+  el.innerHTML = rules.map(r => `<label class="vchip"><input type="checkbox" ${attr}="${r}"${checked.includes(r) ? ' checked' : ''}><span>${RULE_LABEL[r]}</span></label>`).join('');
+}
 
 function onDown(e) {
   if (e.button !== undefined && e.button !== 0) return;
@@ -2610,6 +2838,10 @@ function onDown(e) {
     const k = p.cages.findIndex(cg => cg.cells.includes(i));
     if (k >= 0) { app.selCage = k; app.drag = null; renderBoard(); renderEditAux(); const inp = $('#cageSum'); inp.focus(); inp.select(); return; }
     app.selCage = -1; app.drag = { kind: 'cage', cells: [i] }; renderBoard(); renderEditAux();
+  } else if (t === 'lrule') {
+    if (!inG) return;
+    let k = -1; for (let n = p.lines.length - 1; n >= 0; n--) if (p.lines[n].cells.includes(i)) { k = n; break; }
+    app.selLine = k; renderBoard(); renderEditAux();
   } else if (LINE_TOOLS.includes(t)) {
     if (!inG) return; app.drag = { kind: 'line', path: [i] }; renderBoard();
   } else if (['cons', 'white', 'black', 'X', 'V'].includes(t)) {
@@ -2660,7 +2892,7 @@ function onDown(e) {
       const before = p.clues.length; p.clues = p.clues.filter(k => !(k.r === h.r && k.c === h.c));
       const b2 = p.olines.length; p.olines = p.olines.filter(ol => !ol.cells.some(([r, c]) => r === h.r && c === h.c));
       let changed = p.clues.length !== before || p.olines.length !== b2;
-      p.lines.forEach(l => { if (l.type === 'regsum' && l.ring && l.ring[0] === h.r && l.ring[1] === h.c) { delete l.ring; changed = true; } });
+      p.lines.forEach(l => { if (X.lineTypes(l).includes('regsum') && l.ring && l.ring[0] === h.r && l.ring[1] === h.c) { delete l.ring; changed = true; } });
       if (changed) touch(true);
     }
   }
@@ -2668,7 +2900,7 @@ function onDown(e) {
 function onMove(e) {
   const d = app.drag; if (!d) return;
   const { x, y } = toSvg(e), h = hit(x, y), p = app.puzzle;
-  if (d.kind === 'line' && app.tool === 'regsum') {
+  if (d.kind === 'line' && curRules().includes('regsum')) {
     if (!inCell(h.r, h.c)) {
       const path = d.path, last = path[path.length - 1];
       const r = rowOf(last), c = colOf(last), cands = [];
@@ -2712,10 +2944,16 @@ function onUp() {
   const d = app.drag; app.drag = null; if (!d) return;
   const p = app.puzzle;
   if (d.kind === 'line') {
-    const need = app.tool === 'between' ? 3 : 2;
+    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') ? 3 : 2;
     if (d.path.length >= need) {
-      const ln = { type: app.tool, cells: d.path.slice() };
-      if (app.tool === 'regsum' && d.ringEnd) {
+      const ln = { type: rules[0], cells: d.path.slice() };
+      if (rules.length > 1) {
+        ln.also = rules.slice(1);
+        if (!X.lineFeasible(rules, d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) {
+          renderBoard(); flash(`No digits satisfy ${rules.map(r => RULE_LABEL[r]).join(' + ')} on these ${d.path.length} cells. Try another length or fewer rules.`, 'warn'); return;
+        }
+      }
+      if (rules.includes('regsum') && d.ringEnd) {
         const [rr, rc] = d.ringEnd;
         ln.ring = d.ringEnd.slice();
         if (!p.clues.some(cl => cl.r === rr && cl.c === rc)) p.clues.push({ kind: 'xs', r: rr, c: rc, val: '' });
@@ -2726,9 +2964,9 @@ function onUp() {
       }
       p.lines.push(ln); touch(true);
     }
-    else { renderBoard(); if (d.path.length && app.tool === 'between') flash('Between lines need at least three cells.', 'warn'); }
+    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
   } else if (d.kind === 'oline') {
-    if (d.cells.length >= 2) { p.olines.push({ type: app.olType, kind: app.olKind, cells: d.cells.map(c => c.slice()), diff: app.olType === 'whisper' ? app.olDiff : undefined }); touch(true); }
+    if (d.cells.length >= 2) { { const ex = app.olExtras.filter(t => t !== app.olType), ol = { type: app.olType, kind: app.olKind, cells: d.cells.map(c => c.slice()) }; if (ex.length) ol.also = ex; if ([app.olType].concat(ex).includes('whisper')) ol.diff = app.olDiff; p.olines.push(ol); } touch(true); }
     else renderBoard();
   } else if (d.kind === 'cage') {
     p.cages.push({ cells: d.cells.slice(), sum: null }); app.selCage = p.cages.length - 1; touch();
@@ -2842,7 +3080,23 @@ function toggleVariant(k, on) {
 function syncGen() {
   $$('#genChips input').forEach(inp => { inp.checked = app.genSel.has(inp.dataset.v); });
   $('#genCount').textContent = app.genSel.size ? app.genSel.size + ' selected' : 'Classic (nothing selected)';
-  $('#genWhisper').hidden = !(app.genSel.has('whisper') || app.genSel.has('shadeline'));
+  $('#genWhisper').hidden = !(app.genSel.has('whisper') || app.genSel.has('shadeline') || app.genSel.has('duality'));
+  $('#genDual').hidden = !app.genSel.has('duality');
+  if (app.genSel.has('duality')) renderDual();
+  renderCounts();
+}
+function renderDual() {
+  ruleChips($('#dualChips'), X.LINE_RULES, Array.from(app.dualRules), 'data-dr');
+  $('#dualMax').value = app.dualMax;
+  const n = X.dualCombos(Array.from(app.dualRules), app.dualMax, app.whisperDiff).length;
+  $('#dualNote').textContent = `${n} compatible combination${n === 1 ? '' : 's'} of 2 to ${app.dualMax} rules at whisper gap ${app.whisperDiff}. The generator picks among them at random.`;
+}
+function renderCounts() {
+  const keys = COUNT_KEYS.filter(k => app.genSel.has(k));
+  $('#genLines').hidden = !keys.length;
+  if (!keys.length) return;
+  $('#genDensity').value = app.genDensity;
+  $('#genCounts').innerHTML = keys.map(k => `<label class="cnt"><span>${X.VLABEL[k]}</span><input type="number" min="1" max="12" inputmode="numeric" data-cnt="${k}" placeholder="auto" value="${app.genCounts[k] || ''}"></label>`).join('');
 }
 function feasibleMix(sel) {
   const s = new Set(sel);
@@ -2859,10 +3113,11 @@ function runGenerate(list) {
   $('#genStatus').textContent = 'Building and checking for a single solution…';
   setTimeout(() => {
     const t0 = Date.now();
-    let q = null;
-    try { q = X.generate({ variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff }, null, 9000); } catch (err) { q = null; }
+    let q = null, spec = null;
+    const counts = {}; COUNT_KEYS.forEach(k => { if (list.includes(k) && app.genCounts[k]) counts[k] = app.genCounts[k]; }); spec = { variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff, density: app.genDensity, counts, dualityRules: Array.from(app.dualRules), dualityMax: app.dualMax };
+    try { q = X.generate(spec, null, 9000); } catch (err) { q = null; }
     app.busy = false; $('#genBtn').disabled = false; $('#surpriseBtn').disabled = false;
-    if (!q) { $('#genStatus').textContent = 'Could not build that mix. Try again, or remove a variant.'; return; }
+    if (!q) { $('#genStatus').textContent = Object.keys(spec.counts).length ? 'Could not place those exact line counts. Lower a count, set it to auto, or try again.' : 'Could not build that mix. Try again, or remove a variant.'; return; }
     $('#genStatus').textContent = `Done in ${((Date.now() - t0) / 1000).toFixed(1)} s. One solution, verified.`;
     loadPuzzle(q, 'play');
   }, 40);
@@ -2882,7 +3137,8 @@ const PRESETS = [
   ['Whispers + Renban', ['whisper', 'renban']], ['Arrow + Sandwich', ['arrow', 'sandwich']],
   ['Nurikabe', ['nurikabe']], ['Shaded whispers', ['shadeline']], ['Nurikabe + Killer', ['nurikabe', 'killer']],
   ['Region sums + Thermo', ['regsum', 'thermo']], ['X-sums on lines', ['outxsum']], ['Sandwich on lines', ['outsandwich']],
-  ['Quadruples', ['quad']], ['Quadruples + Killer', ['quad', 'killer']]
+  ['Quadruples', ['quad']], ['Quadruples + Killer', ['quad', 'killer']],
+  ['Parity lines', ['parity']], ['Entropic lines', ['entropic']], ['Duality lines', ['duality']]
 ];
 
 /* ---------- history and saved progress ---------- */
@@ -2996,10 +3252,23 @@ function bind() {
     const digits = e.target.value.replace(/[^1-6]/g, '').slice(0, 4).split('').map(Number);
     app.puzzle.quads[k].digits = digits; touch(true);
   });
+  $('#lineExtraChips').addEventListener('change', e => { const r = e.target.dataset.xr; if (!r) return; app.extras = e.target.checked ? app.extras.concat(r) : app.extras.filter(x => x !== r); renderEditAux(); });
+  $('#olExtraChips').addEventListener('change', e => { const r = e.target.dataset.or; if (!r) return; app.olExtras = e.target.checked ? app.olExtras.concat(r) : app.olExtras.filter(x => x !== r); renderEditAux(); });
+  $('#lineRuleChips').addEventListener('change', e => {
+    const r = e.target.dataset.lr, ln = app.puzzle.lines[app.selLine]; if (!r || !ln) return;
+    const cur = X.lineTypes(ln), next = X.LINE_RULES.filter(t => t === r ? e.target.checked : cur.includes(t));
+    if (!next.length) { flash('A line needs at least one rule.', 'warn'); renderEditAux(); return; }
+    if (next.length > 1 && !X.lineFeasible(next, ln.cells.length, app.puzzle.opts.whisperDiff || 4, ln.cells, app.puzzle.regions)) {
+      flash(`No digits satisfy ${next.map(t => RULE_LABEL[t]).join(' + ')} on these ${ln.cells.length} cells.`, 'warn'); renderEditAux(); return;
+    }
+    ln.type = next[0]; if (next.length > 1) ln.also = next.slice(1); else delete ln.also;
+    if (!next.includes('regsum')) delete ln.ring;
+    flash(''); touch(true); renderEditAux();
+  });
   $('#quadDel').addEventListener('click', () => { const k = app.selQuad; if (k < 0) return; app.puzzle.quads.splice(k, 1); app.selQuad = -1; touch(); });
   $('#tools').addEventListener('click', e => {
     const b = e.target.closest('button[data-tool]'); if (!b) return;
-    app.tool = b.dataset.tool; app.drag = null; if (app.tool !== 'cage') app.selCage = -1; if (app.tool !== 'clue') app.selRing = null; if (app.tool !== 'mkc' && app.tool !== 'mks') app.selMark = -1; if (app.tool !== 'quad') app.selQuad = -1;
+    if (b.dataset.tool !== app.tool) { app.extras = []; app.olExtras = []; } app.tool = b.dataset.tool; app.drag = null; if (app.tool !== 'cage') app.selCage = -1; if (app.tool !== 'clue') app.selRing = null; if (app.tool !== 'mkc' && app.tool !== 'mks') app.selMark = -1; if (app.tool !== 'quad') app.selQuad = -1; if (app.tool !== 'lrule') app.selLine = -1;
     renderAll();
   });
   $('#regionSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-rg]'); if (b) { app.paint = +b.dataset.rg; renderEditAux(); } });
@@ -3019,7 +3288,11 @@ function bind() {
   $('#editBtn').addEventListener('click', () => setTab('edit'));
   // generator
   $$('#genDiff input').forEach(r => r.addEventListener('change', () => { app.genDiff = r.value; }));
-  $('#whisperGen').addEventListener('change', e => { app.whisperDiff = +e.target.value; });
+  $('#whisperGen').addEventListener('change', e => { app.whisperDiff = +e.target.value; if (app.genSel.has('duality')) renderDual(); });
+  $('#genDensity').addEventListener('change', e => { app.genDensity = e.target.value; });
+  $('#genCounts').addEventListener('input', e => { const k = e.target.dataset.cnt; if (!k) return; const v = parseInt(e.target.value, 10); if (v >= 1) app.genCounts[k] = Math.min(12, v); else delete app.genCounts[k]; });
+  $('#dualChips').addEventListener('change', e => { const r = e.target.dataset.dr; if (!r) return; if (e.target.checked) app.dualRules.add(r); else app.dualRules.delete(r); renderDual(); });
+  $('#dualMax').addEventListener('change', e => { app.dualMax = +e.target.value; renderDual(); });
   $('#genBtn').addEventListener('click', () => runGenerate(Array.from(app.genSel)));
   $('#surpriseBtn').addEventListener('click', surprise);
   $('#presets').innerHTML = PRESETS.map((pr, i) => `<button class="btn quiet" data-pre="${i}">${pr[0]}</button>`).join('');
