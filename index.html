@@ -233,7 +233,7 @@ details.about p{margin:8px 0 0}
 .par{fill:var(--par)}
 .ln{fill:none;stroke-linecap:round;stroke-linejoin:round}
 .ln.thermo{stroke-width:15} .ln.arrow{stroke-width:4.5} .ln.whisper{stroke-width:8}
-.ln.regsum{stroke-width:9;opacity:.9} .ln.parity{stroke-width:12;opacity:.9} .ln.entropic{stroke-width:12;opacity:.9}
+.ln.regsum{stroke-width:9;opacity:.9} .ln.parity{stroke-width:12;opacity:.9} .ln.entropic{stroke-width:12;opacity:.9} .ln.regsum-tick{stroke-width:5;opacity:1}
 .lsel{fill:none;stroke:var(--accent);stroke-width:32;opacity:.22;stroke-linecap:round;stroke-linejoin:round} .ln.renban{stroke-width:14;opacity:.55} .ln.palindrome{stroke-width:14;opacity:.55} .ln.between{stroke-width:4}
 .abulb{fill:none;stroke-width:3.5} .ebulb{fill:none;stroke-width:3.5}
 .cage{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85;stroke-linecap:butt}
@@ -1436,6 +1436,7 @@ root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry3
   stdRegions, newPuzzle, usesShade, clueRange, outVal, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, OL_RULES, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky };
 })(typeof window !== 'undefined' ? window : globalThis);
+
 </script>
 <script>/* ===== Generator ===== */
 (function (root) {
@@ -1669,6 +1670,16 @@ function sampleOutLines(kind, sol, rng, usedRing, max, dual) {
   return lines;
 }
 
+/* A region-sum line's segments are the contiguous same-region stretches; each must sum equally
+   (the standard rule). If the line leaves a region and later re-enters it, that revisit is its
+   own segment too - correct, but easy for a solver to misread as "this region's total" rather
+   than "this particular stretch". Generation avoids that ambiguous shape: every segment belongs
+   to a region the line visits only once. */
+function noRegionReentry(cells, regions) {
+  const runs = S.regRuns(cells, regions);
+  return new Set(runs.map(r => regions[r[0]])).size === runs.length;
+}
+
 function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const items = [];
   const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
@@ -1716,7 +1727,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
         const types = pick(combos, rng).types, cb = combos.find(c => c.types === types);
         const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000,
           prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
-          finalOK: (v, cells) => S.lineOK(types, v, true, { wd: wdv, cells, regions, minRuns: 2, maxRuns: 4 }) && (!types.includes('arrow') || v[0] >= 3) });
+          finalOK: (v, cells) => S.lineOK(types, v, true, { wd: wdv, cells, regions, minRuns: 2, maxRuns: 4 }) && (!types.includes('arrow') || v[0] >= 3) && (!types.includes('regsum') || noRegionReentry(cells, regions)) });
         if (got.length) { const cs = got[0]; add('duality', p => p.lines.push({ type: types[0], also: types.slice(1), cells: cs.slice() }), lk('duality')); break; }
       }
     }
@@ -1732,6 +1743,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
     sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000,
       prefixOK: () => true,
       finalOK: (v, cells) => { const runs = S.regRuns(cells, regions); if (runs.length < 2 || runs.length > 4) return false;
+        if (!noRegionReentry(cells, regions)) return false;
         const sums = runs.map(r => r.reduce((a, c) => a + sol[c], 0)); return sums.every(x => x === sums[0]); } })
       .forEach(cs => {
         const runs = S.regRuns(cs, regions), commonSum = runs[0].reduce((a, c) => a + sol[c], 0);
@@ -2073,7 +2085,7 @@ function rulesFor(p) {
   if (lt.has('entropic')) R.push('Entropic lines (pink): every three consecutive cells on the line hold one digit from each of 1–2, 3–4 and 5–6.');
   if (p.lines.some(l => l.also)) R.push('Duality lines (layered colors): a line drawn with several layers obeys every rule shown by its layers at once.');
   if (lt.has('regsum')) {
-    R.push('Region sum lines (coral): cut the line wherever it crosses a region border. Every stretch inside one region has the same digit sum.');
+    R.push('Region sum lines (coral): cut the line wherever it crosses a region border (marked with a small tick). Every resulting segment has the same digit sum — if the line leaves a region and later comes back to it, that return trip is its own segment too, not pooled with the earlier one.');
     if (p.lines.some(l => X.lineTypes(l).includes('regsum') && l.ring)) R.push('When a region sum line reaches a clue outside the grid, that clue’s value must equal the line’s common sum.');
   }
   if (p.quads.length) R.push('Quadruple clues (small circles at a corner): every digit shown must appear at least once in the four surrounding cells. A repeated digit must appear in two of the four.');
@@ -2368,6 +2380,16 @@ function renderBoard() {
         o += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
       }
     });
+    if (types.includes('regsum') && L >= 2) {
+      const col = preview ? 'var(--accent)' : COL.regsum;
+      for (let k = 0; k + 1 < L; k++) {
+        if (p.regions[cells[k]] === p.regions[cells[k + 1]]) continue;
+        const x0 = cx(cells[k]), y0 = cy(cells[k]), x1 = cx(cells[k + 1]), y1 = cy(cells[k + 1]);
+        const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+        const px = -dy / len * 11, py = dx / len * 11;
+        o += `<line class="ln regsum-tick" style="stroke:${col}" x1="${(mx - px).toFixed(1)}" y1="${(my - py).toFixed(1)}" x2="${(mx + px).toFixed(1)}" y2="${(my + py).toFixed(1)}"/>`;
+      }
+    }
     return o;
   };
   p.lines.forEach(l => { s += drawLine(X.lineTypes(l), l.cells); });
@@ -2585,7 +2607,7 @@ const HINTS = {
   between: 'Drag from one end circle to the other (three cells or more).',
   cons: 'Click the border between two cells.', white: 'Click the border between two cells.', black: 'Click the border between two cells.',
   X: 'Click the border between two cells.', V: 'Click the border between two cells.',
-  regsum: 'Drag along the line across region borders. Each stretch inside one region has the same digit sum. Continue the drag one step past the grid edge to link that sum to a hidden outside clue.',
+  regsum: 'Drag along the line across region borders. Every time it crosses a border (shown with a tick mark) starts a new segment, and every segment — even a second one back in a region it already visited — must sum to the same total. Continue the drag one step past the grid edge to link that sum to a hidden outside clue.',
   parity: 'Drag along the line. Neighboring digits alternate between odd and even.',
   entropic: 'Drag along the line (three cells or more). Every three consecutive cells hold one digit from each of 1–2, 3–4 and 5–6.',
   lrule: 'Click a line, then tick the rules it obeys. A line with several rules is a duality line.',
