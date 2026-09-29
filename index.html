@@ -371,8 +371,10 @@ details.about p{margin:8px 0 0}
         <div class="tlabel">How many lines</div>
         <div class="inline" style="margin-top:6px"><label for="genDensity" style="font-weight:700">Density</label>
           <select id="genDensity"><option value="sparse">Sparse</option><option value="normal" selected>Normal</option><option value="dense">Dense</option></select></div>
+        <div class="inline" style="margin-top:6px"><label for="genLenBias" style="font-weight:700">Line length</label>
+          <select id="genLenBias"><option value="short">Short</option><option value="normal" selected>Normal</option><option value="long">Long</option></select></div>
         <div id="genCounts"></div>
-        <p class="small">A number fixes that many lines of the type and keeps every one of them. Auto lets the generator drop lines it does not need. Dense keeps every line it places. Sparse allows at most two lines per type.</p>
+        <p class="small">A number fixes that many lines of the type and keeps every one of them. Auto lets the generator drop lines it does not need. Dense keeps every line it places. Sparse allows at most two lines per type. Line length steers the generator toward shorter or longer lines; Long favors fewer, longer lines over many short ones.</p>
       </div>
       <div class="row">
         <button id="genBtn" class="btn primary">Generate puzzle</button>
@@ -1541,20 +1543,41 @@ function clueValue(cl, sol) {
   return c;
 }
 
+/* Skewed 0..1 draw: 'long' pulls toward 1 (the high end of a range), 'short' toward 0, 'normal' is uniform. */
+function biasedT(rng, bias) {
+  const p = bias === 'long' ? 2.4 : bias === 'short' ? 0.42 : 1;
+  return Math.pow(rng(), 1 / p);
+}
+function pickLenRange(rng, lo, hi, bias) { return hi <= lo ? lo : lo + Math.round(biasedT(rng, bias) * (hi - lo)); }
+function pickLenFromList(rng, lens, bias) { return lens[Math.min(lens.length - 1, Math.floor(biasedT(rng, bias) * lens.length))]; }
+
 function sampleLines(sol, rng, o) {
   const lines = [], used = new Set();
-  for (let a = 0; a < o.attempts && lines.length < o.max; a++) {
-    const L = o.lens ? pick(o.lens, rng) : o.minL + Math.floor(rng() * (o.maxL - o.minL + 1));
-    const start = Math.floor(rng() * NN);
-    if (used.has(start)) continue;
-    const path = [start], inPath = new Set(path);
-    while (path.length < L) {
-      const last = path[path.length - 1];
-      const opts = nbr8[last].filter(j => !inPath.has(j) && !used.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
-      if (!opts.length) break;
-      const j = pick(opts, rng); path.push(j); inPath.add(j);
+  const bias = o.lenBias || 'normal';
+  // a random walk that stalls early just keeps whatever shorter line it found, which on its own skews
+  // the whole pool short; retrying a few times at the same target length (same total attempt budget,
+  // just grouped) gives longer targets a real chance to actually get built instead of falling back at once
+  const retries = bias === 'long' ? 4 : bias === 'short' ? 1 : 2;
+  let a = 0;
+  while (a < o.attempts && lines.length < o.max) {
+    const L = o.lens ? pickLenFromList(rng, o.lens, bias) : pickLenRange(rng, o.minL, o.maxL, bias);
+    let best = null;
+    for (let r = 0; r < retries && a < o.attempts; r++, a++) {
+      const start = Math.floor(rng() * NN);
+      if (used.has(start)) continue;
+      const path = [start], inPath = new Set(path);
+      while (path.length < L) {
+        const last = path[path.length - 1];
+        const opts = nbr8[last].filter(j => !inPath.has(j) && !used.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
+        if (!opts.length) break;
+        const j = pick(opts, rng); path.push(j); inPath.add(j);
+      }
+      if (path.length >= o.minL && o.finalOK(path.map(k => sol[k]), path)) {
+        if (!best || path.length > best.length) best = path;
+        if (best.length === L) break;
+      }
     }
-    if (path.length >= o.minL && o.finalOK(path.map(k => sol[k]), path)) { lines.push(path); path.forEach(k => used.add(k)); }
+    if (best) { lines.push(best); best.forEach(k => used.add(k)); }
   }
   return lines;
 }
@@ -1651,12 +1674,12 @@ function outOK(type, v, d) {
   if (type === 'parity') return v.every((x, i) => i === 0 || (x + v[i - 1]) % 2 === 1);
   return v.every((x, i) => x === v[L - 1 - i]);
 }
-function sampleOutLines(kind, sol, rng, usedRing, max, dual) {
+function sampleOutLines(kind, sol, rng, usedRing, max, dual, bias) {
   const lines = [];
   for (let a = 0; a < 5000 && lines.length < max; a++) {
     const side = Math.floor(rng() * 4), type = pick(OL_TYPES, rng);
     const also = dual && rng() < 0.5 ? [pick(OL_TYPES.filter(t => t !== type), rng)] : [], types = [type].concat(also);
-    const L = types.includes('arrow') ? 3 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 3);
+    const L = pickLenRange(rng, 3, types.includes('arrow') ? 4 : 5, bias);
     const start = Math.floor(rng() * (N - L + 1));
     let cells = []; for (let k = 0; k < L; k++) cells.push(sideCell(side, start + k));
     if (rng() < 0.5) cells.reverse();
@@ -1700,12 +1723,13 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   }
 
   const counts = (spec && spec.counts) || {}, dens = (spec && spec.density) || 'normal', wdv = whisperDiff;
+  const lenBias = (spec && spec.lineLength) || 'normal';
   const capOf = (key, dflt) => counts[key] != null ? counts[key] : dens === 'sparse' ? Math.min(2, dflt) : dens === 'dense' ? Math.ceil(dflt * 1.5) : dflt;
   const lk = key => counts[key] != null || dens === 'dense';
   const plain = (key, minL, maxL, dflt, att, extra) => {
     if (!V.has(key)) return;
     const types = [key];
-    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att,
+    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att, lenBias,
       prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
       finalOK: v => S.lineOK(types, v, true, { wd: wdv }) && (!extra || extra(v)) })
       .forEach(cs => add(key, p => p.lines.push({ type: key, cells: cs.slice() }), lk(key)));
@@ -1725,7 +1749,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
     for (let i = 0; combos.length && i < capOf('duality', 3); i++) {
       for (let t = 0; t < 6; t++) {
         const types = pick(combos, rng).types, cb = combos.find(c => c.types === types);
-        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000,
+        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000, lenBias,
           prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
           finalOK: (v, cells) => S.lineOK(types, v, true, { wd: wdv, cells, regions, minRuns: 2, maxRuns: 4 }) && (!types.includes('arrow') || v[0] >= 3) && (!types.includes('regsum') || noRegionReentry(cells, regions)) });
         if (got.length) { const cs = got[0]; add('duality', p => p.lines.push({ type: types[0], also: types.slice(1), cells: cs.slice() }), lk('duality')); break; }
@@ -1740,7 +1764,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
       if (c === 0) cands.push([r, -1]); if (c === N - 1) cands.push([r, N]);
       return cands;
     };
-    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000,
+    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000, lenBias,
       prefixOK: () => true,
       finalOK: (v, cells) => { const runs = S.regRuns(cells, regions); if (runs.length < 2 || runs.length > 4) return false;
         if (!noRegionReentry(cells, regions)) return false;
@@ -1774,7 +1798,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const nOutV = ['outxsum', 'outsandwich', 'outsky'].filter(k => V.has(k)).length;
   [['outxsum', 'xs'], ['outsandwich', 'sw'], ['outsky', 'sk']].forEach(([variant, kind]) => {
     if (!V.has(variant)) return;
-    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1][nOutV], V.has('duality'));
+    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1][nOutV], V.has('duality'), lenBias);
     lines.forEach(ln => add(variant, p => p.olines.push({ type: ln.type, also: ln.also, kind: ln.kind, cells: ln.cells.map(c => c.slice()), diff: ln.diff })));
     lines.forEach(ln => ln.cells.forEach(([r, c], k) => add(variant + '-c', p => p.clues.push({ kind, r, c, val: ln.vals[k] }))));
     let n = 0;
@@ -1977,7 +2001,7 @@ const app = {
   model: null, solInfo: null, play: null, drag: null, paint: 0, showConflicts: true, autoClear: true,
   genSel: new Set(['littlekiller', 'xsum']), genDiff: 'medium', whisperDiff: 4, busy: false,
   paintCol: 1, selMark: -1, selQuad: -1, olType: 'thermo', olKind: 'xs', olDiff: 5,
-  extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genCounts: {}
+  extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}
 };
 const RULE_LABEL = { thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
 const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality'];
@@ -2357,16 +2381,40 @@ function renderBoard() {
   // lines
   if (editing && app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine]) s += `<polyline class="lsel" points="${pts(p.lines[app.selLine].cells)}"/>`;
   const LW = { thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, regsum: 9, whisper: 8 };
+  /* perpendicular unit normal at vertex i of a polyline, bisecting the incoming/outgoing segments
+     (falls back to a single segment's normal at a sharp near-reversal, e.g. a V-shaped line) */
+  const normalAt = (P, i) => {
+    const n = P.length, norm = v => { const l = Math.hypot(v.x, v.y) || 1; return { x: v.x / l, y: v.y / l }; };
+    const din = i > 0 ? norm({ x: P[i].x - P[i - 1].x, y: P[i].y - P[i - 1].y }) : null;
+    const dout = i < n - 1 ? norm({ x: P[i + 1].x - P[i].x, y: P[i + 1].y - P[i].y }) : null;
+    const a = din || dout, b = dout || din;
+    let sx = a.x + b.x, sy = a.y + b.y, sl = Math.hypot(sx, sy);
+    if (sl < 0.15) { sx = a.x; sy = a.y; sl = Math.hypot(sx, sy) || 1; }
+    return { nx: -sy / sl, ny: sx / sl };
+  };
   const drawLine = (typesIn, cells, preview) => {
     const types = Array.isArray(typesIn) ? typesIn : [typesIn], L = cells.length, multi = types.length > 1;
     const thick = types.filter(t => t !== 'arrow' && t !== 'between').sort((x, y) => LW[y] - LW[x]);
     const thin = types.filter(t => t === 'arrow' || t === 'between');
     let o = '';
-    thick.forEach((type, k) => {
-      const col = preview ? 'var(--accent)' : COL[type], w = multi ? [20, 15, 10, 6, 4][Math.min(k, 4)] : 0;
-      o += `<polyline class="ln ${type}" style="stroke:${col}${w ? ';stroke-width:' + w + ';opacity:1' : ''}" points="${pts(cells)}"/>`;
-      if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
-    });
+    if (multi && thick.length > 1) {
+      // duality (2+ rules): draw each rule as its own thin strand running alongside the others,
+      // rather than nesting them as concentric strokes where the inner ones get buried
+      const P = cells.map(c => ({ x: cx(c), y: cy(c) })), k = thick.length, spacing = 8;
+      thick.forEach((type, idx) => {
+        const off = (idx - (k - 1) / 2) * spacing, col = preview ? 'var(--accent)' : COL[type];
+        const norms = P.map((_, i) => normalAt(P, i));
+        const offPts = P.map((p, i) => `${(p.x + norms[i].nx * off).toFixed(1)},${(p.y + norms[i].ny * off).toFixed(1)}`).join(' ');
+        o += `<polyline class="ln ${type}" style="stroke:${col};stroke-width:7;opacity:1" points="${offPts}"/>`;
+        if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${(P[0].x + norms[0].nx * off).toFixed(1)}" cy="${(P[0].y + norms[0].ny * off).toFixed(1)}" r="14"/>`;
+      });
+    } else {
+      thick.forEach(type => {
+        const col = preview ? 'var(--accent)' : COL[type];
+        o += `<polyline class="ln ${type}" style="stroke:${col}" points="${pts(cells)}"/>`;
+        if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
+      });
+    }
     thin.forEach(type => {
       const col = preview ? 'var(--accent)' : COL[type];
       if (type === 'between') {
@@ -3118,6 +3166,7 @@ function renderCounts() {
   $('#genLines').hidden = !keys.length;
   if (!keys.length) return;
   $('#genDensity').value = app.genDensity;
+  $('#genLenBias').value = app.genLenBias;
   $('#genCounts').innerHTML = keys.map(k => `<label class="cnt"><span>${X.VLABEL[k]}</span><input type="number" min="1" max="12" inputmode="numeric" data-cnt="${k}" placeholder="auto" value="${app.genCounts[k] || ''}"></label>`).join('');
 }
 function feasibleMix(sel) {
@@ -3136,7 +3185,7 @@ function runGenerate(list) {
   setTimeout(() => {
     const t0 = Date.now();
     let q = null, spec = null;
-    const counts = {}; COUNT_KEYS.forEach(k => { if (list.includes(k) && app.genCounts[k]) counts[k] = app.genCounts[k]; }); spec = { variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff, density: app.genDensity, counts, dualityRules: Array.from(app.dualRules), dualityMax: app.dualMax };
+    const counts = {}; COUNT_KEYS.forEach(k => { if (list.includes(k) && app.genCounts[k]) counts[k] = app.genCounts[k]; }); spec = { variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff, density: app.genDensity, lineLength: app.genLenBias, counts, dualityRules: Array.from(app.dualRules), dualityMax: app.dualMax };
     try { q = X.generate(spec, null, 9000); } catch (err) { q = null; }
     app.busy = false; $('#genBtn').disabled = false; $('#surpriseBtn').disabled = false;
     if (!q) { $('#genStatus').textContent = Object.keys(spec.counts).length ? 'Could not place those exact line counts. Lower a count, set it to auto, or try again.' : 'Could not build that mix. Try again, or remove a variant.'; return; }
@@ -3312,6 +3361,7 @@ function bind() {
   $$('#genDiff input').forEach(r => r.addEventListener('change', () => { app.genDiff = r.value; }));
   $('#whisperGen').addEventListener('change', e => { app.whisperDiff = +e.target.value; if (app.genSel.has('duality')) renderDual(); });
   $('#genDensity').addEventListener('change', e => { app.genDensity = e.target.value; });
+  $('#genLenBias').addEventListener('change', e => { app.genLenBias = e.target.value; });
   $('#genCounts').addEventListener('input', e => { const k = e.target.dataset.cnt; if (!k) return; const v = parseInt(e.target.value, 10); if (v >= 1) app.genCounts[k] = Math.min(12, v); else delete app.genCounts[k]; });
   $('#dualChips').addEventListener('change', e => { const r = e.target.dataset.dr; if (!r) return; if (e.target.checked) app.dualRules.add(r); else app.dualRules.delete(r); renderDual(); });
   $('#dualMax').addEventListener('change', e => { app.dualMax = +e.target.value; renderDual(); });
