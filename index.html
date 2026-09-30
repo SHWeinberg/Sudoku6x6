@@ -1439,6 +1439,7 @@ root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry3
   chkSum, chkXsum, chkSandwich, chkSky };
 })(typeof window !== 'undefined' ? window : globalThis);
 
+
 </script>
 <script>/* ===== Generator ===== */
 (function (root) {
@@ -1551,8 +1552,14 @@ function biasedT(rng, bias) {
 function pickLenRange(rng, lo, hi, bias) { return hi <= lo ? lo : lo + Math.round(biasedT(rng, bias) * (hi - lo)); }
 function pickLenFromList(rng, lens, bias) { return lens[Math.min(lens.length - 1, Math.floor(biasedT(rng, bias) * lens.length))]; }
 
+/* o.usedEndpoints is a Set shared across every line-sampling call for the whole puzzle build (not just
+   this one rule type), so no two lines - of any type, from any pool - ever start or end on the same cell.
+   That's the only thing that made two separate lines visually read as one continuous line: two endpoints
+   coinciding with no marker to show the line actually ended there. Lines may still freely cross through
+   each other's interior cells - only claiming a cell as an endpoint is exclusive. */
 function sampleLines(sol, rng, o) {
-  const lines = [], used = new Set();
+  const lines = [];
+  const usedEndpoints = o.usedEndpoints;
   const bias = o.lenBias || 'normal';
   // a random walk that stalls early just keeps whatever shorter line it found, which on its own skews
   // the whole pool short; retrying a few times at the same target length (same total attempt budget,
@@ -1564,20 +1571,21 @@ function sampleLines(sol, rng, o) {
     let best = null;
     for (let r = 0; r < retries && a < o.attempts; r++, a++) {
       const start = Math.floor(rng() * NN);
-      if (used.has(start)) continue;
+      if (usedEndpoints.has(start)) continue;
       const path = [start], inPath = new Set(path);
       while (path.length < L) {
         const last = path[path.length - 1];
-        const opts = nbr8[last].filter(j => !inPath.has(j) && !used.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
+        const opts = nbr8[last].filter(j => !inPath.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
         if (!opts.length) break;
         const j = pick(opts, rng); path.push(j); inPath.add(j);
       }
-      if (path.length >= o.minL && o.finalOK(path.map(k => sol[k]), path)) {
+      const end = path[path.length - 1];
+      if (path.length >= o.minL && !usedEndpoints.has(end) && o.finalOK(path.map(k => sol[k]), path)) {
         if (!best || path.length > best.length) best = path;
         if (best.length === L) break;
       }
     }
-    if (best) { lines.push(best); best.forEach(k => used.add(k)); }
+    if (best) { lines.push(best); usedEndpoints.add(best[0]); usedEndpoints.add(best[best.length - 1]); }
   }
   return lines;
 }
@@ -1707,6 +1715,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const items = [];
   const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
   const usedRing = new Set();
+  const usedEndpoints = new Set(); // shared across every line pool below, so no two lines ever start/end on the same cell
   const sum = a => a.reduce((x, y) => x + y, 0);
 
   if (V.has('killer')) killerCages(sol, rng).forEach(cg => add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })));
@@ -1729,7 +1738,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const plain = (key, minL, maxL, dflt, att, extra) => {
     if (!V.has(key)) return;
     const types = [key];
-    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att, lenBias,
+    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att, lenBias, usedEndpoints,
       prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
       finalOK: v => S.lineOK(types, v, true, { wd: wdv }) && (!extra || extra(v)) })
       .forEach(cs => add(key, p => p.lines.push({ type: key, cells: cs.slice() }), lk(key)));
@@ -1749,7 +1758,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
     for (let i = 0; combos.length && i < capOf('duality', 3); i++) {
       for (let t = 0; t < 6; t++) {
         const types = pick(combos, rng).types, cb = combos.find(c => c.types === types);
-        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000, lenBias,
+        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000, lenBias, usedEndpoints,
           prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
           finalOK: (v, cells) => S.lineOK(types, v, true, { wd: wdv, cells, regions, minRuns: 2, maxRuns: 4 }) && (!types.includes('arrow') || v[0] >= 3) && (!types.includes('regsum') || noRegionReentry(cells, regions)) });
         if (got.length) { const cs = got[0]; add('duality', p => p.lines.push({ type: types[0], also: types.slice(1), cells: cs.slice() }), lk('duality')); break; }
@@ -1764,7 +1773,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
       if (c === 0) cands.push([r, -1]); if (c === N - 1) cands.push([r, N]);
       return cands;
     };
-    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000, lenBias,
+    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000, lenBias, usedEndpoints,
       prefixOK: () => true,
       finalOK: (v, cells) => { const runs = S.regRuns(cells, regions); if (runs.length < 2 || runs.length > 4) return false;
         if (!noRegionReentry(cells, regions)) return false;
