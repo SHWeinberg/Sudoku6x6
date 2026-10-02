@@ -408,7 +408,7 @@ details.about p{margin:8px 0 0}
           <option value="renban">Renban</option><option value="palindrome">Palindrome</option><option value="parity">Parity</option>
         </select>
         <select id="olKind" aria-label="Clue type">
-          <option value="xs">X-sums</option><option value="sw">Sandwich</option><option value="sk">Skyscraper</option>
+          <option value="xs">X-sums</option><option value="sw">Sandwich</option><option value="sk">Skyscraper</option><option value="nr">Numbered Rooms</option>
         </select>
         <label id="olDiffWrap" hidden>differ by at least <input id="olDiff" type="number" min="1" max="20" value="5"></label>
       </div>
@@ -573,7 +573,7 @@ function newPuzzle() {
 function usesShade(p) {
   const o = p.opts || {};
   return !!((p.marks && p.marks.some(x => x)) || (p.paint && p.paint.some(x => x & 6)) ||
-    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper);
+    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper || o.shadeLoop || o.boxRenban);
 }
 function clonePuzzle(p) { return JSON.parse(JSON.stringify(p)); }
 
@@ -655,6 +655,15 @@ function chkRenban(g, cells) {
   let mn = 9, mx = 0;
   for (const i of cells) { const v = g[i]; if (v) { if (v < mn) mn = v; if (v > mx) mx = v; } }
   return mx === 0 || mx - mn <= cells.length - 1;
+}
+function chkRooms(g, seq, T) {
+  const a0 = g[seq[0]];
+  const tryN = a0 ? [a0] : [1, 2, 3, 4, 5, 6];
+  for (const n of tryN) {
+    const v = g[seq[n - 1]];
+    if (!v || v === T) return true;
+  }
+  return false;
 }
 function chkArrow(g, cells) {
   const c = g[cells[0]]; let s = 0, unk = 0;
@@ -744,6 +753,15 @@ function clueRange(kind, seq, g) {
       }
     }
     return hi < 0 ? null : [lo, hi];
+  }
+  if (kind === 'nr') {
+    const a0 = g[seq[0]]; let lo = 99, hi = -1;
+    for (const n of (a0 ? [a0] : [1, 2, 3, 4, 5, 6])) {
+      const v = g[seq[n - 1]];
+      if (v) { if (v < lo) lo = v; if (v > hi) hi = v; }
+      else { lo = 1; hi = 6; }
+    }
+    return [lo, hi];
   }
   let max = 0, cnt = 0, k = 0;
   for (; k < N; k++) { const v = g[seq[k]]; if (!v) break; if (v > max) { max = v; cnt++; } }
@@ -1013,6 +1031,7 @@ function compile(p) {
       if (cl.kind === 'xs') addGroup(seq, g => chkXsum(g, seq, T));
       else if (cl.kind === 'sw') addGroup(seq, g => chkSandwich(g, seq, T));
       else if (cl.kind === 'sk') addGroup(seq, g => chkSky(g, seq, T));
+      else if (cl.kind === 'nr') addGroup(seq, g => chkRooms(g, seq, T));
     }
   }
   const useShade = usesShade(p);
@@ -1030,7 +1049,8 @@ function compile(p) {
   for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= wdv) mm |= bit(e); allow[d] = mm; }
   return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
     useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
-    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper }, wd: wdv, allow };
+    regList,
+    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, shadeLoop: !!o.shadeLoop, boxRenban: !!o.boxRenban }, wd: wdv, allow };
 }
 
 /* ---- shading propagation (sg: 0 unknown, 1 land, 2 water; sdom bit1 land, bit2 water) ---- */
@@ -1103,6 +1123,39 @@ function shadeProp(m, grid, sg, sdom, cand) {
         const comp = flood(start, j => sg[j] !== 1); let cnt = 0;
         for (const c of comp) if (sg[c] === 2) cnt++;
         if (cnt < wc) return false;
+      }
+    }
+    if (o.shadeLoop) {
+      let anyShaded = -1, totalShaded = 0, incomplete = false;
+      for (let i = 0; i < NN; i++) {
+        if (sg[i] !== 2) continue;
+        totalShaded++; if (anyShaded < 0) anyShaded = i;
+        const nb = nbr4[i]; let shadedCnt = 0; const unk = [];
+        for (const j of nb) { if (sg[j] === 2) shadedCnt++; else if (!sg[j]) unk.push(j); }
+        if (shadedCnt > 2) return false;
+        if (shadedCnt + unk.length < 2) return false;
+        if (shadedCnt === 2) { for (const j of unk) if (!setS(j, 1)) return false; }
+        else if (shadedCnt + unk.length === 2) { for (const j of unk) if (!setS(j, 2)) return false; }
+        else incomplete = true;
+      }
+      if (totalShaded && !incomplete) {
+        const comp = flood(anyShaded, j => sg[j] === 2);
+        if (comp.length !== totalShaded) return false;
+      }
+    }
+    if (o.boxRenban && m.regList) {
+      for (const cells of m.regList) {
+        let shadedDone = true;
+        for (const c of cells) if (sg[c] === 2 && !grid[c]) { shadedDone = false; break; }
+        const allDecided = cells.every(c => sg[c]);
+        if (!allDecided || !shadedDone) continue;
+        const sc = cells.filter(c => sg[c] === 2);
+        if (sc.length <= 1) continue;
+        const inSet = new Set(sc), seen = new Set([sc[0]]), stack = [sc[0]];
+        while (stack.length) { const c = stack.pop(); for (const j of nbr4[c]) if (inSet.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); } }
+        if (seen.size !== sc.length) return false;
+        const digits = sc.map(c => grid[c]), mn = Math.min(...digits), mx = Math.max(...digits);
+        if (mx - mn !== digits.length - 1) return false;
       }
     }
     const nkCheck = X => {
@@ -1341,6 +1394,9 @@ function verify(p, g, sh) {
       } else if (cl.kind === 'sk') {
         let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
         if (c !== T) errs.push('sk');
+      } else if (cl.kind === 'nr') {
+        const n = v[0];
+        if (v[n - 1] !== T) errs.push('nr');
       }
     }
   }
@@ -1369,6 +1425,7 @@ function outVal(kind, seq, g) {
     const a = v.indexOf(1), b = v.indexOf(6); if (a < 0 || b < 0) return null;
     let s = 0; for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k]; return s;
   }
+  if (kind === 'nr') { const n = v[0]; return v[n - 1]; }
   let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; } return c;
 }
 
@@ -1418,6 +1475,24 @@ function verifyShade(p, g, sh, errs) {
   };
   if (o.nkLand) perRegion(L, 0);
   if (o.nkWater) perRegion(Wt, 1);
+  if (o.shadeLoop) {
+    let total = 0, bad = false;
+    for (let i = 0; i < NN; i++) if (sh[i] === 1) { total++; if (nbr4[i].filter(j => sh[j] === 1).length !== 2) bad = true; }
+    if (bad) errs.push('shaded loop: every shaded cell needs exactly 2 shaded neighbors');
+    else if (total && Wt.n > 1) errs.push('shaded loop: must be one connected loop');
+  }
+  if (o.boxRenban) {
+    const regions = p.regions || stdRegions();
+    for (let b = 0; b < 6; b++) {
+      const cells = []; for (let i = 0; i < NN; i++) if (regions[i] === b && sh[i] === 1) cells.push(i);
+      if (cells.length <= 1) continue;
+      const inSet = new Set(cells), seen = new Set([cells[0]]), stack = [cells[0]];
+      while (stack.length) { const c = stack.pop(); for (const j of nbr4[c]) if (inSet.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); } }
+      if (seen.size !== cells.length) { errs.push('shaded renban: not connected within box'); continue; }
+      const digits = cells.map(i => g[i]), mn = Math.min(...digits), mx = Math.max(...digits);
+      if (mx - mn !== digits.length - 1) errs.push('shaded renban: not a renban set within box');
+    }
+  }
 }
 
 /* cells that definitely break a rule given a partial grid (for live feedback) */
@@ -1432,12 +1507,14 @@ function conflicts(p, model, grid) {
   return bad;
 }
 
-const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper' };
+const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
 
 root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, OL_RULES, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+
 
 
 </script>
@@ -1461,6 +1538,7 @@ const VARIANTS = [
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
   { k: 'sandwich', label: 'Sandwich', group: 'Sums' },
   { k: 'skyscraper', label: 'Skyscraper', group: 'Sums' },
+  { k: 'roomnumbers', label: 'Numbered Rooms', group: 'Sums' },
   { k: 'thermo', label: 'Thermo', group: 'Lines' },
   { k: 'whisper', label: 'German whispers', group: 'Lines' },
   { k: 'renban', label: 'Renban', group: 'Lines' },
@@ -1478,14 +1556,19 @@ const VARIANTS = [
   { k: 'outxsum', label: 'X-sums on lines', group: 'Outside lines' },
   { k: 'outsandwich', label: 'Sandwich on lines', group: 'Outside lines' },
   { k: 'outsky', label: 'Skyscraper on lines', group: 'Outside lines' },
+  { k: 'outrooms', label: 'Numbered Rooms on lines', group: 'Outside lines' },
   { k: 'nurikabe', label: 'Nurikabe', group: 'Shading' },
-  { k: 'shadeline', label: 'Shaded whispers', group: 'Shading' }
+  { k: 'shadeline', label: 'Shaded whispers', group: 'Shading' },
+  { k: 'shaderenban', label: 'Shaded renban', group: 'Shading' }
 ];
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const MIN_KEEP = { killer: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
-  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, nurikabe: 0, shadeline: 0, regsum: 1, nonconsecutive: 0,
-  outxsum: 1, outsandwich: 1, outsky: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
+  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, regsum: 1, nonconsecutive: 0,
+  outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
+/* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
+   floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
+const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality']);
 
 function randomRegions(rng) {
   for (let attempt = 0; attempt < 800; attempt++) {
@@ -1540,6 +1623,7 @@ function clueValue(cl, sol) {
     for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k];
     return s;
   }
+  if (cl.kind === 'nr') { const n = v[0]; return v[n - 1]; }
   let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
   return c;
 }
@@ -1561,6 +1645,18 @@ function sampleLines(sol, rng, o) {
   const lines = [];
   const usedEndpoints = o.usedEndpoints;
   const bias = o.lenBias || 'normal';
+  // cellCross caps how many lines (of any type) may ever visually cross through one cell, and
+  // steers new lines away from crossing an existing line of the SAME type/combo through a shared
+  // cell - a same-color crossing is the one case where the line-length fix can't even show two
+  // lines are distinct, since a strand drawn over itself in the same color is invisible.
+  const cellCross = o.cellCross, lineKey = o.lineKey || '';
+  const crossOK = j => {
+    if (!cellCross) return true;
+    const ex = cellCross.get(j);
+    if (!ex) return true;
+    if (ex.length >= 2) return false;
+    return !(lineKey && ex.includes(lineKey));
+  };
   // a random walk that stalls early just keeps whatever shorter line it found, which on its own skews
   // the whole pool short; retrying a few times at the same target length (same total attempt budget,
   // just grouped) gives longer targets a real chance to actually get built instead of falling back at once
@@ -1571,11 +1667,11 @@ function sampleLines(sol, rng, o) {
     let best = null;
     for (let r = 0; r < retries && a < o.attempts; r++, a++) {
       const start = Math.floor(rng() * NN);
-      if (usedEndpoints.has(start)) continue;
+      if (usedEndpoints.has(start) || !crossOK(start)) continue;
       const path = [start], inPath = new Set(path);
       while (path.length < L) {
         const last = path[path.length - 1];
-        const opts = nbr8[last].filter(j => !inPath.has(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
+        const opts = nbr8[last].filter(j => !inPath.has(j) && crossOK(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
         if (!opts.length) break;
         const j = pick(opts, rng); path.push(j); inPath.add(j);
       }
@@ -1585,7 +1681,10 @@ function sampleLines(sol, rng, o) {
         if (best.length === L) break;
       }
     }
-    if (best) { lines.push(best); usedEndpoints.add(best[0]); usedEndpoints.add(best[best.length - 1]); }
+    if (best) {
+      lines.push(best); usedEndpoints.add(best[0]); usedEndpoints.add(best[best.length - 1]);
+      if (cellCross) best.forEach(c => { const ex = cellCross.get(c); if (ex) ex.push(lineKey); else cellCross.set(c, [lineKey]); });
+    }
   }
   return lines;
 }
@@ -1636,23 +1735,58 @@ function makeNurikabe(sol, rng) {
   }
   return null;
 }
-/* Shaded whispers: a shaded path whose touching cells differ by at least wd */
-function makeShadeLine(sol, rng, wd) {
-  for (let att = 0; att < 6000; att++) {
-    const L = 4 + Math.floor(rng() * 5);
-    const path = [Math.floor(rng() * NN)], inP = new Set(path);
-    while (path.length < L) {
-      const last = path[path.length - 1];
-      const opts = nbr4[last].filter(j => !inP.has(j) && Math.abs(sol[j] - sol[last]) >= wd);
-      if (!opts.length) break;
-      const j = pick(opts, rng); path.push(j); inP.add(j);
-    }
-    if (path.length < 4) continue;
-    const sh = new Array(NN).fill(0); path.forEach(c => { sh[c] = 1; });
-    if (orthPairs.some(([a, b]) => sh[a] && sh[b] && Math.abs(sol[a] - sol[b]) < wd)) continue;
-    return { sh, path };
+/* Shaded whispers / shaded renban: a shaded CLOSED LOOP (every shaded cell has exactly 2 shaded
+   orthogonal neighbors, forming one cycle). Growth keeps each newly-added cell's only shaded
+   orthogonal neighbor-so-far as the one it was just attached to, so no accidental chord/branch
+   can form; closing the loop back to the start is the only way any cell gets its second neighbor.
+   opts.wd: if set, require every adjacent pair on the loop to differ by >= wd (shaded whispers).
+   opts.boxRenban: if set, require each region's shaded cells to be orthogonally connected
+   (within that region) and form a renban set (max-min === count-1) of solution digits - checked
+   post-hoc since it depends on the whole loop (shaded renban). */
+/* A hollow-rectangle ring (h, w >= 3) or a bare 2x2 block is always a genuine single cycle on a
+   grid graph - every cell on it has exactly 2 orthogonal neighbors also on it. Trying a random
+   self-avoiding walk and hoping it randomly ends up adjacent to its own start almost never
+   succeeds on a grid this small, so loops are built from this much more reliable shape instead;
+   rejection-sampling over size/position still gives a varied pool of loops to pick from. */
+function rectLoopCells(rng) {
+  const twoByTwo = rng() < 0.15;
+  const h = twoByTwo ? 2 : 3 + Math.floor(rng() * 4); // 3..6
+  const w = twoByTwo ? 2 : 3 + Math.floor(rng() * 4);
+  if (h > N || w > N) return null;
+  const r0 = Math.floor(rng() * (N - h + 1)), c0 = Math.floor(rng() * (N - w + 1));
+  const cells = [];
+  for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + w; c++) {
+    if (twoByTwo || r === r0 || r === r0 + h - 1 || c === c0 || c === c0 + w - 1) cells.push(ix(r, c));
+  }
+  return cells;
+}
+function makeShadeLoop(sol, rng, opts) {
+  opts = opts || {};
+  const wd = opts.wd || 0;
+  const attempts = opts.attempts || 6000;
+  for (let att = 0; att < attempts; att++) {
+    const cells = rectLoopCells(rng);
+    if (!cells) continue;
+    const sh = new Array(NN).fill(0); cells.forEach(c => { sh[c] = 1; });
+    // belt-and-suspenders: confirm every shaded cell really has exactly 2 shaded orthogonal neighbors
+    if (!cells.every(c => nbr4[c].filter(j => sh[j]).length === 2)) continue;
+    if (wd && cells.some(c => nbr4[c].some(j => sh[j] && Math.abs(sol[c] - sol[j]) < wd))) continue;
+    if (opts.boxRenban && !boxRenbanOK(sh, sol, opts.regions)) continue;
+    return { sh, path: cells };
   }
   return null;
+}
+function boxRenbanOK(sh, sol, regions) {
+  for (let b = 0; b < 6; b++) {
+    const cells = []; for (let i = 0; i < NN; i++) if (regions[i] === b && sh[i]) cells.push(i);
+    if (cells.length <= 1) continue;
+    const inSet = new Set(cells), seen = new Set([cells[0]]), stack = [cells[0]];
+    while (stack.length) { const c = stack.pop(); for (const j of nbr4[c]) if (inSet.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); } }
+    if (seen.size !== cells.length) return false;
+    const digits = cells.map(i => sol[i]), mn = Math.min(...digits), mx = Math.max(...digits);
+    if (mx - mn !== digits.length - 1) return false;
+  }
+  return true;
 }
 
 const _cf = new Map();
@@ -1716,6 +1850,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
   const usedRing = new Set();
   const usedEndpoints = new Set(); // shared across every line pool below, so no two lines ever start/end on the same cell
+  const cellCross = new Map(); // shared across every line pool: caps crossings per cell at 2 and steers lines away from crossing a same-type line
   const sum = a => a.reduce((x, y) => x + y, 0);
 
   if (V.has('killer')) killerCages(sol, rng).forEach(cg => add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })));
@@ -1738,7 +1873,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   const plain = (key, minL, maxL, dflt, att, extra) => {
     if (!V.has(key)) return;
     const types = [key];
-    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att, lenBias, usedEndpoints,
+    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att, lenBias, usedEndpoints, cellCross, lineKey: key,
       prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
       finalOK: v => S.lineOK(types, v, true, { wd: wdv }) && (!extra || extra(v)) })
       .forEach(cs => add(key, p => p.lines.push({ type: key, cells: cs.slice() }), lk(key)));
@@ -1758,7 +1893,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
     for (let i = 0; combos.length && i < capOf('duality', 3); i++) {
       for (let t = 0; t < 6; t++) {
         const types = pick(combos, rng).types, cb = combos.find(c => c.types === types);
-        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000, lenBias, usedEndpoints,
+        const got = sampleLines(sol, rng, { lens: cb.lens, minL: 3, maxL: 7, max: 1, attempts: types.includes('palindrome') ? 20000 : 6000, lenBias, usedEndpoints, cellCross, lineKey: 'duality:' + types.join('+'),
           prefixOK: (v, c, Lt) => S.lineOK(types, v, false, { wd: wdv, L: Lt }),
           finalOK: (v, cells) => S.lineOK(types, v, true, { wd: wdv, cells, regions, minRuns: 2, maxRuns: 4 }) && (!types.includes('arrow') || v[0] >= 3) && (!types.includes('regsum') || noRegionReentry(cells, regions)) });
         if (got.length) { const cs = got[0]; add('duality', p => p.lines.push({ type: types[0], also: types.slice(1), cells: cs.slice() }), lk('duality')); break; }
@@ -1773,7 +1908,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
       if (c === 0) cands.push([r, -1]); if (c === N - 1) cands.push([r, N]);
       return cands;
     };
-    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000, lenBias, usedEndpoints,
+    sampleLines(sol, rng, { minL: 4, maxL: 8, max: capOf('regsum', 5), attempts: 9000, lenBias, usedEndpoints, cellCross, lineKey: 'regsum',
       prefixOK: () => true,
       finalOK: (v, cells) => { const runs = S.regRuns(cells, regions); if (runs.length < 2 || runs.length > 4) return false;
         if (!noRegionReentry(cells, regions)) return false;
@@ -1804,15 +1939,15 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
         }, lk('regsum'));
       });
   }
-  const nOutV = ['outxsum', 'outsandwich', 'outsky'].filter(k => V.has(k)).length;
-  [['outxsum', 'xs'], ['outsandwich', 'sw'], ['outsky', 'sk']].forEach(([variant, kind]) => {
+  const nOutV = ['outxsum', 'outsandwich', 'outsky', 'outrooms'].filter(k => V.has(k)).length;
+  [['outxsum', 'xs'], ['outsandwich', 'sw'], ['outsky', 'sk'], ['outrooms', 'nr']].forEach(([variant, kind]) => {
     if (!V.has(variant)) return;
-    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1][nOutV], V.has('duality'), lenBias);
+    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1, 1][nOutV], V.has('duality'), lenBias);
     lines.forEach(ln => add(variant, p => p.olines.push({ type: ln.type, also: ln.also, kind: ln.kind, cells: ln.cells.map(c => c.slice()), diff: ln.diff })));
     lines.forEach(ln => ln.cells.forEach(([r, c], k) => add(variant + '-c', p => p.clues.push({ kind, r, c, val: ln.vals[k] }))));
     let n = 0;
     for (const cl of shuffle(ringSlots(kind), rng)) {
-      if (n >= [0, 8, 4, 2][nOutV]) break;
+      if (n >= [0, 8, 4, 2, 2][nOutV]) break;
       const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
       usedRing.add(rk); n++;
       const val = clueValue(cl, sol);
@@ -1831,7 +1966,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
       add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
     }
   };
-  const nRing = ['littlekiller', 'xsum', 'sandwich', 'skyscraper'].filter(k => V.has(k)).length || 1;
+  const nRing = ['littlekiller', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers'].filter(k => V.has(k)).length || 1;
   const share = Math.max(3, Math.floor((28 - usedRing.size) / nRing));
   if (V.has('littlekiller')) ringPool('littlekiller', 'lk', Math.min(16, share), ringSlots('lk'));
   if (V.has('xsum')) ringPool('xsum', 'xs', Math.min(10, share), ringSlots('xs'));
@@ -1842,6 +1977,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
     ringPool('sandwich', 'sw', Math.min(8, share), slots);
   }
   if (V.has('skyscraper')) ringPool('skyscraper', 'sk', Math.min(10, share), ringSlots('sk'));
+  if (V.has('roomnumbers')) ringPool('roomnumbers', 'nr', Math.min(10, share), ringSlots('nr'));
 
   const key = (a, b) => [a, b];
   if (V.has('consecutive'))
@@ -1910,14 +2046,19 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     nk.circles.forEach(c => { base.marks[c] = 1; });
     ssol = nk.sh;
   } else if (V.has('shadeline')) {
-    const sl = makeShadeLine(sol, rng, whisperDiff); if (!sl) return null;
-    base.opts.waterConn = true; base.opts.shadeWhisper = true;
+    const sl = makeShadeLoop(sol, rng, { wd: whisperDiff }); if (!sl) return null;
+    base.opts.shadeLoop = true; base.opts.shadeWhisper = true;
+    base.marks[sl.path[0]] = 2; base.mval[sl.path[0]] = sl.path.length;
+    ssol = sl.sh;
+  } else if (V.has('shaderenban')) {
+    const sl = makeShadeLoop(sol, rng, { boxRenban: true, regions: base.regions }); if (!sl) return null;
+    base.opts.shadeLoop = true; base.opts.boxRenban = true;
     base.marks[sl.path[0]] = 2; base.mval[sl.path[0]] = sl.path.length;
     ssol = sl.sh;
   }
   const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec);
   if (ssol) {
-    const kind = V.has('nurikabe') ? 'nurikabe' : 'shadeline';
+    const kind = V.has('nurikabe') ? 'nurikabe' : V.has('shaderenban') ? 'shaderenban' : 'shadeline';
     for (let i = 0; i < NN; i++) if (!base.marks[i]) add2(items, kind, i, ssol[i] ? 1 : 2);
   }
   const usedVariants = Array.from(V).filter(k => MIN_KEEP[k] !== undefined);
@@ -1951,13 +2092,18 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   }
   // B: drop redundant constraints
   if (hasItems) {
+    const lineDens = (spec && spec.density) || 'normal';
     const removable = shuffle(items.filter(it => !it.locked), rng);
     let budget = diff === 'easy' ? Math.floor(removable.length * 0.4) : 1e9;
     for (const it of removable) {
       if (budget <= 0 || Date.now() > deadline) break;
       const cnt = items.filter(x => x.variant === it.variant && inc.has(x)).length;
-      const mkp = MIN_KEEP[it.variant];
-      if (cnt <= (mkp === undefined ? 1 : mkp)) continue;
+      let mkp = MIN_KEEP[it.variant]; mkp = mkp === undefined ? 1 : mkp;
+      // Normal density promises "a few" lines of a type, not just whatever the uniqueness check can't
+      // prune away - without this, any other decent constraint (a classic marker, irregular regions...)
+      // usually lets pruning remove every "unnecessary" line down to the bare MIN_KEEP floor of 1.
+      if (LINE_DENSITY_KEYS.has(it.variant) && lineDens === 'normal') mkp = Math.max(mkp, 2);
+      if (cnt <= mkp) continue;
       inc.delete(it);
       if (isUnique(build(), 50000)) budget--; else inc.add(it);
     }
@@ -1987,6 +2133,7 @@ function generate(spec, seed, budgetMs) {
 }
 
 root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
+root.SX.makeShadeLoop = makeShadeLoop; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
 root.SX.randomRegions = randomRegions;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -2037,9 +2184,9 @@ function normalize(o) {
     if (!X.lineTypes(l).includes('regsum') || !Array.isArray(l.ring) || l.ring.length !== 2) delete l.ring;
   });
   p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN);
-  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'sw', 'sk'].includes(c.kind));
+  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'sw', 'sk', 'nr'].includes(c.kind));
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
-  p.olines = ((o && o.olines) || []).filter(l => X.OL_RULES.includes(l.type) && ['xs', 'sw', 'sk'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
+  p.olines = ((o && o.olines) || []).filter(l => X.OL_RULES.includes(l.type) && ['xs', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
   p.olines.forEach(l => { l.also = Array.from(new Set((l.also || []).filter(t => X.OL_RULES.includes(t) && t !== l.type))); if (!l.also.length) delete l.also; });
   p.quads = ((o && o.quads) || []).filter(q => q.r >= 1 && q.r <= N - 1 && q.c >= 1 && q.c <= N - 1 && Array.isArray(q.digits))
     .map(q => ({ r: q.r, c: q.c, digits: q.digits.filter(d => d >= 1 && d <= 6).slice(0, 4) }));
@@ -2091,13 +2238,14 @@ function variantLabels(p) {
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (e.has('white') || e.has('black')) L.push('Kropki'); if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
-  const nk = p.marks.some(x => x) || o.nkLand || o.nkWater;
+  const nk = (p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban && !o.shadeLoop) || o.nkLand || o.nkWater;
   if (nk) L.push('Nurikabe');
   if (o.shadeWhisper) L.push('Shaded whispers');
-  if (!nk && !o.shadeWhisper && X.usesShade(p)) L.push('Shading');
+  if (o.boxRenban) L.push('Shaded renban');
+  if (!nk && !o.shadeWhisper && !o.boxRenban && X.usesShade(p)) L.push('Shading');
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
   if (p.olines.length || p.lines.some(l => l.type === 'regsum' && l.ring)) L.push('Outside lines');
-  if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper');
+  if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper'); if (ck.has('nr')) L.push('Numbered Rooms');
   return L;
 }
 function rulesFor(p) {
@@ -2137,6 +2285,7 @@ function rulesFor(p) {
   if (ck.has('xs')) R.push('X-Sums (X): if the digit nearest the clue is n, the first n digits in that line sum to the clue.');
   if (ck.has('sw')) R.push('Sandwich (S): digits between the 1 and the 6 in that row or column sum to the clue.');
   if (ck.has('sk')) R.push('Skyscraper (▲): the clue counts the digits visible from that side; a larger digit hides smaller ones behind it.');
+  if (ck.has('nr')) R.push('Numbered Rooms (N): let n be the digit nearest the clue; the clue’s value must appear in the nth cell counting in from the clue.');
   if (p.olines.length) {
     R.push('Outside lines: squares outside the grid joined by a line hold clues (marked X, S or ▲) whose values are not all shown. Work the values out from the grid. Hidden values obey the line’s rule:');
     const ot = new Set(); p.olines.forEach(l => X.lineTypes(l).forEach(t => ot.add(t)));
@@ -2155,7 +2304,10 @@ function rulesFor(p) {
     if (o.noPool) R.push('No 2×2 block is entirely shaded.');
     if (o.nkLand) R.push('Every island contains exactly one circle.');
     if (o.nkWater) R.push('Every shaded region contains exactly one square.');
-    if (o.shadeWhisper) R.push(`Shaded whispers: shaded cells that share an edge differ by at least ${o.whisperDiff || 4}. The shaded cells trace German whisper lines.`);
+    if (o.shadeLoop && o.shadeWhisper) R.push(`Shaded whispers: the shaded cells form one closed loop (every shaded cell touches exactly two other shaded cells), and neighboring digits on the loop differ by at least ${o.whisperDiff || 4}.`);
+    else if (o.shadeWhisper) R.push(`Shaded whispers: shaded cells that share an edge differ by at least ${o.whisperDiff || 4}. The shaded cells trace German whisper lines.`);
+    if (o.shadeLoop && o.boxRenban) R.push('Shaded renban: the shaded cells form one closed loop (every shaded cell touches exactly two other shaded cells). Within each box, the shaded cells must be orthogonally connected to each other (no diagonals) and their digits must form a set of consecutive values.');
+    else if (o.shadeLoop) R.push('Shaded loop: the shaded cells form one closed loop — every shaded cell touches exactly two other shaded cells.');
     if (p.paint.some(x => x & 2)) R.push('Cells that start shaded are given.');
     if (p.paint.some(x => x & 4)) R.push('Cells that start with the Land color are unshaded.');
     R.push('Optional: mark cells you know are unshaded with the Land color.');
@@ -2318,7 +2470,7 @@ function arrowHeadXY(ax, ay, bx, by) { // triangle at b pointing away from a
 const arrowHead = (a, b) => arrowHeadXY(cx(a), cy(a), cx(b), cy(b));
 
 const ARROW = { '1,1': '↘', '1,-1': '↙', '-1,1': '↗', '-1,-1': '↖' };
-const TAG = { xs: 'X', sw: 'S', sk: '▲' };
+const TAG = { xs: 'X', sw: 'S', sk: '▲', nr: 'N' };
 
 function regRingAnchor(cells, r, c) {
   const check = cell => {
@@ -2401,6 +2553,13 @@ function renderBoard() {
     if (sl < 0.15) { sx = a.x; sy = a.y; sl = Math.hypot(sx, sy) || 1; }
     return { nx: -sy / sl, ny: sx / sl };
   };
+  // Point markers (bulbs, arrowheads, between-end circles) are buffered here and painted after
+  // every line stroke, so a line that crosses later never visually chops off another line's marker.
+  let markerBuf = '';
+  // A white/background "halo" drawn under every stroke so that a later line crossing an earlier
+  // one visually breaks the earlier line's color where they overlap (bridge-gap / overpass look),
+  // instead of the two colors blending into each other at the crossing cell.
+  const halo = (cls, ptsStr, w) => `<polyline class="ln halo" style="stroke:var(--cell);stroke-width:${w}" points="${ptsStr}"/>`;
   const drawLine = (typesIn, cells, preview) => {
     const types = Array.isArray(typesIn) ? typesIn : [typesIn], L = cells.length, multi = types.length > 1;
     const thick = types.filter(t => t !== 'arrow' && t !== 'between').sort((x, y) => LW[y] - LW[x]);
@@ -2414,27 +2573,32 @@ function renderBoard() {
         const off = (idx - (k - 1) / 2) * spacing, col = preview ? 'var(--accent)' : COL[type];
         const norms = P.map((_, i) => normalAt(P, i));
         const offPts = P.map((p, i) => `${(p.x + norms[i].nx * off).toFixed(1)},${(p.y + norms[i].ny * off).toFixed(1)}`).join(' ');
+        o += halo('ln', offPts, 11);
         o += `<polyline class="ln ${type}" style="stroke:${col};stroke-width:7;opacity:1" points="${offPts}"/>`;
-        if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${(P[0].x + norms[0].nx * off).toFixed(1)}" cy="${(P[0].y + norms[0].ny * off).toFixed(1)}" r="14"/>`;
+        if (type === 'thermo') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${(P[0].x + norms[0].nx * off).toFixed(1)}" cy="${(P[0].y + norms[0].ny * off).toFixed(1)}" r="14"/>`;
       });
     } else {
       thick.forEach(type => {
         const col = preview ? 'var(--accent)' : COL[type];
+        o += halo('ln', pts(cells), (LW[type] || 10) + 6);
         o += `<polyline class="ln ${type}" style="stroke:${col}" points="${pts(cells)}"/>`;
-        if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
+        if (type === 'thermo') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
       });
     }
     thin.forEach(type => {
       const col = preview ? 'var(--accent)' : COL[type];
       if (type === 'between') {
+        o += halo('ln', pts(cells), 11);
         o += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
-        [cells[0], cells[L - 1]].forEach(c => { o += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
+        [cells[0], cells[L - 1]].forEach(c => { markerBuf += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
       } else if (L >= 2) {
         const dx0 = cx(cells[1]) - cx(cells[0]), dy0 = cy(cells[1]) - cy(cells[0]), l0 = Math.hypot(dx0, dy0) || 1;
         const sx = cx(cells[0]) + dx0 / l0 * 23, sy = cy(cells[0]) + dy0 / l0 * 23;
-        o += `<polyline class="ln arrow" style="stroke:${col}" points="${sx.toFixed(1)},${sy.toFixed(1)} ${pts(cells.slice(1))}"/>`;
-        o += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
-        o += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
+        const bodyPts = `${sx.toFixed(1)},${sy.toFixed(1)} ${pts(cells.slice(1))}`;
+        o += halo('ln', bodyPts, 9);
+        o += `<polyline class="ln arrow" style="stroke:${col}" points="${bodyPts}"/>`;
+        markerBuf += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
+        markerBuf += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
       }
     });
     if (types.includes('regsum') && L >= 2) {
@@ -2450,6 +2614,7 @@ function renderBoard() {
     return o;
   };
   p.lines.forEach(l => { s += drawLine(X.lineTypes(l), l.cells); });
+  s += markerBuf; markerBuf = '';
   const drawRegRing = (cells, ring, preview) => {
     const [rr, rc] = ring, rcRect = ringRect(rr, rc), mx = rcRect.x + rcRect.w / 2, my = rcRect.y + rcRect.h / 2;
     const anchor = regRingAnchor(cells, rr, rc), col = preview ? 'var(--accent)' : COL.regsum;
@@ -2460,6 +2625,7 @@ function renderBoard() {
   p.lines.forEach(l => { if (X.lineTypes(l).includes('regsum') && l.ring) s += drawRegRing(l.cells, l.ring); });
   if (app.drag && app.drag.kind === 'line' && app.drag.ringEnd) s += drawRegRing(app.drag.path, app.drag.ringEnd, true);
   if (app.drag && app.drag.kind === 'line' && app.drag.path.length) s += drawLine([app.tool], app.drag.path, true);
+  s += markerBuf; markerBuf = '';
 
   // cages
   p.cages.forEach((cg, k) => {
@@ -2500,7 +2666,8 @@ function renderBoard() {
   for (let i = 0; i < NN; i++) if (p.marks[i]) {
     const x = cx(i), y = cy(i);
     s += p.marks[i] === 1 ? `<circle class="mkc" cx="${x}" cy="${y}" r="25"/>` : `<rect class="mks" x="${x - 24}" y="${y - 24}" width="48" height="48" rx="5"/>`;
-    if (p.mval[i]) s += `<text class="mkn" x="${gx(colOf(i)) + CELL - 5}" y="${gy(rowOf(i)) + 14}">${p.mval[i]}</text>`;
+    if (p.mval[i]) { const txt = String(p.mval[i]), fs = txt.length > 1 ? 11 : 13;
+      s += `<text class="mkn" style="font-size:${fs}px" x="${gx(colOf(i)) + CELL - 6}" y="${gy(rowOf(i)) + (txt.length > 1 ? 16 : 14)}">${txt}</text>`; }
   }
   // digits
   for (let i = 0; i < NN; i++) {
@@ -2538,8 +2705,9 @@ function renderBoard() {
     let o = '';
     thick.forEach((type, k) => {
       const col = preview ? 'var(--accent)' : COL[type], w = multi ? [12, 8, 5, 3][Math.min(k, 3)] : (type === 'whisper' ? 6 : 10);
+      o += halo('ln', P0.map(fmt).join(' '), w + 6);
       o += `<polyline class="ln ${type}" style="stroke:${col};stroke-width:${w}${multi ? ';opacity:1' : ''}" points="${P0.map(fmt).join(' ')}"/>`;
-      if (type === 'thermo') o += `<circle class="bulb" style="fill:${col}" cx="${P0[0][0]}" cy="${P0[0][1]}" r="25"/>`;
+      if (type === 'thermo') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${P0[0][0]}" cy="${P0[0][1]}" r="25"/>`;
     });
     if (types.includes('arrow')) {
       const col = preview ? 'var(--accent)' : COL.arrow;
@@ -2737,7 +2905,7 @@ function ringOptions(r, c) {
   const side = r === -1 ? 'T' : r === N ? 'B' : c === -1 ? 'L' : 'R';
   const corner = (r < 0 || r >= N) && (c < 0 || c >= N);
   if (!corner) {
-    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' });
+    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' });
   }
   for (const dr of [-1, 1]) for (const dc of [-1, 1]) {
     if (!inCell(r + dr, c + dc)) continue;
