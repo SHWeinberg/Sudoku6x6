@@ -2298,8 +2298,8 @@ function rulesFor(p) {
   }
   if (X.usesShade(p)) {
     R.push('Shading: also color cells with the Shade color. Digits go in every cell, shaded or not. Shaded cells that share an edge form a region; unshaded cells that share an edge form an island.');
-    if (p.marks.some(x => x === 1)) R.push('Circled cells are unshaded. A circled digit equals the number of cells in its island, or the fixed number shown in the corner.');
-    if (p.marks.some(x => x === 2)) R.push('Squared cells are shaded. A squared digit equals the number of cells in its shaded region, or the fixed number shown in the corner.');
+    if (p.marks.some(x => x === 1)) R.push('Circled cells are unshaded. The number of cells in a circled cell’s island equals the fixed number in its corner if one is shown, otherwise the digit written in that cell.');
+    if (p.marks.some(x => x === 2)) R.push('Squared cells are shaded. The number of cells in a squared cell’s shaded region equals the fixed number in its corner if one is shown, otherwise the digit written in that cell.');
     if (o.waterConn) R.push('All shaded cells form one edge-connected region.');
     if (o.noPool) R.push('No 2×2 block is entirely shaded.');
     if (o.nkLand) R.push('Every island contains exactly one circle.');
