@@ -259,6 +259,7 @@ details.about p{margin:8px 0 0}
 .col8{fill:var(--c8)}
 .mkc,.mks{fill:none;stroke:var(--ink);stroke-width:2.6}
 .mkn{font-size:13px;font-weight:700;fill:var(--ink);text-anchor:end}
+.bxn{font-size:13px;font-weight:700;fill:var(--accent);text-anchor:end}
 .qd{fill:var(--cell);stroke:var(--ink);stroke-width:2.2}
 .qd.on{stroke:var(--accent);stroke-width:3}
 .qdn{font-size:14px;font-weight:700;fill:var(--ink);text-anchor:middle;dominant-baseline:central}
@@ -1036,6 +1037,18 @@ function compile(p) {
   }
   const useShade = usesShade(p);
   const sdom0 = new Array(NN).fill(3), mk = [];
+  // boxClue: one entry per box that has a revealed "N shaded cells in this box" clue (marks===3).
+  // Unlike marks 1/2 (circle/square), a mark of 3 is purely a display anchor - it doesn't pin that
+  // cell's own shaded state, and it's deliberately kept out of `mk` below so the flood-fill
+  // component-size logic (built for marks 1/2) never runs on it.
+  const boxClue = [];
+  if (useShade && p.marks) {
+    const doneB = new Set();
+    for (let i = 0; i < NN; i++) if (p.marks[i] === 3 && !doneB.has(p.regions[i])) {
+      doneB.add(p.regions[i]);
+      boxClue.push({ cells: regList[p.regions[i]], n: (p.mval && p.mval[i]) || 0 });
+    }
+  }
   if (useShade) for (let i = 0; i < NN; i++) {
     const mkk = (p.marks && p.marks[i]) || 0, pt = (p.paint && p.paint[i]) || 0;
     let d = 3;
@@ -1043,7 +1056,7 @@ function compile(p) {
     if (pt & 2) d &= 2;
     if (pt & 4) d &= 1;
     sdom0[i] = d;
-    if (mkk) mk.push(i);
+    if (mkk === 1 || mkk === 2) mk.push(i);
   }
   const wdv = +o.whisperDiff || 4, allow = [0];
   for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= wdv) mm |= bit(e); allow[d] = mm; }
@@ -1053,7 +1066,7 @@ function compile(p) {
   for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= swd) mm |= bit(e); sallow[d] = mm; }
   return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
     useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
-    regList,
+    regList, boxClue,
     sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, boxRenban: !!o.boxRenban },
     wd: wdv, allow, swd, sallow };
 }
@@ -1100,6 +1113,13 @@ function shadeProp(m, grid, sg, sdom, cand) {
       for (const c of b) { if (sg[c] === 2) w++; else if (!sg[c]) { un++; u = c; } }
       if (w === 4) return false;
       if (w === 3 && un === 1 && !setS(u, 1)) return false;
+    }
+    if (m.boxClue.length) for (const { cells, n } of m.boxClue) {
+      let shaded = 0; const unk = [];
+      for (const c of cells) { if (sg[c] === 2) shaded++; else if (!sg[c]) unk.push(c); }
+      if (shaded > n || shaded + unk.length < n) return false;
+      if (shaded === n) { for (const c of unk) if (!setS(c, 1)) return false; }
+      else if (shaded + unk.length === n) { for (const c of unk) if (!setS(c, 2)) return false; }
     }
     for (const k of m.mk) {
       const X = m.marks[k] === 1 ? 1 : 2, Y = 3 - X;
@@ -1169,6 +1189,10 @@ function shadeConflicts(m, grid, sg) {
   if (o.shadeWhisper) for (const [i, j] of orthPairs)
     if (sg[i] === 2 && sg[j] === 2 && grid[i] && grid[j] && Math.abs(grid[i] - grid[j]) < m.swd) { bad.add(i); bad.add(j); }
   if (o.noPool) for (const b of blocks) if (b.every(c => sg[c] === 2)) b.forEach(c => bad.add(c));
+  if (m.boxClue.length) for (const { cells, n } of m.boxClue) {
+    const shaded = cells.filter(c => sg[c] === 2).length;
+    if (shaded > n || (cells.every(c => sg[c]) && shaded !== n)) cells.forEach(c => bad.add(c));
+  }
   for (const k of m.mk) {
     const X = m.marks[k] === 1 ? 1 : 2, Y = 3 - X;
     if (sg[k] === Y) { bad.add(k); continue; }
@@ -1444,7 +1468,7 @@ function verifyShade(p, g, sh, errs) {
     if (marks[i] === 2 && sh[i] !== 1) errs.push('square must be shaded');
     if ((paint[i] & 2) && sh[i] !== 1) errs.push('painted shade');
     if ((paint[i] & 4) && sh[i] !== 0) errs.push('painted land');
-    if (marks[i]) {
+    if (marks[i] === 1 || marks[i] === 2) {
       const lab = marks[i] === 1 ? L : Wt, n = mval[i] || g[i];
       if (lab.id[i] >= 0 && size(lab, i) !== n) errs.push('region size');
     }
@@ -1462,6 +1486,15 @@ function verifyShade(p, g, sh, errs) {
   };
   if (o.nkLand) perRegion(L, 0);
   if (o.nkWater) perRegion(Wt, 1);
+  {
+    const regions = p.regions || stdRegions(), doneB = new Set();
+    for (let i = 0; i < NN; i++) if (marks[i] === 3 && !doneB.has(regions[i])) {
+      doneB.add(regions[i]);
+      const n = mval[i] || 0;
+      let cnt = 0; for (let j = 0; j < NN; j++) if (regions[j] === regions[i] && sh[j]) cnt++;
+      if (cnt !== n) errs.push('box shade count');
+    }
+  }
   if (o.boxRenban) {
     const regions = p.regions || stdRegions();
     for (let b = 0; b < 6; b++) {
@@ -2056,15 +2089,27 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     const swd = SHADE_WHISPER_DIFF;
     const sl = makeShadeBlob(sol, rng, { wd: swd }); if (!sl) return null;
     base.opts.waterConn = true; base.opts.noPool = true; base.opts.shadeWhisper = true; base.opts.shadeWhisperDiff = swd;
-    base.marks[sl.start] = 2; base.mval[sl.start] = sl.cells.length;
     ssol = sl.sh;
   } else if (V.has('shaderenban')) {
     const sl = makeShadeBlob(sol, rng, { boxRenban: true, regions: base.regions }); if (!sl) return null;
     base.opts.waterConn = true; base.opts.noPool = true; base.opts.boxRenban = true;
-    base.marks[sl.start] = 2; base.mval[sl.start] = sl.cells.length;
     ssol = sl.sh;
   }
   const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec);
+  // Shaded whispers / shaded renban show "N shaded cells" per box instead of one grid-wide total:
+  // more localized clues, scattered across up to 6 boxes, picked up by the normal redundant-
+  // constraint pruning below (default floor of 1, since 'boxShade' has no MIN_KEEP entry) so at
+  // least one box's count always survives even after pruning away the ones that turn out redundant.
+  if (ssol && (V.has('shadeline') || V.has('shaderenban'))) {
+    const regCells = {};
+    for (let i = 0; i < NN; i++) (regCells[base.regions[i]] = regCells[base.regions[i]] || []).push(i);
+    for (const key of Object.keys(regCells)) {
+      const cells = regCells[key], count = cells.reduce((a, c) => a + (ssol[c] ? 1 : 0), 0);
+      if (!count) continue; // nothing to point at in a box with no shaded cells
+      const anchor = pick(cells, rng);
+      items.push({ variant: 'boxShade', locked: false, apply: p => { p.marks[anchor] = 3; p.mval[anchor] = count; } });
+    }
+  }
   if (ssol) {
     const kind = V.has('nurikabe') ? 'nurikabe' : V.has('shaderenban') ? 'shaderenban' : 'shadeline';
     for (let i = 0; i < NN; i++) if (!base.marks[i]) add2(items, kind, i, ssol[i] ? 1 : 2);
@@ -2308,6 +2353,7 @@ function rulesFor(p) {
     R.push('Shading: also color cells with the Shade color. Digits go in every cell, shaded or not. Shaded cells that share an edge form a region; unshaded cells that share an edge form an island.');
     if (p.marks.some(x => x === 1)) R.push('Circled cells are unshaded. The number of cells in a circled cell’s island equals the fixed number in its corner if one is shown, otherwise the digit written in that cell.');
     if (p.marks.some(x => x === 2)) R.push('Squared cells are shaded. The number of cells in a squared cell’s shaded region equals the fixed number in its corner if one is shown, otherwise the digit written in that cell.');
+    if (p.marks.some(x => x === 3)) R.push('A plain corner number (no circle or square) gives the number of shaded cells somewhere in that cell’s box — it isn’t a claim about that cell itself.');
     if (o.waterConn) R.push('All shaded cells form one edge-connected region.');
     if (o.noPool) R.push('No 2×2 block is entirely shaded.');
     if (o.nkLand) R.push('Every island contains exactly one circle.');
@@ -2668,12 +2714,13 @@ function renderBoard() {
     for (let r = 1; r < N; r++) for (let c = 1; c < N; c++)
       if (!p.quads.some(q => q.r === r && q.c === c)) s += `<circle class="qdg" cx="${gx(c)}" cy="${gy(r)}" r="6"/>`;
   }
-  // circle / square markers
+  // circle / square markers (1/2); mark 3 is a box shade-count clue - a plain corner number with
+  // no circle/square background, since (unlike 1/2) it doesn't pin its own cell's shaded state
   for (let i = 0; i < NN; i++) if (p.marks[i]) {
     const x = cx(i), y = cy(i);
-    s += p.marks[i] === 1 ? `<circle class="mkc" cx="${x}" cy="${y}" r="25"/>` : `<rect class="mks" x="${x - 24}" y="${y - 24}" width="48" height="48" rx="5"/>`;
+    if (p.marks[i] !== 3) s += p.marks[i] === 1 ? `<circle class="mkc" cx="${x}" cy="${y}" r="25"/>` : `<rect class="mks" x="${x - 24}" y="${y - 24}" width="48" height="48" rx="5"/>`;
     if (p.mval[i]) { const txt = String(p.mval[i]), fs = txt.length > 1 ? 11 : 13;
-      s += `<text class="mkn" style="font-size:${fs}px" x="${gx(colOf(i)) + CELL - 6}" y="${gy(rowOf(i)) + (txt.length > 1 ? 16 : 14)}">${txt}</text>`; }
+      s += `<text class="${p.marks[i] === 3 ? 'bxn' : 'mkn'}" style="font-size:${fs}px" x="${gx(colOf(i)) + CELL - 6}" y="${gy(rowOf(i)) + (txt.length > 1 ? 16 : 14)}">${txt}</text>`; }
   }
   // digits
   for (let i = 0; i < NN; i++) {
