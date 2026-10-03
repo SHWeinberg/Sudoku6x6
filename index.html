@@ -573,7 +573,7 @@ function newPuzzle() {
 function usesShade(p) {
   const o = p.opts || {};
   return !!((p.marks && p.marks.some(x => x)) || (p.paint && p.paint.some(x => x & 6)) ||
-    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper || o.shadeLoop || o.boxRenban);
+    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper || o.boxRenban);
 }
 function clonePuzzle(p) { return JSON.parse(JSON.stringify(p)); }
 
@@ -1047,10 +1047,15 @@ function compile(p) {
   }
   const wdv = +o.whisperDiff || 4, allow = [0];
   for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= wdv) mm |= bit(e); allow[d] = mm; }
+  // the shaded-loop's pairwise rule uses its own threshold (default 3), independent of the drawn
+  // German-whisper lines' whisperDiff - a closed loop almost never tolerates a diff-of-4 everywhere
+  const swd = +o.shadeWhisperDiff || 3, sallow = [0];
+  for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= swd) mm |= bit(e); sallow[d] = mm; }
   return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
     useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
     regList,
-    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, shadeLoop: !!o.shadeLoop, boxRenban: !!o.boxRenban }, wd: wdv, allow };
+    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, boxRenban: !!o.boxRenban },
+    wd: wdv, allow, swd, sallow };
 }
 
 /* ---- shading propagation (sg: 0 unknown, 1 land, 2 water; sdom bit1 land, bit2 water) ---- */
@@ -1081,13 +1086,13 @@ function shadeProp(m, grid, sg, sdom, cand) {
     }
     if (o.shadeWhisper) for (const [i, j] of orthPairs) {
       const si = sg[i], sj = sg[j], di = grid[i], dj = grid[j];
-      if (di && dj && Math.abs(di - dj) < m.wd) {
+      if (di && dj && Math.abs(di - dj) < m.swd) {
         if (si === 2 && sj === 2) return false;
         if (si === 2 && !setS(j, 1)) return false;
         if (sj === 2 && !setS(i, 1)) return false;
       } else if (si === 2 && sj === 2) {
-        if (di && !dj) { const nc = cand[j] & m.allow[di]; if (!nc) return false; if (nc !== cand[j]) { cand[j] = nc; changed = true; } }
-        else if (dj && !di) { const nc = cand[i] & m.allow[dj]; if (!nc) return false; if (nc !== cand[i]) { cand[i] = nc; changed = true; } }
+        if (di && !dj) { const nc = cand[j] & m.sallow[di]; if (!nc) return false; if (nc !== cand[j]) { cand[j] = nc; changed = true; } }
+        else if (dj && !di) { const nc = cand[i] & m.sallow[dj]; if (!nc) return false; if (nc !== cand[i]) { cand[i] = nc; changed = true; } }
       }
     }
     if (o.noPool) for (const b of blocks) {
@@ -1123,24 +1128,6 @@ function shadeProp(m, grid, sg, sdom, cand) {
         const comp = flood(start, j => sg[j] !== 1); let cnt = 0;
         for (const c of comp) if (sg[c] === 2) cnt++;
         if (cnt < wc) return false;
-      }
-    }
-    if (o.shadeLoop) {
-      let anyShaded = -1, totalShaded = 0, incomplete = false;
-      for (let i = 0; i < NN; i++) {
-        if (sg[i] !== 2) continue;
-        totalShaded++; if (anyShaded < 0) anyShaded = i;
-        const nb = nbr4[i]; let shadedCnt = 0; const unk = [];
-        for (const j of nb) { if (sg[j] === 2) shadedCnt++; else if (!sg[j]) unk.push(j); }
-        if (shadedCnt > 2) return false;
-        if (shadedCnt + unk.length < 2) return false;
-        if (shadedCnt === 2) { for (const j of unk) if (!setS(j, 1)) return false; }
-        else if (shadedCnt + unk.length === 2) { for (const j of unk) if (!setS(j, 2)) return false; }
-        else incomplete = true;
-      }
-      if (totalShaded && !incomplete) {
-        const comp = flood(anyShaded, j => sg[j] === 2);
-        if (comp.length !== totalShaded) return false;
       }
     }
     if (o.boxRenban && m.regList) {
@@ -1180,7 +1167,7 @@ function shadeConflicts(m, grid, sg) {
   if (!m.useShade) return bad;
   const o = m.sopts;
   if (o.shadeWhisper) for (const [i, j] of orthPairs)
-    if (sg[i] === 2 && sg[j] === 2 && grid[i] && grid[j] && Math.abs(grid[i] - grid[j]) < m.wd) { bad.add(i); bad.add(j); }
+    if (sg[i] === 2 && sg[j] === 2 && grid[i] && grid[j] && Math.abs(grid[i] - grid[j]) < m.swd) { bad.add(i); bad.add(j); }
   if (o.noPool) for (const b of blocks) if (b.every(c => sg[c] === 2)) b.forEach(c => bad.add(c));
   for (const k of m.mk) {
     const X = m.marks[k] === 1 ? 1 : 2, Y = 3 - X;
@@ -1466,7 +1453,7 @@ function verifyShade(p, g, sh, errs) {
   if (o.noPool) for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++)
     if (sh[ix(r, c)] && sh[ix(r, c + 1)] && sh[ix(r + 1, c)] && sh[ix(r + 1, c + 1)]) errs.push('pool');
   if (o.shadeWhisper) for (const [a, b] of orthPairs)
-    if (sh[a] && sh[b] && Math.abs(g[a] - g[b]) < (+o.whisperDiff || 4)) errs.push('shaded whisper');
+    if (sh[a] && sh[b] && Math.abs(g[a] - g[b]) < (+o.shadeWhisperDiff || 3)) errs.push('shaded whisper');
   const perRegion = (lab, colour) => {
     for (let k = 0; k < lab.n; k++) {
       let cnt = 0; for (let i = 0; i < NN; i++) if (lab.id[i] === k && marks[i] === (colour === 0 ? 1 : 2)) cnt++;
@@ -1475,12 +1462,6 @@ function verifyShade(p, g, sh, errs) {
   };
   if (o.nkLand) perRegion(L, 0);
   if (o.nkWater) perRegion(Wt, 1);
-  if (o.shadeLoop) {
-    let total = 0, bad = false;
-    for (let i = 0; i < NN; i++) if (sh[i] === 1) { total++; if (nbr4[i].filter(j => sh[j] === 1).length !== 2) bad = true; }
-    if (bad) errs.push('shaded loop: every shaded cell needs exactly 2 shaded neighbors');
-    else if (total && Wt.n > 1) errs.push('shaded loop: must be one connected loop');
-  }
   if (o.boxRenban) {
     const regions = p.regions || stdRegions();
     for (let b = 0; b < 6; b++) {
@@ -1563,6 +1544,7 @@ const VARIANTS = [
 ];
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
+const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
 const MIN_KEEP = { killer: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
@@ -1735,46 +1717,68 @@ function makeNurikabe(sol, rng) {
   }
   return null;
 }
-/* Shaded whispers / shaded renban: a shaded CLOSED LOOP (every shaded cell has exactly 2 shaded
-   orthogonal neighbors, forming one cycle). Growth keeps each newly-added cell's only shaded
-   orthogonal neighbor-so-far as the one it was just attached to, so no accidental chord/branch
-   can form; closing the loop back to the start is the only way any cell gets its second neighbor.
-   opts.wd: if set, require every adjacent pair on the loop to differ by >= wd (shaded whispers).
+/* Shaded whispers / shaded renban: the shaded cells form one edge-connected region with no 2x2
+   block entirely shaded (the same waterConn + noPool rules Nurikabe's lake already uses) - not a
+   closed loop. An earlier version required every shaded cell to have exactly 2 shaded orthogonal
+   neighbors (a single cycle); that's only satisfiable when the region is orthogonally convex, so
+   anything but a plain hollow rectangle either pinches a cell to 3 neighbors or stops short and
+   leaves one with only 1, depending on how the concave corner happens to land. Dropping the
+   exactly-2 requirement in favor of "connected, no 2x2" removes that failure mode entirely - any
+   connected blob/branch qualifies, so growth can't paint itself into a corner.
+   opts.wd: if set, require every adjacent pair of shaded cells to differ by >= wd (shaded whispers).
    opts.boxRenban: if set, require each region's shaded cells to be orthogonally connected
-   (within that region) and form a renban set (max-min === count-1) of solution digits - checked
-   post-hoc since it depends on the whole loop (shaded renban). */
-/* A hollow-rectangle ring (h, w >= 3) or a bare 2x2 block is always a genuine single cycle on a
-   grid graph - every cell on it has exactly 2 orthogonal neighbors also on it. Trying a random
-   self-avoiding walk and hoping it randomly ends up adjacent to its own start almost never
-   succeeds on a grid this small, so loops are built from this much more reliable shape instead;
-   rejection-sampling over size/position still gives a varied pool of loops to pick from. */
-function rectLoopCells(rng) {
-  const twoByTwo = rng() < 0.15;
-  const h = twoByTwo ? 2 : 3 + Math.floor(rng() * 4); // 3..6
-  const w = twoByTwo ? 2 : 3 + Math.floor(rng() * 4);
-  if (h > N || w > N) return null;
-  const r0 = Math.floor(rng() * (N - h + 1)), c0 = Math.floor(rng() * (N - w + 1));
-  const cells = [];
-  for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + w; c++) {
-    if (twoByTwo || r === r0 || r === r0 + h - 1 || c === c0 || c === c0 + w - 1) cells.push(ix(r, c));
+   (within that region) and form a renban set (max-min === count-1) of solution digits (shaded renban),
+   checked post-hoc since it depends on the whole region. */
+const blocks4 = [];
+for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++) blocks4.push([ix(r, c), ix(r, c + 1), ix(r + 1, c), ix(r + 1, c + 1)]);
+function blocksContaining(j) {
+  const r = rowOf(j), c = colOf(j), out = [];
+  for (const dr of [-1, 0]) for (const dc of [-1, 0]) {
+    const r0 = r + dr, c0 = c + dc;
+    if (r0 < 0 || c0 < 0 || r0 + 1 >= N || c0 + 1 >= N) continue;
+    out.push([ix(r0, c0), ix(r0, c0 + 1), ix(r0 + 1, c0), ix(r0 + 1, c0 + 1)]);
   }
-  return cells;
+  return out;
 }
-function makeShadeLoop(sol, rng, opts) {
+function growShadeBlob(rng, target) {
+  const start = Math.floor(rng() * NN);
+  const inSh = new Set([start]);
+  const canAdd = j => {
+    if (inSh.has(j)) return false;
+    for (const b of blocksContaining(j)) if (b.every(c => c === j || inSh.has(c))) return false;
+    return true;
+  };
+  while (inSh.size < target) {
+    const opts = [];
+    for (const c of inSh) for (const nb of nbr4[c]) if (canAdd(nb)) opts.push(nb);
+    if (!opts.length) break;
+    inSh.add(pick(opts, rng));
+  }
+  return { cells: Array.from(inSh), start };
+}
+function makeShadeBlob(sol, rng, opts) {
   opts = opts || {};
   const wd = opts.wd || 0;
-  const attempts = opts.attempts || 6000;
+  const attempts = opts.attempts || 800;
+  const lo = opts.minSize || 8, hi = opts.maxSize || 20;
   for (let att = 0; att < attempts; att++) {
-    const cells = rectLoopCells(rng);
-    if (!cells) continue;
+    const target = lo + Math.floor(rng() * (hi - lo + 1));
+    const { cells, start } = growShadeBlob(rng, target);
+    if (cells.length < lo) continue;
     const sh = new Array(NN).fill(0); cells.forEach(c => { sh[c] = 1; });
-    // belt-and-suspenders: confirm every shaded cell really has exactly 2 shaded orthogonal neighbors
-    if (!cells.every(c => nbr4[c].filter(j => sh[j]).length === 2)) continue;
+    // belt-and-suspenders: confirm connectivity and no 2x2 pool really hold
+    if (flood4(sh, start).size !== cells.length) continue;
+    if (blocks4.some(b => b.every(c => sh[c]))) continue;
     if (wd && cells.some(c => nbr4[c].some(j => sh[j] && Math.abs(sol[c] - sol[j]) < wd))) continue;
     if (opts.boxRenban && !boxRenbanOK(sh, sol, opts.regions)) continue;
-    return { sh, path: cells };
+    return { sh, cells, start };
   }
   return null;
+}
+function flood4(sh, start) {
+  const seen = new Set([start]), st = [start];
+  while (st.length) { const c = st.pop(); for (const j of nbr4[c]) if (sh[j] && !seen.has(j)) { seen.add(j); st.push(j); } }
+  return seen;
 }
 function boxRenbanOK(sh, sol, regions) {
   for (let b = 0; b < 6; b++) {
@@ -2046,14 +2050,18 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     nk.circles.forEach(c => { base.marks[c] = 1; });
     ssol = nk.sh;
   } else if (V.has('shadeline')) {
-    const sl = makeShadeLoop(sol, rng, { wd: whisperDiff }); if (!sl) return null;
-    base.opts.shadeLoop = true; base.opts.shadeWhisper = true;
-    base.marks[sl.path[0]] = 2; base.mval[sl.path[0]] = sl.path.length;
+    // the shaded-region pairwise difference is kept separate from the drawn German-whisper lines'
+    // own whisperDiff: a connected blob of 8+ cells on digits 1-6 almost never satisfies a diff-of-4
+    // requirement on every edge, so this variant uses its own, looser threshold.
+    const swd = SHADE_WHISPER_DIFF;
+    const sl = makeShadeBlob(sol, rng, { wd: swd }); if (!sl) return null;
+    base.opts.waterConn = true; base.opts.noPool = true; base.opts.shadeWhisper = true; base.opts.shadeWhisperDiff = swd;
+    base.marks[sl.start] = 2; base.mval[sl.start] = sl.cells.length;
     ssol = sl.sh;
   } else if (V.has('shaderenban')) {
-    const sl = makeShadeLoop(sol, rng, { boxRenban: true, regions: base.regions }); if (!sl) return null;
-    base.opts.shadeLoop = true; base.opts.boxRenban = true;
-    base.marks[sl.path[0]] = 2; base.mval[sl.path[0]] = sl.path.length;
+    const sl = makeShadeBlob(sol, rng, { boxRenban: true, regions: base.regions }); if (!sl) return null;
+    base.opts.waterConn = true; base.opts.noPool = true; base.opts.boxRenban = true;
+    base.marks[sl.start] = 2; base.mval[sl.start] = sl.cells.length;
     ssol = sl.sh;
   }
   const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec);
@@ -2133,7 +2141,7 @@ function generate(spec, seed, budgetMs) {
 }
 
 root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
-root.SX.makeShadeLoop = makeShadeLoop; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
+root.SX.makeShadeBlob = makeShadeBlob; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
 root.SX.randomRegions = randomRegions;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -2238,7 +2246,7 @@ function variantLabels(p) {
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (e.has('white') || e.has('black')) L.push('Kropki'); if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
-  const nk = (p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban && !o.shadeLoop) || o.nkLand || o.nkWater;
+  const nk = (p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater;
   if (nk) L.push('Nurikabe');
   if (o.shadeWhisper) L.push('Shaded whispers');
   if (o.boxRenban) L.push('Shaded renban');
@@ -2304,10 +2312,8 @@ function rulesFor(p) {
     if (o.noPool) R.push('No 2×2 block is entirely shaded.');
     if (o.nkLand) R.push('Every island contains exactly one circle.');
     if (o.nkWater) R.push('Every shaded region contains exactly one square.');
-    if (o.shadeLoop && o.shadeWhisper) R.push(`Shaded whispers: the shaded cells form one closed loop (every shaded cell touches exactly two other shaded cells), and neighboring digits on the loop differ by at least ${o.whisperDiff || 4}.`);
-    else if (o.shadeWhisper) R.push(`Shaded whispers: shaded cells that share an edge differ by at least ${o.whisperDiff || 4}. The shaded cells trace German whisper lines.`);
-    if (o.shadeLoop && o.boxRenban) R.push('Shaded renban: the shaded cells form one closed loop (every shaded cell touches exactly two other shaded cells). Within each box, the shaded cells must be orthogonally connected to each other (no diagonals) and their digits must form a set of consecutive values.');
-    else if (o.shadeLoop) R.push('Shaded loop: the shaded cells form one closed loop — every shaded cell touches exactly two other shaded cells.');
+    if (o.shadeWhisper) R.push(`Shaded whispers: any two shaded cells that share an edge differ by at least ${o.shadeWhisperDiff || o.whisperDiff || 4}.`);
+    if (o.boxRenban) R.push('Shaded renban: within each box, the shaded cells must be orthogonally connected to each other (no diagonals) and their digits must form a set of consecutive values.');
     if (p.paint.some(x => x & 2)) R.push('Cells that start shaded are given.');
     if (p.paint.some(x => x & 4)) R.push('Cells that start with the Land color are unshaded.');
     R.push('Optional: mark cells you know are unshaded with the Land color.');
@@ -2935,8 +2941,8 @@ function applyRing() {
 function renderAll() { renderBoard(); renderMeta(); renderEditAux(); saveProgress(); }
 
 /* ---------- outside clue notes ---------- */
-const KIND_RANGE = { xs: [1, 21], sw: [0, 14], sk: [1, 6] };
-const KIND_NAME = { xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper' };
+const KIND_RANGE = { xs: [1, 21], sw: [0, 14], sk: [1, 6], nr: [1, 6] };
+const KIND_NAME = { xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
 function noteCell(r, c) {
   const p = app.puzzle;
   if (p.clues.some(q => q.r === r && q.c === c)) return null;
@@ -3327,7 +3333,7 @@ function toggleVariant(k, on) {
 function syncGen() {
   $$('#genChips input').forEach(inp => { inp.checked = app.genSel.has(inp.dataset.v); });
   $('#genCount').textContent = app.genSel.size ? app.genSel.size + ' selected' : 'Classic (nothing selected)';
-  $('#genWhisper').hidden = !(app.genSel.has('whisper') || app.genSel.has('shadeline') || app.genSel.has('duality'));
+  $('#genWhisper').hidden = !(app.genSel.has('whisper') || app.genSel.has('duality'));
   $('#genDual').hidden = !app.genSel.has('duality');
   if (app.genSel.has('duality')) renderDual();
   renderCounts();
@@ -3528,7 +3534,7 @@ function bind() {
   $('#ringDel').addEventListener('click', () => { $('#ringVal').value = ''; applyRing(); });
   $('#ptitleInput').addEventListener('input', e => { app.puzzle.title = e.target.value; lsSet('sx6.current', app.puzzle); renderMeta(); });
   OPTS.forEach(([id, k]) => $('#' + id).addEventListener('change', e => { app.puzzle.opts[k] = e.target.checked; touch(true); }));
-  $('#whisperDiff').addEventListener('change', e => { app.puzzle.opts.whisperDiff = +e.target.value; touch(true); });
+  $('#whisperDiff').addEventListener('change', e => { app.puzzle.opts.whisperDiff = +e.target.value; app.puzzle.opts.shadeWhisperDiff = +e.target.value; touch(true); });
   $('#uniqBtn').addEventListener('click', checkUnique); $('#addGivensBtn').addEventListener('click', addGivens); $('#trimBtn').addEventListener('click', trimGivens);
   $('#clearGivens').addEventListener('click', () => { app.puzzle.givens.fill(0); touch(); });
   $('#clearAll').addEventListener('click', () => { const t = app.puzzle.title; loadPuzzle(Object.assign(X.newPuzzle(), { title: t }), 'edit'); });
