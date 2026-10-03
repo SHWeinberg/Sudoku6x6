@@ -2038,7 +2038,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   return items;
 }
 
-function add2(items, variant, i, v) { items.push({ variant, locked: false, apply: p => { p.paint[i] = v === 1 ? 2 : 4; } }); }
+function add2(items, variant, i, v) { items.push({ variant, locked: false, shaded: v === 1, apply: p => { p.paint[i] = v === 1 ? 2 : 4; } }); }
 function assemble(base, items, givens, sol) {
   const p = clonePuzzle(base);
   items.forEach(it => it.apply(p));
@@ -2160,6 +2160,14 @@ function tryGenerate(V, diff, rng, deadline, spec) {
       inc.delete(it);
       if (isUnique(build(), 50000)) budget--; else inc.add(it);
     }
+  }
+  // D: a shading puzzle always keeps at least one shaded cell revealed from the start - adding a
+  // given is always safe (it can only confirm what's already forced, never break uniqueness), and
+  // without this, pruning can legitimately strip every shaded reveal, leaving the player with no
+  // concrete foothold into which cells are shaded.
+  if (ssol && !Array.from(inc).some(it => it.shaded)) {
+    const cand = items.find(it => it.shaded);
+    if (cand) inc.add(cand);
   }
   const p = build();
   p.sol = sol.slice();
@@ -2420,7 +2428,7 @@ function applyColor(k) {
   const P = app.play, p = app.puzzle;
   if (P.solved && !P.revealed) return;
   let cells = Array.from(app.sel);
-  if (k === 1 || k === 2) cells = cells.filter(i => !p.marks[i] && !(p.paint[i] & 6));
+  if (k === 1 || k === 2) cells = cells.filter(i => (p.marks[i] !== 1 && p.marks[i] !== 2) && !(p.paint[i] & 6));
   if (!cells.length) return;
   pushUndo();
   if (k === 0) cells.forEach(i => { P.col[i] = 0; });
@@ -3283,7 +3291,7 @@ function checkPlay() {
     for (let i = 0; i < NN; i++) if (P.vals[i] && !app.puzzle.givens[i] && P.vals[i] !== info.sol[i]) P.wrong.add(i);
     const p = app.puzzle;
     if (X.usesShade(p) && info.shade) for (let i = 0; i < NN; i++) {
-      if (p.marks[i] || (p.paint[i] & 6)) continue;
+      if (p.marks[i] === 1 || p.marks[i] === 2 || (p.paint[i] & 6)) continue;
       if (((P.col[i] & 2) && !info.shade[i]) || ((P.col[i] & 4) && info.shade[i])) P.wrong.add(i);
     }
     outsideCells().forEach(([r, c, kind]) => { const e = P.ring[r + ',' + c]; if (e && e.v) { const v = solValue(kind, r, c, info.sol); if (v != null && v !== e.v) P.wrong.add(r + ',' + c); } });
