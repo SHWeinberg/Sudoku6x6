@@ -1067,9 +1067,18 @@ function compile(p) {
   // German-whisper lines' whisperDiff - a closed loop almost never tolerates a diff-of-4 everywhere
   const swd = +o.shadeWhisperDiff || 3, sallow = [0];
   for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= swd) mm |= bit(e); sallow[d] = mm; }
+  // sandwichShade only binds on the rows/columns that actually carry a Sandwich clue (kind 'sw') -
+  // tying every row and column is essentially never generatable, so the generator ties just a
+  // couple of lines per puzzle and the solver/verifier must only hold those to the rule.
+  const swRows = new Set(), swCols = new Set();
+  (p.clues || []).forEach(cl => {
+    if (cl.kind !== 'sw') return;
+    if (cl.c === -1 || cl.c === N) swRows.add(cl.r);
+    else if (cl.r === -1 || cl.r === N) swCols.add(cl.c);
+  });
   return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
     useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
-    regList, boxClue,
+    regList, boxClue, swRows, swCols,
     sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, boxRenban: !!o.boxRenban,
       landConn: !!o.landConn, noPoolLand: !!o.noPoolLand, sandwichShade: !!o.sandwichShade },
     wd: wdv, allow, swd, sallow };
@@ -1128,10 +1137,12 @@ function shadeProp(m, grid, sg, sdom, cand) {
     }
     if (o.sandwichShade) {
       // sandwich crusts (the row/column's 1 and 6) are shaded; cells strictly between them
-      // (by position in that row or column) are unshaded. Forward-only: this fires once a 1 or
-      // 6 is actually placed, rather than also constraining digit placement from the shade side -
-      // sound either way, just leaves some propagation strength on the table.
-      for (let r = 0; r < N; r++) {
+      // (by position in that row or column) are unshaded. Only binds on the specific rows/columns
+      // that carry a Sandwich clue (m.swRows/m.swCols) - tying every line is essentially never
+      // generatable, so only a couple of lines are tied per puzzle. Forward-only: this fires once
+      // a 1 or 6 is actually placed, rather than also constraining digit placement from the shade
+      // side - sound either way, just leaves some propagation strength on the table.
+      for (const r of m.swRows) {
         let c1 = -1, c6 = -1;
         for (let c = 0; c < N; c++) { const v = grid[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
         if (c1 >= 0 && !setS(ix(r, c1), 2)) return false;
@@ -1139,7 +1150,7 @@ function shadeProp(m, grid, sg, sdom, cand) {
         if (c1 >= 0 && c6 >= 0) { const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
           for (let c = lo + 1; c < hi; c++) if (!setS(ix(r, c), 1)) return false; }
       }
-      for (let c = 0; c < N; c++) {
+      for (const c of m.swCols) {
         let r1 = -1, r6 = -1;
         for (let r = 0; r < N; r++) { const v = grid[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
         if (r1 >= 0 && !setS(ix(r1, c), 2)) return false;
@@ -1236,7 +1247,7 @@ function shadeConflicts(m, grid, sg) {
   if (o.noPool) for (const b of blocks) if (b.every(c => sg[c] === 2)) b.forEach(c => bad.add(c));
   if (o.noPoolLand) for (const b of blocks) if (b.every(c => sg[c] === 1)) b.forEach(c => bad.add(c));
   if (o.sandwichShade) {
-    for (let r = 0; r < N; r++) {
+    for (const r of m.swRows) {
       let c1 = -1, c6 = -1;
       for (let c = 0; c < N; c++) { const v = grid[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
       if (c1 >= 0 && sg[ix(r, c1)] === 1) bad.add(ix(r, c1));
@@ -1244,7 +1255,7 @@ function shadeConflicts(m, grid, sg) {
       if (c1 >= 0 && c6 >= 0) { const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
         for (let c = lo + 1; c < hi; c++) if (sg[ix(r, c)] === 2) bad.add(ix(r, c)); }
     }
-    for (let c = 0; c < N; c++) {
+    for (const c of m.swCols) {
       let r1 = -1, r6 = -1;
       for (let r = 0; r < N; r++) { const v = grid[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
       if (r1 >= 0 && sg[ix(r1, c)] === 1) bad.add(ix(r1, c));
@@ -1554,7 +1565,15 @@ function verifyShade(p, g, sh, errs) {
   if (o.shadeWhisper) for (const [a, b] of orthPairs)
     if (sh[a] && sh[b] && Math.abs(g[a] - g[b]) < (+o.shadeWhisperDiff || 3)) errs.push('shaded whisper');
   if (o.sandwichShade) {
-    for (let r = 0; r < N; r++) {
+    // only binds on the rows/columns that actually carry a Sandwich clue (kind 'sw') - tying
+    // every line is essentially never generatable, so only a couple of lines are tied per puzzle.
+    const swRows = new Set(), swCols = new Set();
+    (p.clues || []).forEach(cl => {
+      if (cl.kind !== 'sw') return;
+      if (cl.c === -1 || cl.c === N) swRows.add(cl.r);
+      else if (cl.r === -1 || cl.r === N) swCols.add(cl.c);
+    });
+    for (const r of swRows) {
       let c1 = -1, c6 = -1;
       for (let c = 0; c < N; c++) { const v = g[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
       if (c1 < 0 || c6 < 0) { errs.push('sandwich shade: row missing 1 or 6'); continue; }
@@ -1562,7 +1581,7 @@ function verifyShade(p, g, sh, errs) {
       const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
       for (let c = lo + 1; c < hi; c++) if (sh[ix(r, c)]) errs.push('sandwich shade: filling must be unshaded');
     }
-    for (let c = 0; c < N; c++) {
+    for (const c of swCols) {
       let r1 = -1, r6 = -1;
       for (let r = 0; r < N; r++) { const v = g[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
       if (r1 < 0 || r6 < 0) { errs.push('sandwich shade: column missing 1 or 6'); continue; }
@@ -2013,22 +2032,30 @@ function makeYinYang(rng, opts) {
    and column's 1 and 6 (shaded) and everything strictly between them (unshaded) - a cell holding
    1 or 6 is always its row's AND column's crust simultaneously (sudoku guarantees each digit is
    unique per row/column), so the two sources of fixed cells never actually conflict. */
-function sandwichShadeFixed(sol) {
+/* restricted to a specific subset of rows/columns, since tying every row and column is
+   essentially never satisfiable (see makeYinYang's comment) - tying just a couple of lines, picked
+   at random each puzzle, is the version that's actually generatable most of the time. */
+function sandwichShadeFixedLines(sol, rows, cols) {
   const fixed = new Array(NN).fill(0);
-  for (let i = 0; i < NN; i++) if (sol[i] === 1 || sol[i] === 6) fixed[i] = 2;
-  for (let r = 0; r < N; r++) {
+  for (const r of rows) {
     let c1 = -1, c6 = -1;
     for (let c = 0; c < N; c++) { const v = sol[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
+    fixed[ix(r, c1)] = 2; fixed[ix(r, c6)] = 2;
     const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
     for (let c = lo + 1; c < hi; c++) { const i = ix(r, c); if (fixed[i] !== 2) fixed[i] = 1; }
   }
-  for (let c = 0; c < N; c++) {
+  for (const c of cols) {
     let r1 = -1, r6 = -1;
     for (let r = 0; r < N; r++) { const v = sol[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
+    fixed[ix(r1, c)] = 2; fixed[ix(r6, c)] = 2;
     const lo = Math.min(r1, r6), hi = Math.max(r1, r6);
     for (let r = lo + 1; r < hi; r++) { const i = ix(r, c); if (fixed[i] !== 2) fixed[i] = 1; }
   }
   return fixed;
+}
+function sandwichShadeFixed(sol) {
+  const all = []; for (let i = 0; i < N; i++) all.push(i);
+  return sandwichShadeFixedLines(sol, all, all);
 }
 
 const _cf = new Map();
@@ -2087,7 +2114,7 @@ function noRegionReentry(cells, regions) {
   return new Set(runs.map(r => regions[r[0]])).size === runs.length;
 }
 
-function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
+function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   const items = [];
   const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
   const usedRing = new Set();
@@ -2213,10 +2240,25 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec) {
   if (V.has('littlekiller')) ringPool('littlekiller', 'lk', Math.min(16, share), ringSlots('lk'));
   if (V.has('xsum')) ringPool('xsum', 'xs', Math.min(10, share), ringSlots('xs'));
   if (V.has('sandwich')) {
-    const slots = [];
-    for (let c = 0; c < N; c++) slots.push({ kind: 'sw', r: rng() < .5 ? -1 : N, c });
-    for (let r = 0; r < N; r++) slots.push({ kind: 'sw', r, c: rng() < .5 ? -1 : N });
-    ringPool('sandwich', 'sw', Math.min(8, share), slots);
+    if (sandwichTied) {
+      // Yin-Yang combo: these specific lines are the only Sandwich clues this puzzle gets, and
+      // they're locked so redundant-constraint pruning can never drop the one clue that shows
+      // where the crust/filling cross-rule actually applies.
+      const addTied = (cl) => {
+        const rk = cl.r + ',' + cl.c;
+        if (usedRing.has(rk)) return;
+        usedRing.add(rk);
+        const val = clueValue(cl, sol);
+        add('sandwich', p => p.clues.push(Object.assign({}, cl, { val })), true);
+      };
+      sandwichTied.rows.forEach(r => addTied({ kind: 'sw', r, c: rng() < .5 ? -1 : N }));
+      sandwichTied.cols.forEach(c => addTied({ kind: 'sw', r: rng() < .5 ? -1 : N, c }));
+    } else {
+      const slots = [];
+      for (let c = 0; c < N; c++) slots.push({ kind: 'sw', r: rng() < .5 ? -1 : N, c });
+      for (let r = 0; r < N; r++) slots.push({ kind: 'sw', r, c: rng() < .5 ? -1 : N });
+      ringPool('sandwich', 'sw', Math.min(8, share), slots);
+    }
   }
   if (V.has('skyscraper')) ringPool('skyscraper', 'sk', Math.min(10, share), ringSlots('sk'));
   if (V.has('roomnumbers')) ringPool('roomnumbers', 'nr', Math.min(10, share), ringSlots('nr'));
@@ -2253,6 +2295,7 @@ function assemble(base, items, givens, sol) {
 const isUnique = (p, maxNodes) => { const r = solvePuzzle(p, { limit: 2, maxNodes: maxNodes || 60000 }); return r.count === 1 && !r.aborted; };
 
 function tryGenerate(V, diff, rng, deadline, spec) {
+  let sandwichTiedLines = null;
   const base = newPuzzle();
   if (V.has('irregular')) { const rg = randomRegions(rng); if (!rg) return null; base.regions = rg; }
   base.opts.diag = V.has('diag');
@@ -2300,24 +2343,37 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     base.opts.waterConn = true; base.opts.noPool = true; base.opts.boxRenban = true;
     ssol = sl.sh;
   } else if (V.has('yinyang')) {
-    // combined with Sandwich: every row/column's 1 and 6 are shaded crusts, and everything
-    // strictly between them is an unshaded filling - a real cross-rule the solver enforces
-    // (o.sandwichShade below), not just a generation-time coincidence. In practice a random
-    // sudoku solution's 1s and 6s scatter the forced crusts into 6-9 separate islands with only
-    // a handful of free cells left to glue them into one connected shaded region, so the combo
-    // is only satisfiable for a small minority of solutions - a quick, cheap-per-try, low-restart
-    // attempt either finds one of those or (almost always) doesn't, and when it doesn't this
-    // falls back to plain Yin-Yang (no cross-rule) rather than failing the whole generation.
+    // combined with Sandwich: on a couple of rows/columns (picked at random each puzzle), the 1
+    // and 6 are shaded crusts and everything strictly between them is an unshaded filling - a real
+    // cross-rule the solver enforces (o.sandwichShade below), not just a generation-time
+    // coincidence. Tying *every* row and column this way is essentially never satisfiable (a random
+    // solution's 1s and 6s scatter into 6-9 separate forced islands with too little free space left
+    // to connect them), but tying just 2-3 lines leaves plenty of room and works most of the time.
+    // Those tied lines' Sandwich clues are generated below as the only Sandwich clues this puzzle
+    // gets, locked so pruning can never hide the one thing that makes the cross-rule visible.
     const combo = V.has('sandwich');
-    let yy = combo ? makeYinYang(rng, { fixed: sandwichShadeFixed(sol), restarts: 15, itersPerRestart: 400 }) : null;
+    let yy = null, tiedLines = null;
+    if (combo) {
+      const pool = []; for (let i = 0; i < N; i++) { pool.push(['r', i]); pool.push(['c', i]); }
+      for (let t = 0; t < 8 && !yy; t++) {
+        const k = rng() < 0.5 ? 2 : 3;
+        const chosen = shuffle(pool.slice(), rng).slice(0, k);
+        const rows = chosen.filter(x => x[0] === 'r').map(x => x[1]);
+        const cols = chosen.filter(x => x[0] === 'c').map(x => x[1]);
+        const fixed = sandwichShadeFixedLines(sol, rows, cols);
+        const attempt = makeYinYang(rng, { fixed, restarts: 40, itersPerRestart: 1500 });
+        if (attempt) { yy = attempt; tiedLines = { rows, cols }; }
+      }
+    }
     const gotCombo = !!yy;
     if (!yy) yy = makeYinYang(rng, {});
     if (!yy) return null;
     base.opts.waterConn = true; base.opts.noPool = true; base.opts.landConn = true; base.opts.noPoolLand = true;
     if (gotCombo) base.opts.sandwichShade = true;
     ssol = yy.sh;
+    sandwichTiedLines = gotCombo ? tiedLines : null;
   }
-  const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec);
+  const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec, sandwichTiedLines);
   // Shaded whispers / shaded renban show "N shaded cells" per box instead of one grid-wide total:
   // more localized clues, scattered across up to 6 boxes, picked up by the normal redundant-
   // constraint pruning below (default floor of 1, since 'boxShade' has no MIN_KEEP entry) so at
@@ -2346,6 +2402,9 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   const usedVariants = Array.from(V).filter(k => MIN_KEEP[k] !== undefined);
   const exact = spec.counts || {};
   for (const k of usedVariants) {
+    // the Yin-Yang combo's tied line count is dictated by what the shading search could satisfy,
+    // not by how many Sandwich clues the person asked for - don't fail generation over that.
+    if (k === 'sandwich' && sandwichTiedLines) continue;
     const have = items.filter(it => it.variant === k).length;
     if (exact[k] != null) { if (have < exact[k]) return null; continue; }
     if (have < Math.min(MIN_KEEP[k], 2)) return null;
@@ -2606,7 +2665,7 @@ function rulesFor(p) {
     if (o.boxRenban) R.push('Shaded renban: within each box, the shaded cells must be orthogonally connected to each other (no diagonals) and their digits must form a set of consecutive values.');
     if (o.landConn) R.push('All unshaded cells also form one edge-connected region (Yin-Yang).');
     if (o.noPoolLand) R.push('No 2×2 block is entirely unshaded.');
-    if (o.sandwichShade) R.push('Sandwich crusts & fillings: in every row and column, the cells holding the 1 and the 6 (the crusts) are shaded, and every cell strictly between them (the fillings) is unshaded.');
+    if (o.sandwichShade) R.push('Sandwich crusts & fillings: for the row(s)/column(s) with a Sandwich clue, the cells holding the 1 and the 6 (the crusts) are shaded, and every cell strictly between them (the fillings) is unshaded.');
     if (p.paint.some(x => x & 2)) R.push('Cells that start shaded are given.');
     if (p.paint.some(x => x & 4)) R.push('Cells that start with the Land color are unshaded.');
     R.push('Optional: mark cells you know are unshaded with the Land color.');
