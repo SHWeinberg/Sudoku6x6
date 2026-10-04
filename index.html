@@ -564,7 +564,8 @@ function newPuzzle() {
     v: 4, title: '', regions: stdRegions(), givens: new Array(NN).fill(0),
     opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false,
             nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
-            waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false },
+            waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false,
+            landConn: false, noPoolLand: false, sandwichShade: false },
     cages: [], lines: [], edges: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
     marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
     sol: null, ssol: null, meta: null
@@ -573,7 +574,8 @@ function newPuzzle() {
 function usesShade(p) {
   const o = p.opts || {};
   return !!((p.marks && p.marks.some(x => x)) || (p.paint && p.paint.some(x => x & 6)) ||
-    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper || o.boxRenban);
+    o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper || o.boxRenban ||
+    o.landConn || o.noPoolLand || o.sandwichShade);
 }
 function clonePuzzle(p) { return JSON.parse(JSON.stringify(p)); }
 
@@ -1068,7 +1070,8 @@ function compile(p) {
   return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
     useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
     regList, boxClue,
-    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, boxRenban: !!o.boxRenban },
+    sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, boxRenban: !!o.boxRenban,
+      landConn: !!o.landConn, noPoolLand: !!o.noPoolLand, sandwichShade: !!o.sandwichShade },
     wd: wdv, allow, swd, sallow };
 }
 
@@ -1115,6 +1118,36 @@ function shadeProp(m, grid, sg, sdom, cand) {
       if (w === 4) return false;
       if (w === 3 && un === 1 && !setS(u, 1)) return false;
     }
+    // noPoolLand mirrors noPool for the other color (no 2x2 block entirely unshaded) - the
+    // "no monochrome 2x2 of either color" half of the classic Yin-Yang rule
+    if (o.noPoolLand) for (const b of blocks) {
+      let l = 0, un = 0, u = -1;
+      for (const c of b) { if (sg[c] === 1) l++; else if (!sg[c]) { un++; u = c; } }
+      if (l === 4) return false;
+      if (l === 3 && un === 1 && !setS(u, 2)) return false;
+    }
+    if (o.sandwichShade) {
+      // sandwich crusts (the row/column's 1 and 6) are shaded; cells strictly between them
+      // (by position in that row or column) are unshaded. Forward-only: this fires once a 1 or
+      // 6 is actually placed, rather than also constraining digit placement from the shade side -
+      // sound either way, just leaves some propagation strength on the table.
+      for (let r = 0; r < N; r++) {
+        let c1 = -1, c6 = -1;
+        for (let c = 0; c < N; c++) { const v = grid[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
+        if (c1 >= 0 && !setS(ix(r, c1), 2)) return false;
+        if (c6 >= 0 && !setS(ix(r, c6), 2)) return false;
+        if (c1 >= 0 && c6 >= 0) { const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
+          for (let c = lo + 1; c < hi; c++) if (!setS(ix(r, c), 1)) return false; }
+      }
+      for (let c = 0; c < N; c++) {
+        let r1 = -1, r6 = -1;
+        for (let r = 0; r < N; r++) { const v = grid[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
+        if (r1 >= 0 && !setS(ix(r1, c), 2)) return false;
+        if (r6 >= 0 && !setS(ix(r6, c), 2)) return false;
+        if (r1 >= 0 && r6 >= 0) { const lo = Math.min(r1, r6), hi = Math.max(r1, r6);
+          for (let r = lo + 1; r < hi; r++) if (!setS(ix(r, c), 1)) return false; }
+      }
+    }
     if (m.boxClue.length) for (const { cells, n } of m.boxClue) {
       let shaded = 0; const unk = [];
       for (const c of cells) { if (sg[c] === 2) shaded++; else if (!sg[c]) unk.push(c); }
@@ -1149,6 +1182,17 @@ function shadeProp(m, grid, sg, sdom, cand) {
         const comp = flood(start, j => sg[j] !== 1); let cnt = 0;
         for (const c of comp) if (sg[c] === 2) cnt++;
         if (cnt < wc) return false;
+      }
+    }
+    // landConn mirrors waterConn for the unshaded cells - the other half of "both colors are
+    // each edge-connected" (classic Yin-Yang)
+    if (o.landConn) {
+      let start = -1, lc = 0;
+      for (let i = 0; i < NN; i++) if (sg[i] === 1) { lc++; if (start < 0) start = i; }
+      if (lc > 1) {
+        const comp = flood(start, j => sg[j] !== 2); let cnt = 0;
+        for (const c of comp) if (sg[c] === 1) cnt++;
+        if (cnt < lc) return false;
       }
     }
     if (o.boxRenban && m.regList) {
@@ -1190,6 +1234,25 @@ function shadeConflicts(m, grid, sg) {
   if (o.shadeWhisper) for (const [i, j] of orthPairs)
     if (sg[i] === 2 && sg[j] === 2 && grid[i] && grid[j] && Math.abs(grid[i] - grid[j]) < m.swd) { bad.add(i); bad.add(j); }
   if (o.noPool) for (const b of blocks) if (b.every(c => sg[c] === 2)) b.forEach(c => bad.add(c));
+  if (o.noPoolLand) for (const b of blocks) if (b.every(c => sg[c] === 1)) b.forEach(c => bad.add(c));
+  if (o.sandwichShade) {
+    for (let r = 0; r < N; r++) {
+      let c1 = -1, c6 = -1;
+      for (let c = 0; c < N; c++) { const v = grid[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
+      if (c1 >= 0 && sg[ix(r, c1)] === 1) bad.add(ix(r, c1));
+      if (c6 >= 0 && sg[ix(r, c6)] === 1) bad.add(ix(r, c6));
+      if (c1 >= 0 && c6 >= 0) { const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
+        for (let c = lo + 1; c < hi; c++) if (sg[ix(r, c)] === 2) bad.add(ix(r, c)); }
+    }
+    for (let c = 0; c < N; c++) {
+      let r1 = -1, r6 = -1;
+      for (let r = 0; r < N; r++) { const v = grid[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
+      if (r1 >= 0 && sg[ix(r1, c)] === 1) bad.add(ix(r1, c));
+      if (r6 >= 0 && sg[ix(r6, c)] === 1) bad.add(ix(r6, c));
+      if (r1 >= 0 && r6 >= 0) { const lo = Math.min(r1, r6), hi = Math.max(r1, r6);
+        for (let r = lo + 1; r < hi; r++) if (sg[ix(r, c)] === 2) bad.add(ix(r, c)); }
+    }
+  }
   if (m.boxClue.length) for (const { cells, n } of m.boxClue) {
     const shaded = cells.filter(c => sg[c] === 2).length;
     if (shaded > n || (cells.every(c => sg[c]) && shaded !== n)) cells.forEach(c => bad.add(c));
@@ -1207,6 +1270,13 @@ function shadeConflicts(m, grid, sg) {
     if (water.length > 1) {
       const comp = new Set(flood(water[0], j => sg[j] !== 1));
       water.forEach(c => { if (!comp.has(c)) { bad.add(c); bad.add(water[0]); } });
+    }
+  }
+  if (o.landConn) {
+    const land = []; for (let i = 0; i < NN; i++) if (sg[i] === 1) land.push(i);
+    if (land.length > 1) {
+      const comp = new Set(flood(land[0], j => sg[j] !== 2));
+      land.forEach(c => { if (!comp.has(c)) { bad.add(c); bad.add(land[0]); } });
     }
   }
   const nk = X => {
@@ -1478,8 +1548,29 @@ function verifyShade(p, g, sh, errs) {
   if (o.waterConn && Wt.n > 1) errs.push('water not connected');
   if (o.noPool) for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++)
     if (sh[ix(r, c)] && sh[ix(r, c + 1)] && sh[ix(r + 1, c)] && sh[ix(r + 1, c + 1)]) errs.push('pool');
+  if (o.landConn && L.n > 1) errs.push('land not connected');
+  if (o.noPoolLand) for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++)
+    if (!sh[ix(r, c)] && !sh[ix(r, c + 1)] && !sh[ix(r + 1, c)] && !sh[ix(r + 1, c + 1)]) errs.push('pool (land)');
   if (o.shadeWhisper) for (const [a, b] of orthPairs)
     if (sh[a] && sh[b] && Math.abs(g[a] - g[b]) < (+o.shadeWhisperDiff || 3)) errs.push('shaded whisper');
+  if (o.sandwichShade) {
+    for (let r = 0; r < N; r++) {
+      let c1 = -1, c6 = -1;
+      for (let c = 0; c < N; c++) { const v = g[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
+      if (c1 < 0 || c6 < 0) { errs.push('sandwich shade: row missing 1 or 6'); continue; }
+      if (!sh[ix(r, c1)] || !sh[ix(r, c6)]) errs.push('sandwich shade: crust must be shaded');
+      const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
+      for (let c = lo + 1; c < hi; c++) if (sh[ix(r, c)]) errs.push('sandwich shade: filling must be unshaded');
+    }
+    for (let c = 0; c < N; c++) {
+      let r1 = -1, r6 = -1;
+      for (let r = 0; r < N; r++) { const v = g[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
+      if (r1 < 0 || r6 < 0) { errs.push('sandwich shade: column missing 1 or 6'); continue; }
+      if (!sh[ix(r1, c)] || !sh[ix(r6, c)]) errs.push('sandwich shade: crust must be shaded');
+      const lo = Math.min(r1, r6), hi = Math.max(r1, r6);
+      for (let r = lo + 1; r < hi; r++) if (sh[ix(r, c)]) errs.push('sandwich shade: filling must be unshaded');
+    }
+  }
   const perRegion = (lab, colour) => {
     for (let k = 0; k < lab.n; k++) {
       let cnt = 0; for (let i = 0; i < NN; i++) if (lab.id[i] === k && marks[i] === (colour === 0 ? 1 : 2)) cnt++;
@@ -1575,13 +1666,14 @@ const VARIANTS = [
   { k: 'outrooms', label: 'Numbered Rooms on lines', group: 'Outside lines' },
   { k: 'nurikabe', label: 'Nurikabe', group: 'Shading' },
   { k: 'shadeline', label: 'Shaded whispers', group: 'Shading' },
-  { k: 'shaderenban', label: 'Shaded renban', group: 'Shading' }
+  { k: 'shaderenban', label: 'Shaded renban', group: 'Shading' },
+  { k: 'yinyang', label: 'Yin-Yang', group: 'Shading' }
 ];
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
 const MIN_KEEP = { killer: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
-  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, regsum: 1, nonconsecutive: 0,
+  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
@@ -1826,6 +1918,117 @@ function boxRenbanOK(sh, sol, regions) {
     if (mx - mn !== digits.length - 1) return false;
   }
   return true;
+}
+
+/* Yin-Yang: shaded cells are one edge-connected region, unshaded cells are another, and no 2x2
+   block is entirely one color. A single growth pass (claim-a-free-cell-adjacent-to-your-own-region,
+   repeat) builds each color connected "by construction," but it reliably paints itself into a
+   corner near the end of the grid - some leftover free cell ends up fully boxed in by one color
+   with no legal move for either color (<2% hit rate), and that's a dead end, not a rare fluke to
+   retry away. Chronological backtracking on that same growth order helps little: escaping those
+   dead ends takes deep, expensive backtracking, not a step or two back.
+   Local search sidesteps this: first build ANY coloring that just satisfies "no mono 2x2" (cheap -
+   a random-order per-cell backtrack over that single local rule essentially never backtracks), then
+   repeatedly flip single free cells (never a fixed one) to merge connected components, accepting a
+   flip when it keeps "no mono 2x2" true and doesn't increase the total component count (occasionally
+   accepting a worse flip too, to escape local optima) until exactly 2 components remain - one shaded,
+   one land. This finds a valid coloring in a couple of milliseconds, essentially every time.
+   opts.fixed: optional array (0 free, 1 land, 2 shaded) of cells the combo with Sandwich pins
+   before the search starts (every row/column's 1 and 6 crust cells shaded in, the cells between
+   them unshaded); those cells are never flipped. */
+function floodColor(sh, start, want) {
+  const seen = new Set([start]), st = [start];
+  while (st.length) { const c = st.pop(); for (const j of nbr4[c]) if (!seen.has(j) && (sh[j] ? 1 : 0) === want) { seen.add(j); st.push(j); } }
+  return seen;
+}
+function hasMonoPool(sh, want) {
+  return blocks4.some(b => b.every(c => (sh[c] ? 1 : 0) === want));
+}
+function shadeComponents(sh) {
+  const seen = new Array(NN).fill(false);
+  let n = 0;
+  for (let i = 0; i < NN; i++) {
+    if (seen[i]) continue;
+    n++;
+    const want = sh[i];
+    for (const j of floodColor(sh, i, want)) seen[j] = true;
+  }
+  return n;
+}
+function yyInitialColoring(rng, fixed) {
+  const sg = fixed.slice();
+  const order = []; for (let i = 0; i < NN; i++) if (!sg[i]) order.push(i);
+  shuffle(order, rng);
+  const canColor = (j, color) => { for (const b of blocksContaining(j)) if (b.every(c => c === j || sg[c] === color)) return false; return true; };
+  const stack = [];
+  let pos = 0;
+  while (pos < order.length) {
+    const cell = order[pos];
+    let frame = stack[pos];
+    if (!frame) { const first = rng() < 0.5 ? 1 : 2; frame = { order: first === 1 ? [1, 2] : [2, 1] }; stack[pos] = frame; }
+    let placed = false;
+    while (frame.order.length) {
+      const color = frame.order.shift();
+      if (canColor(cell, color)) { sg[cell] = color; placed = true; break; }
+    }
+    if (placed) pos++;
+    else { sg[cell] = 0; stack[pos] = null; pos--; if (pos < 0) return null; }
+  }
+  return sg;
+}
+function makeYinYang(rng, opts) {
+  opts = opts || {};
+  const fixed = opts.fixed || new Array(NN).fill(0);
+  // bail out fast if the fixed cells alone already make a mono 2x2 - no amount of searching fixes that
+  for (const b of blocks4) if (b.every(c => fixed[c] && fixed[c] === fixed[b[0]])) return null;
+  const restarts = opts.restarts || 60;
+  const itersPerRestart = opts.itersPerRestart || 3000;
+  const freeCells = []; for (let i = 0; i < NN; i++) if (!fixed[i]) freeCells.push(i);
+  for (let r = 0; r < restarts; r++) {
+    const sg = yyInitialColoring(rng, fixed);
+    if (!sg) continue;
+    let sh = sg.map(v => v === 2 ? 1 : 0);
+    let comps = shadeComponents(sh);
+    if (comps === 2) return { sh };
+    for (let it = 0; it < itersPerRestart; it++) {
+      const cell = pick(freeCells, rng);
+      const oldColor = sg[cell], newColor = oldColor === 2 ? 1 : 2;
+      sg[cell] = newColor;
+      let ok = true;
+      for (const b of blocksContaining(cell)) { let allSame = true; for (const c of b) if (sg[c] !== newColor) { allSame = false; break; } if (allSame) { ok = false; break; } }
+      if (!ok) { sg[cell] = oldColor; continue; }
+      const newSh = sg.map(v => v === 2 ? 1 : 0);
+      const newComps = shadeComponents(newSh);
+      if (newComps <= comps || rng() < 0.05) {
+        comps = newComps; sh = newSh;
+        if (comps === 2) return { sh };
+      } else {
+        sg[cell] = oldColor;
+      }
+    }
+  }
+  return null;
+}
+/* the fixed cells a Sandwich combo forces before Yin-Yang growth fills in the rest: every row's
+   and column's 1 and 6 (shaded) and everything strictly between them (unshaded) - a cell holding
+   1 or 6 is always its row's AND column's crust simultaneously (sudoku guarantees each digit is
+   unique per row/column), so the two sources of fixed cells never actually conflict. */
+function sandwichShadeFixed(sol) {
+  const fixed = new Array(NN).fill(0);
+  for (let i = 0; i < NN; i++) if (sol[i] === 1 || sol[i] === 6) fixed[i] = 2;
+  for (let r = 0; r < N; r++) {
+    let c1 = -1, c6 = -1;
+    for (let c = 0; c < N; c++) { const v = sol[ix(r, c)]; if (v === 1) c1 = c; else if (v === 6) c6 = c; }
+    const lo = Math.min(c1, c6), hi = Math.max(c1, c6);
+    for (let c = lo + 1; c < hi; c++) { const i = ix(r, c); if (fixed[i] !== 2) fixed[i] = 1; }
+  }
+  for (let c = 0; c < N; c++) {
+    let r1 = -1, r6 = -1;
+    for (let r = 0; r < N; r++) { const v = sol[ix(r, c)]; if (v === 1) r1 = r; else if (v === 6) r6 = r; }
+    const lo = Math.min(r1, r6), hi = Math.max(r1, r6);
+    for (let r = lo + 1; r < hi; r++) { const i = ix(r, c); if (fixed[i] !== 2) fixed[i] = 1; }
+  }
+  return fixed;
 }
 
 const _cf = new Map();
@@ -2096,6 +2299,23 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     const sl = makeShadeBlob(sol, rng, { boxRenban: true, regions: base.regions }); if (!sl) return null;
     base.opts.waterConn = true; base.opts.noPool = true; base.opts.boxRenban = true;
     ssol = sl.sh;
+  } else if (V.has('yinyang')) {
+    // combined with Sandwich: every row/column's 1 and 6 are shaded crusts, and everything
+    // strictly between them is an unshaded filling - a real cross-rule the solver enforces
+    // (o.sandwichShade below), not just a generation-time coincidence. In practice a random
+    // sudoku solution's 1s and 6s scatter the forced crusts into 6-9 separate islands with only
+    // a handful of free cells left to glue them into one connected shaded region, so the combo
+    // is only satisfiable for a small minority of solutions - a quick, cheap-per-try, low-restart
+    // attempt either finds one of those or (almost always) doesn't, and when it doesn't this
+    // falls back to plain Yin-Yang (no cross-rule) rather than failing the whole generation.
+    const combo = V.has('sandwich');
+    let yy = combo ? makeYinYang(rng, { fixed: sandwichShadeFixed(sol), restarts: 15, itersPerRestart: 400 }) : null;
+    const gotCombo = !!yy;
+    if (!yy) yy = makeYinYang(rng, {});
+    if (!yy) return null;
+    base.opts.waterConn = true; base.opts.noPool = true; base.opts.landConn = true; base.opts.noPoolLand = true;
+    if (gotCombo) base.opts.sandwichShade = true;
+    ssol = yy.sh;
   }
   const items = buildPool(V, sol, rng, neg, whisperDiff, base.regions, spec);
   // Shaded whispers / shaded renban show "N shaded cells" per box instead of one grid-wide total:
@@ -2120,7 +2340,7 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     }
   }
   if (ssol) {
-    const kind = V.has('nurikabe') ? 'nurikabe' : V.has('shaderenban') ? 'shaderenban' : 'shadeline';
+    const kind = V.has('nurikabe') ? 'nurikabe' : V.has('shaderenban') ? 'shaderenban' : V.has('yinyang') ? 'yinyang' : 'shadeline';
     for (let i = 0; i < NN; i++) if (!base.marks[i]) add2(items, kind, i, ssol[i] ? 1 : 2);
   }
   const usedVariants = Array.from(V).filter(k => MIN_KEEP[k] !== undefined);
@@ -2204,6 +2424,7 @@ function generate(spec, seed, budgetMs) {
 
 root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
 root.SX.makeShadeBlob = makeShadeBlob; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
+root.SX.makeYinYang = makeYinYang; root.SX.sandwichShadeFixed = sandwichShadeFixed;
 root.SX.randomRegions = randomRegions;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -2312,7 +2533,8 @@ function variantLabels(p) {
   if (nk) L.push('Nurikabe');
   if (o.shadeWhisper) L.push('Shaded whispers');
   if (o.boxRenban) L.push('Shaded renban');
-  if (!nk && !o.shadeWhisper && !o.boxRenban && X.usesShade(p)) L.push('Shading');
+  if (o.landConn) L.push('Yin-Yang');
+  if (!nk && !o.shadeWhisper && !o.boxRenban && !o.landConn && X.usesShade(p)) L.push('Shading');
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
   if (p.olines.length || p.lines.some(l => l.type === 'regsum' && l.ring)) L.push('Outside lines');
   if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper'); if (ck.has('nr')) L.push('Numbered Rooms');
@@ -2382,6 +2604,9 @@ function rulesFor(p) {
     if (o.nkWater) R.push('Every shaded region contains exactly one square.');
     if (o.shadeWhisper) R.push(`Shaded whispers: any two shaded cells that share an edge differ by at least ${o.shadeWhisperDiff || o.whisperDiff || 4}.`);
     if (o.boxRenban) R.push('Shaded renban: within each box, the shaded cells must be orthogonally connected to each other (no diagonals) and their digits must form a set of consecutive values.');
+    if (o.landConn) R.push('All unshaded cells also form one edge-connected region (Yin-Yang).');
+    if (o.noPoolLand) R.push('No 2×2 block is entirely unshaded.');
+    if (o.sandwichShade) R.push('Sandwich crusts & fillings: in every row and column, the cells holding the 1 and the 6 (the crusts) are shaded, and every cell strictly between them (the fillings) is unshaded.');
     if (p.paint.some(x => x & 2)) R.push('Cells that start shaded are given.');
     if (p.paint.some(x => x & 4)) R.push('Cells that start with the Land color are unshaded.');
     R.push('Optional: mark cells you know are unshaded with the Land color.');
@@ -3383,8 +3608,9 @@ function buildGenerator() {
 }
 const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking'],
   ['nonconsecutive', 'diag'], ['nonconsecutive', 'antiknight'], ['nonconsecutive', 'antiking'], ['nonconsecutive', 'disjoint']];
+const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang'];
 function clash(a, b, set) {
-  if ((a === 'nurikabe' && b === 'shadeline') || (a === 'shadeline' && b === 'nurikabe')) return true;
+  if (SHADING_EXCL.includes(a) && SHADING_EXCL.includes(b) && a !== b) return true;
   if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
   if (set.has('irregular')) return false;
   return SOFT.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
@@ -3426,7 +3652,8 @@ function feasibleMix(sel) {
     if (s.has('diag') && (s.has('antiknight') || s.has('antiking') || s.has('disjoint'))) return false;
     if (s.has('antiknight') && s.has('antiking')) return false;
   }
-  return !(s.has('disjoint') && s.has('irregular')) && !(s.has('nurikabe') && s.has('shadeline'));
+  if (SHADING_EXCL.filter(k => s.has(k)).length > 1) return false;
+  return !(s.has('disjoint') && s.has('irregular'));
 }
 function runGenerate(list) {
   if (app.busy) return;
