@@ -1074,12 +1074,16 @@ function compile(p) {
   for (const ln of p.lines) {
     const cs = ln.cells, L = cs.length;
     if (ln.escape) {
-      const escIdx = ln.escape.idx === L - 1 ? L - 1 : 0;
+      // the hidden value is one MORE link in the chain, beyond cs's own L cells - not a
+      // replacement for whichever real cell sits at that end (that real cell still has to hold
+      // its own difference/order/etc. relationship to its neighbor, same as any other link)
+      const atStart = ln.escape.idx !== L - 1;
       const eseq = clueSeq({ kind: ln.escape.kind, r: ln.escape.r, c: ln.escape.c, dr: ln.escape.dr, dc: ln.escape.dc });
       const types = lineTypes(ln);
       addGroup(Array.from(new Set(cs.concat(eseq))), g => {
         const er = clueRange(ln.escape.kind, eseq, g); if (!er) return false;
-        const R = cs.map((i, k) => k === escIdx ? er : (g[i] ? [g[i], g[i]] : [1, 6]));
+        const realR = cs.map(i => g[i] ? [g[i], g[i]] : [1, 6]);
+        const R = atStart ? [er, ...realR] : [...realR, er];
         return chkLineEsc(types, R, wd);
       });
       continue;
@@ -1587,10 +1591,11 @@ function verify(p, g, sh) {
   for (const ln of p.lines) {
     const cs0 = ln.cells, L0 = cs0.length;
     if (ln.escape) {
-      const escIdx = ln.escape.idx === L0 - 1 ? L0 - 1 : 0;
+      const atStart = ln.escape.idx !== L0 - 1;
       const eseq = clueSeq({ kind: ln.escape.kind, r: ln.escape.r, c: ln.escape.c, dr: ln.escape.dr, dc: ln.escape.dc });
       const er = clueRange(ln.escape.kind, eseq, g);
-      const R = cs0.map((i, k) => k === escIdx ? er : [g[i], g[i]]);
+      const realR = cs0.map(i => [g[i], g[i]]);
+      const R = atStart ? [er, ...realR] : [...realR, er];
       if (!er || !chkLineEsc(lineTypes(ln), R, +o.whisperDiff || 4)) errs.push('escaping line');
       continue;
     }
@@ -2502,7 +2507,10 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       const eseq = clueSeq({ kind, r: rr, c: rcc, dr, dc });
       if (eseq.length < 2) return false;
       const escVal = clueValue({ kind, r: rr, c: rcc, dr, dc }, sol);
-      const R = cells.map((c, k) => k === escIdx ? [escVal, escVal] : [sol[c], sol[c]]);
+      // the hidden value is an extra link beyond cells' own length, not a replacement for the
+      // real cell at that end - that cell still needs its own valid relationship to its neighbor
+      const realR = cells.map(c => [sol[c], sol[c]]);
+      const R = escIdx === 0 ? [[escVal, escVal], ...realR] : [...realR, [escVal, escVal]];
       if (!S.chkLineEsc([type], R, whisperDiff)) return false;
       usedRing.add(rk); cells.forEach(c => escClaimed.add(c));
       usedEndpoints.add(path[0]); usedEndpoints.add(path[path.length - 1]);
