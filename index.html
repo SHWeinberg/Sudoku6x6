@@ -720,6 +720,62 @@ function verifyQuad(g, cells, digits) {
   for (const d in need) if (vals.filter(v => v === +d).length < need[d]) return false;
   return true;
 }
+
+/* ---- look-and-say cages: like a killer cage's shape, but repeats are allowed and the corner clue
+   is one or two "quantity, digit" pairs (read 2 characters at a time) - e.g. "12" reads as exactly
+   one 2; "0213" reads as exactly zero 2s AND exactly two... wait, reads as [0,2] then [1,3]: zero 2s
+   and exactly one 3. Unlike the cage's own cell count, this is a PARTIAL clue: it states the exact
+   count of each digit it names and says nothing at all about any other digit or cell in the cage -
+   the cage may hold more cells than the clue's counts add up to. runs: [{d, n}, ...], at most 2,
+   each naming a different digit with its exact count (0-6) among the cage's cells. ---- */
+function lookSayCode(runs) {
+  return runs.map(r => String(r.n) + String(r.d)).join('');
+}
+function chkLookSay(g, cells, runs) {
+  for (const { d, n } of runs) {
+    let have = 0, unk = 0;
+    for (const i of cells) { const v = g[i]; if (v) { if (v === d) have++; } else unk++; }
+    if (have > n || have + unk < n) return false;
+  }
+  return true;
+}
+function verifyLookSay(g, cells, runs) {
+  for (const { d, n } of runs) {
+    let have = 0;
+    for (const i of cells) if (g[i] === d) have++;
+    if (have !== n) return false;
+  }
+  return true;
+}
+
+/* ---- "escape the grid" cages: one member of the cage's clue sits outside the grid, in a ring
+   slot that belongs to a different outside-clue variant (Numbered Rooms, X-Sums, Sandwich or
+   Skyscraper). That slot's true value is never shown directly - it both counts toward the cage's
+   own shown total (or look-and-say code) and, separately, is the hidden value the target variant's
+   own rule needs for that row/column. escRange is clueRange(targetKind, targetSeq, g): a [lo, hi]
+   bound on what that hidden value could still be given the current (partial or complete) grid;
+   on a fully solved grid it always collapses to an exact [v, v], which is what makes these the
+   same functions used for both live solving (compile) and the final exact check (verify). ---- */
+function chkSumEsc(g, cells, T, escRange) {
+  let s = 0, unk = 0, used = 0;
+  for (const i of cells) { const v = g[i]; if (v) { s += v; used |= bit(v); } else unk++; }
+  const av = []; for (let d = 1; d <= 6; d++) if (!(used & bit(d))) av.push(d);
+  if (av.length < unk) return false;
+  let mn = 0, mx = 0;
+  for (let k = 0; k < unk; k++) { mn += av[k]; mx += av[av.length - 1 - k]; }
+  return s + mn + escRange[0] <= T && T <= s + mx + escRange[1];
+}
+function chkLookSayEsc(g, cells, runs, escRange) {
+  for (const { d, n } of runs) {
+    let have = 0, unk = 0;
+    for (const i of cells) { const v = g[i]; if (v) { if (v === d) have++; } else unk++; }
+    const escCould = d >= escRange[0] && d <= escRange[1];
+    const escMust = escRange[0] === escRange[1] && escRange[0] === d;
+    const mn = have + (escMust ? 1 : 0), mx = have + unk + (escCould ? 1 : 0);
+    if (n < mn || n > mx) return false;
+  }
+  return true;
+}
 function regSumBounds(g, runs) {
   let lo = 0, hi = 99;
   for (const run of runs) {
@@ -731,6 +787,11 @@ function regSumBounds(g, runs) {
 
 /* ---- outside clue value ranges (partial grids) and outside-line rules ---- */
 function clueRange(kind, seq, g) {
+  if (kind === 'lk') {
+    let s = 0, unk = 0;
+    for (const i of seq) { const v = g[i]; if (v) s += v; else unk++; }
+    return [s + unk, s + 6 * unk];
+  }
   if (kind === 'xs') {
     const a0 = g[seq[0]]; let lo = 99, hi = -1;
     for (const n of (a0 ? [a0] : [1, 2, 3, 4, 5, 6])) {
@@ -890,6 +951,53 @@ function chkOLine(g, ol, seqs) {
   return true;
 }
 
+/* ---- "escape the grid" lines: like escaping cages, but for a drawn line (thermo, whisper, renban,
+   palindrome, between, arrow, parity, entropic - not region sum, which already has its own outside-tie
+   mechanic via ln.ring, and whose regions don't extend outside the grid anyway). One end of the line
+   (cells[escIdx], always a true end - index 0 or the last index, since that's the only way the line can
+   physically reach the grid edge) is a ring slot belonging to a different outside-clue variant rather
+   than a normal 1-6 grid digit. R is an array of [lo, hi] ranges, one per line cell in order - an exact
+   [v, v] for every resolved digit, [1, 6] for an unresolved one, and the escape slot's own clueRange
+   for its position. This is the same interval math chkOLine already uses for a line strung entirely
+   between outside clues, just mixed with ordinary grid-digit ranges. */
+function chkLineEsc(types, R, wd) {
+  const k = R.length;
+  for (const t of types) {
+    if (t === 'thermo') {
+      let m = R[0][0]; if (m > R[0][1]) return false;
+      for (let i = 1; i < k; i++) { m = Math.max(R[i][0], m + 1); if (m > R[i][1]) return false; }
+    } else if (t === 'whisper') {
+      for (let i = 0; i + 1 < k; i++) if (Math.max(R[i + 1][1] - R[i][0], R[i][1] - R[i + 1][0]) < wd) return false;
+    } else if (t === 'arrow') {
+      let lo = 0, hi = 0; for (let i = 1; i < k; i++) { lo += R[i][0]; hi += R[i][1]; }
+      if (R[0][0] > hi || R[0][1] < lo) return false;
+    } else if (t === 'palindrome') {
+      for (let i = 0; i < (k >> 1); i++) { const a = R[i], b = R[k - 1 - i]; if (Math.max(a[0], b[0]) > Math.min(a[1], b[1])) return false; }
+    } else if (t === 'renban') {
+      const known = R.filter(r => r[0] === r[1]).map(r => r[0]);
+      if (new Set(known).size !== known.length) return false;
+      if (known.length) { const mn = Math.min(...known), mx = Math.max(...known); if (mx - mn > k - 1) return false; }
+    } else if (t === 'parity') {
+      for (let i = 0; i + 1 < k; i++) if (R[i][0] === R[i][1] && R[i + 1][0] === R[i + 1][1] && (R[i][0] + R[i + 1][0]) % 2 === 0) return false;
+    } else if (t === 'between') {
+      if (k >= 3) {
+        const a = R[0], b = R[k - 1], lo = Math.min(a[0], b[0]), hi = Math.max(a[1], b[1]);
+        for (let i = 1; i < k - 1; i++) if (R[i][1] <= lo || R[i][0] >= hi) return false;
+        if (a[0] === a[1] && b[0] === b[1] && a[0] === b[0]) return false;
+      }
+    } else if (t === 'entropic') {
+      if (k >= 3) {
+        const groupsOf = r => { const s = new Set(); for (let d = Math.max(1, r[0]); d <= Math.min(6, r[1]); d++) s.add(grpOf(d)); return s; };
+        for (let i = 0; i + 2 < k; i++) {
+          const u = new Set([...groupsOf(R[i]), ...groupsOf(R[i + 1]), ...groupsOf(R[i + 2])]);
+          if (u.size < 3) return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 /* ---- compile a puzzle into propagation structures ---- */
 function compile(p) {
   const cand0 = new Array(NN).fill(ALL);
@@ -935,13 +1043,47 @@ function compile(p) {
 
   // cages
   for (const cg of p.cages) {
-    distinct(cg.cells);
-    if (cg.sum != null && cg.sum !== '') { const T = +cg.sum; addGroup(cg.cells, g => chkSum(g, cg.cells, T, true)); }
+    if (cg.escape) {
+      const eseq = clueSeq({ kind: cg.escape.kind, r: cg.escape.r, c: cg.escape.c });
+      const cells2 = Array.from(new Set(cg.cells.concat(eseq)));
+      if (cg.type === 'looksay') {
+        if (cg.runs) addGroup(cells2, g => { const er = clueRange(cg.escape.kind, eseq, g); return !!er && chkLookSayEsc(g, cg.cells, cg.runs, er); });
+      } else {
+        distinct(cg.cells);
+        if (cg.sum != null && cg.sum !== '') { const T = +cg.sum;
+          addGroup(cells2, g => { const er = clueRange(cg.escape.kind, eseq, g); return !!er && chkSumEsc(g, cg.cells, T, er); });
+        }
+      }
+      continue;
+    }
+    if (cg.type === 'looksay') {
+      // repeats are the whole point here, so no distinct() - each run is its own independent
+      // "exactly n of digit d" count; digits with no run are entirely unconstrained by this cage
+      if (cg.runs) addGroup(cg.cells, g => chkLookSay(g, cg.cells, cg.runs));
+    } else if (cg.type === 'mysterydigit') {
+      // same primitive as a single-run look-and-say cage, visually indistinguishable from a sum
+      // cage of the same size - that's the point (see MysteryCages below)
+      addGroup(cg.cells, g => chkLookSay(g, cg.cells, [{ d: cg.d, n: cg.n }]));
+    } else {
+      distinct(cg.cells);
+      if (cg.sum != null && cg.sum !== '') { const T = +cg.sum; addGroup(cg.cells, g => chkSum(g, cg.cells, T, true)); }
+    }
   }
   // lines
   const wd = +o.whisperDiff || 4;
   for (const ln of p.lines) {
     const cs = ln.cells, L = cs.length;
+    if (ln.escape) {
+      const escIdx = ln.escape.idx === L - 1 ? L - 1 : 0;
+      const eseq = clueSeq({ kind: ln.escape.kind, r: ln.escape.r, c: ln.escape.c, dr: ln.escape.dr, dc: ln.escape.dc });
+      const types = lineTypes(ln);
+      addGroup(Array.from(new Set(cs.concat(eseq))), g => {
+        const er = clueRange(ln.escape.kind, eseq, g); if (!er) return false;
+        const R = cs.map((i, k) => k === escIdx ? er : (g[i] ? [g[i], g[i]] : [1, 6]));
+        return chkLineEsc(types, R, wd);
+      });
+      continue;
+    }
     for (const ty of lineTypes(ln)) {
     if (ty === 'thermo') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
@@ -1422,10 +1564,36 @@ function verify(p, g, sh) {
     if (o.antiKnight && ((dr === 1 && dc === 2) || (dr === 2 && dc === 1))) errs.push('knight ' + i + ',' + j);
   }
   for (const cg of p.cages) {
-    dist(cg.cells, 'cage');
-    if (cg.sum != null && cg.sum !== '' && cg.cells.reduce((a, c) => a + g[c], 0) !== +cg.sum) errs.push('cage sum');
+    if (cg.escape) {
+      const eseq = clueSeq({ kind: cg.escape.kind, r: cg.escape.r, c: cg.escape.c });
+      const er = clueRange(cg.escape.kind, eseq, g);
+      if (cg.type === 'looksay') {
+        if (cg.runs && (!er || !chkLookSayEsc(g, cg.cells, cg.runs, er))) errs.push('escaping look-and-say cage');
+      } else {
+        dist(cg.cells, 'cage');
+        if (cg.sum != null && cg.sum !== '' && (!er || !chkSumEsc(g, cg.cells, +cg.sum, er))) errs.push('escaping cage sum');
+      }
+      continue;
+    }
+    if (cg.type === 'looksay') {
+      if (cg.runs && !verifyLookSay(g, cg.cells, cg.runs)) errs.push('look-and-say cage');
+    } else if (cg.type === 'mysterydigit') {
+      if (!verifyLookSay(g, cg.cells, [{ d: cg.d, n: cg.n }])) errs.push('mystery cage digit count');
+    } else {
+      dist(cg.cells, 'cage');
+      if (cg.sum != null && cg.sum !== '' && cg.cells.reduce((a, c) => a + g[c], 0) !== +cg.sum) errs.push('cage sum');
+    }
   }
   for (const ln of p.lines) {
+    const cs0 = ln.cells, L0 = cs0.length;
+    if (ln.escape) {
+      const escIdx = ln.escape.idx === L0 - 1 ? L0 - 1 : 0;
+      const eseq = clueSeq({ kind: ln.escape.kind, r: ln.escape.r, c: ln.escape.c, dr: ln.escape.dr, dc: ln.escape.dc });
+      const er = clueRange(ln.escape.kind, eseq, g);
+      const R = cs0.map((i, k) => k === escIdx ? er : [g[i], g[i]]);
+      if (!er || !chkLineEsc(lineTypes(ln), R, +o.whisperDiff || 4)) errs.push('escaping line');
+      continue;
+    }
     const v = ln.cells.map(c => g[c]), L = v.length;
     for (const ty of lineTypes(ln)) {
     if (ty === 'thermo') { for (let k = 0; k + 1 < L; k++) if (!(v[k] < v[k + 1])) errs.push('thermo'); }
@@ -1511,6 +1679,7 @@ function verify(p, g, sh) {
 
 /* exact value of an outside clue for a full grid (independent of the solver's range code) */
 function outVal(kind, seq, g) {
+  if (kind === 'lk') { if (!seq.length) return null; return seq.reduce((a, i) => a + g[i], 0); }
   if (seq.length !== N) return null;
   const v = seq.map(i => g[i]);
   if (kind === 'xs') { let s = 0; for (let k = 0; k < v[0]; k++) s += v[k]; return s; }
@@ -1637,7 +1806,7 @@ const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skys
 
 root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, OL_RULES, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
-  chkSum, chkXsum, chkSandwich, chkSky };
+  chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -1658,6 +1827,9 @@ const VARIANTS = [
   { k: 'disjoint', label: 'Disjoint groups', group: 'Grid rules' },
   { k: 'irregular', label: 'Irregular regions', group: 'Grid rules' },
   { k: 'killer', label: 'Killer cages', group: 'Sums' },
+  { k: 'looksay', label: 'Look-and-say cages', group: 'Sums' },
+  { k: 'escape', label: 'Escape the Grid', group: 'Sums' },
+  { k: 'mysterycage', label: 'Mystery Cages', group: 'Sums' },
   { k: 'quad', label: 'Quadruples', group: 'Sums' },
   { k: 'arrow', label: 'Arrow', group: 'Sums' },
   { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
@@ -1691,7 +1863,7 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
@@ -1830,6 +2002,81 @@ function killerCages(sol, rng) {
       const nb = pick(opts, rng); cells.push(nb); cageOf[nb] = cages.length; digs.add(sol[nb]);
     }
     cages.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0) });
+  }
+  return cages.filter(c => c.cells.length >= 2);
+}
+
+/* Look-and-say cages: same free-growth shape as killer cages, but repeats are never avoided - the
+   corner clue names 1-2 digits, each with its own exact count among the cage's cells ("12" = exactly
+   one 2; "0213" = exactly zero 2s and exactly one 3), read 2 characters at a time. This is a PARTIAL
+   clue: any digit it doesn't name is completely unconstrained, and the named counts don't need to
+   add up to the cage's own cell count - a count of 0 ("this digit never appears here") is just as
+   valid a fact as a positive one. */
+function lookSayCages(sol, rng) {
+  const cageOf = new Array(NN).fill(-1), cages = [];
+  for (const s of shuffle([...Array(NN).keys()], rng)) {
+    if (cageOf[s] >= 0) continue;
+    const target = pick([2, 2, 3, 3, 3, 4, 4], rng);
+    const cells = [s]; cageOf[s] = cages.length;
+    while (cells.length < target) {
+      const opts = [];
+      for (const c of cells) for (const nb of nbr4[c]) if (cageOf[nb] < 0) opts.push(nb);
+      if (!opts.length) break;
+      const nb = pick(opts, rng); cells.push(nb); cageOf[nb] = cages.length;
+    }
+    const counts = {}; cells.forEach(c => { const d = sol[c]; counts[d] = (counts[d] || 0) + 1; });
+    const nRuns = rng() < 0.5 ? 1 : 2;
+    const digits = shuffle([1, 2, 3, 4, 5, 6], rng).slice(0, nRuns).sort((a, b) => a - b);
+    const runs = digits.map(d => ({ d, n: counts[d] || 0 }));
+    cages.push({ cells, runs });
+  }
+  return cages.filter(c => c.cells.length >= 2);
+}
+
+/* Mystery cages: a plain dashed cage showing a two-digit number with no marker saying which rule
+   governs it - a classic killer sum (distinct digits) or a single look-and-say run (exactly n of
+   digit d, everything else in the cage unconstrained). Generation picks a digit (for the
+   look-and-say case) whose count+digit code also lands in the valid sum range for a cage of that
+   size, so the shown number is a genuine toss-up rather than something arithmetic alone could rule
+   out on sight; when no digit qualifies it falls back to any present digit (still a valid cage,
+   just not a disguised one this time). */
+function minDistinctSum(n) { return n * (n + 1) / 2; }
+function maxDistinctSum(n) { return 6 * n - n * (n - 1) / 2; }
+function mysteryCages(sol, rng) {
+  const cageOf = new Array(NN).fill(-1), cages = [];
+  for (const s of shuffle([...Array(NN).keys()], rng)) {
+    if (cageOf[s] >= 0) continue;
+    const wantSum = rng() < 0.5;
+    const target = pick([2, 2, 3, 3, 4], rng);
+    const cells = [s], digs = wantSum ? new Set([sol[s]]) : null;
+    cageOf[s] = cages.length;
+    while (cells.length < target) {
+      const opts = [];
+      for (const c of cells) for (const nb of nbr4[c]) {
+        if (cageOf[nb] >= 0) continue;
+        if (digs && digs.has(sol[nb])) continue;
+        opts.push(nb);
+      }
+      if (!opts.length) break;
+      const nb = pick(opts, rng); cells.push(nb); cageOf[nb] = cages.length; if (digs) digs.add(sol[nb]);
+    }
+    if (cells.length < 2) continue;
+    if (wantSum) {
+      cages.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0), mystery: true });
+    } else {
+      const counts = {}; cells.forEach(c => { const d = sol[c]; counts[d] = (counts[d] || 0) + 1; });
+      let chosen = null;
+      for (const d of shuffle([1, 2, 3, 4, 5, 6], rng)) {
+        const n = counts[d] || 0, code = n * 10 + d;
+        if (n >= 1 && code >= minDistinctSum(cells.length) && code <= maxDistinctSum(cells.length)) { chosen = { d, n }; break; }
+      }
+      if (!chosen) {
+        const present = Object.keys(counts).map(Number);
+        const d = present.length ? pick(present, rng) : pick([1, 2, 3, 4, 5, 6], rng);
+        chosen = { d, n: counts[d] || 0 };
+      }
+      cages.push({ cells, type: 'mysterydigit', d: chosen.d, n: chosen.n, mystery: true });
+    }
   }
   return cages.filter(c => c.cells.length >= 2);
 }
@@ -2122,7 +2369,161 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   const cellCross = new Map(); // shared across every line pool: caps crossings per cell at 2 and steers lines away from crossing a same-type line
   const sum = a => a.reduce((x, y) => x + y, 0);
 
-  if (V.has('killer')) killerCages(sol, rng).forEach(cg => add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })));
+  const plainCageCells = new Set(); // cells already claimed by plain Killer/Look-and-say cages below,
+  // so escape's own cage/line growth (next block) never overlaps them even if ever invoked outside
+  // the UI's own exclusivity guard (clash()/feasibleMix() keep 'escape' and 'killer'/'looksay' from
+  // ever being selected together there, but this keeps the generator itself sound either way).
+  if (V.has('killer')) killerCages(sol, rng).forEach(cg => { add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })); cg.cells.forEach(c => plainCageCells.add(c)); });
+  if (V.has('looksay')) lookSayCages(sol, rng).forEach(cg => { add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) })); cg.cells.forEach(c => plainCageCells.add(c)); });
+  if (V.has('mysterycage')) mysteryCages(sol, rng).forEach(cg => {
+    add('mysterycage', p => p.cages.push(cg.type === 'mysterydigit'
+      ? { cells: cg.cells.slice(), type: 'mysterydigit', d: cg.d, n: cg.n, mystery: true }
+      : { cells: cg.cells.slice(), sum: cg.sum, mystery: true }));
+    cg.cells.forEach(c => plainCageCells.add(c));
+  });
+
+  /* "Escape the grid": a killer or look-and-say cage grows out to touch the grid's edge, and one
+     extra "cell" of its clue sits just outside, in a ring slot belonging to a different outside-clue
+     variant (Numbered Rooms, X-Sums, Sandwich or Skyscraper - never Little Killer, since cages only
+     grow orthogonally and can never reach a diagonal ring slot the way a line could). That slot's
+     value is never shown on its own; it's baked straight into the cage's displayed sum (or
+     look-and-say code), and separately has to satisfy the target variant's own rule for that row or
+     column - the player has to pin it down from both directions at once. Mutually exclusive with
+     plain Killer/Look-and-say in the UI (feasibleMix), since those pools already claim almost the
+     whole grid and would leave no room for an escaping cage to grow into. */
+  if (V.has('escape')) {
+    const TARGET_VARIANT = { xs: 'xsum', sw: 'sandwich', sk: 'skyscraper', nr: 'roomnumbers', lk: 'littlekiller' };
+    const sumTargets = ['xs', 'sw', 'sk', 'nr'].filter(k => V.has(TARGET_VARIANT[k]));
+    const codeTargets = ['sk', 'nr'].filter(k => V.has(TARGET_VARIANT[k]));
+    const lineTargets = ['xs', 'sw', 'sk', 'nr', 'lk'].filter(k => V.has(TARGET_VARIANT[k]));
+    const escLineTypes = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic'].filter(t => V.has(t));
+    const cageEligible = sumTargets.length || codeTargets.length;
+    const lineEligible = lineTargets.length && escLineTypes.length;
+    const escClaimed = new Set(plainCageCells);
+    const maxEsc = 3;
+    let made = 0;
+    // A Yin-Yang+Sandwich combo ties a couple of specific rows/cols to a locked, must-keep Sandwich
+    // clue (sandwichTied, built before buildPool runs). That clue is only added later (ringPool's
+    // addTied), so without this check an escape cage/line claiming the same ring slot first would
+    // make addTied silently skip it - not unsound (verify only checks ties it can see), but it would
+    // quietly drop the one clue that makes the cross-rule visible on that line.
+    const swTiedConflict = (kind, rr, rcc) => {
+      if (kind !== 'sw' || !sandwichTied) return false;
+      if ((rr === -1 || rr === N) && sandwichTied.cols.includes(rcc)) return true;
+      if ((rcc === -1 || rcc === N) && sandwichTied.rows.includes(rr)) return true;
+      return false;
+    };
+
+    const attemptCage = () => {
+      const useCode = codeTargets.length && (!sumTargets.length || rng() < 0.4);
+      const targets = useCode ? codeTargets : sumTargets;
+      if (!targets.length) return false;
+      const kind = pick(targets, rng);
+      const side = pick(['t', 'b', 'l', 'r'], rng);
+      let rr, rcc, borderPred;
+      if (side === 't') { rr = -1; rcc = Math.floor(rng() * N); borderPred = i => rowOf(i) === 0 && colOf(i) === rcc; }
+      else if (side === 'b') { rr = N; rcc = Math.floor(rng() * N); borderPred = i => rowOf(i) === N - 1 && colOf(i) === rcc; }
+      else if (side === 'l') { rcc = -1; rr = Math.floor(rng() * N); borderPred = i => colOf(i) === 0 && rowOf(i) === rr; }
+      else { rcc = N; rr = Math.floor(rng() * N); borderPred = i => colOf(i) === N - 1 && rowOf(i) === rr; }
+      const rk = rr + ',' + rcc;
+      if (usedRing.has(rk) || swTiedConflict(kind, rr, rcc)) return false;
+      let borderCell = -1;
+      for (let i = 0; i < NN; i++) if (borderPred(i)) { borderCell = i; break; }
+      if (borderCell < 0 || escClaimed.has(borderCell)) return false;
+      const target = pick([2, 2, 3, 3, 4], rng);
+      const cells = [borderCell], localUsed = new Set([borderCell]);
+      const digs = useCode ? null : new Set([sol[borderCell]]);
+      while (cells.length < target) {
+        const opts = [];
+        for (const c of cells) for (const nb of nbr4[c]) {
+          if (localUsed.has(nb) || escClaimed.has(nb)) continue;
+          if (digs && digs.has(sol[nb])) continue;
+          opts.push(nb);
+        }
+        if (!opts.length) break;
+        const nb = pick(opts, rng); cells.push(nb); localUsed.add(nb); if (digs) digs.add(sol[nb]);
+      }
+      if (cells.length < 2) return false;
+      usedRing.add(rk); cells.forEach(c => escClaimed.add(c));
+      const eseq = clueSeq({ kind, r: rr, c: rcc });
+      const escVal = S.outVal(kind, eseq, sol);
+      const escape = { kind, r: rr, c: rcc };
+      if (useCode) {
+        // single run, named on the escaping digit itself: the hidden value's own identity is
+        // partly exposed through this count, the same way its exact value is only pinned once the
+        // target variant's own rule is cross-referenced.
+        const n = cells.reduce((a, c) => a + (sol[c] === escVal ? 1 : 0), 0) + 1;
+        add('escape', p => p.cages.push({ cells: cells.slice(), type: 'looksay', runs: [{ d: escVal, n }], escape: Object.assign({}, escape) }));
+      } else {
+        const sum = cells.reduce((a, c) => a + sol[c], 0) + escVal;
+        add('escape', p => p.cages.push({ cells: cells.slice(), sum, escape: Object.assign({}, escape) }));
+      }
+      return true;
+    };
+
+    /* Escaping LINES: the same mechanic for a drawn line (thermo, whisper, renban, palindrome,
+       between, arrow, parity, entropic - region sum lines are excluded, since their regions don't
+       extend outside the grid and they already have their own outside-tie mechanic via ln.ring).
+       Lines grow diagonally (nbr8) the way cages never do, so Little Killer - whose ring slot is
+       only reachable on a diagonal - becomes a valid target here. Each candidate is validated
+       straight against the real solution with the exact same range check the solver and verifier
+       use (S.chkLineEsc), so there's never a mismatch between what generation accepts and what a
+       finished puzzle actually enforces. */
+    const attemptLine = () => {
+      const kind = pick(lineTargets, rng);
+      const type = pick(escLineTypes, rng);
+      let rr, rcc, dr, dc, anchor;
+      if (kind === 'lk') {
+        const slot = pick(ringSlots('lk'), rng);
+        rr = slot.r; rcc = slot.c; dr = slot.dr; dc = slot.dc;
+        anchor = ix(rr + dr, rcc + dc);
+      } else {
+        const side = pick(['t', 'b', 'l', 'r'], rng);
+        if (side === 't') { rr = -1; rcc = Math.floor(rng() * N); anchor = ix(0, rcc); }
+        else if (side === 'b') { rr = N; rcc = Math.floor(rng() * N); anchor = ix(N - 1, rcc); }
+        else if (side === 'l') { rcc = -1; rr = Math.floor(rng() * N); anchor = ix(rr, 0); }
+        else { rcc = N; rr = Math.floor(rng() * N); anchor = ix(rr, N - 1); }
+      }
+      const rk = rr + ',' + rcc;
+      if (usedRing.has(rk) || escClaimed.has(anchor) || usedEndpoints.has(anchor) || swTiedConflict(kind, rr, rcc)) return false;
+      const minL = (type === 'between' || type === 'entropic') ? 3 : 2;
+      const targetLen = minL + Math.floor(rng() * 2);
+      const path = [anchor], inPath = new Set(path);
+      while (path.length < targetLen) {
+        const last = path[path.length - 1];
+        const opts = nbr8[last].filter(j => !inPath.has(j) && !escClaimed.has(j));
+        if (!opts.length) break;
+        const j = pick(opts, rng); path.push(j); inPath.add(j);
+      }
+      if (path.length < minL || usedEndpoints.has(path[path.length - 1])) return false;
+      const reverseEnd = rng() < 0.5;
+      const cells = reverseEnd ? path.slice().reverse() : path.slice();
+      const escIdx = reverseEnd ? cells.length - 1 : 0;
+      const eseq = clueSeq({ kind, r: rr, c: rcc, dr, dc });
+      if (eseq.length < 2) return false;
+      const escVal = clueValue({ kind, r: rr, c: rcc, dr, dc }, sol);
+      const R = cells.map((c, k) => k === escIdx ? [escVal, escVal] : [sol[c], sol[c]]);
+      if (!S.chkLineEsc([type], R, whisperDiff)) return false;
+      usedRing.add(rk); cells.forEach(c => escClaimed.add(c));
+      usedEndpoints.add(path[0]); usedEndpoints.add(path[path.length - 1]);
+      const escape = { kind, r: rr, c: rcc, idx: escIdx };
+      if (kind === 'lk') { escape.dr = dr; escape.dc = dc; }
+      add('escape', p => p.lines.push({ type, cells: cells.slice(), escape: Object.assign({}, escape) }));
+      return true;
+    };
+
+    // Interleave cage and line attempts (instead of exhausting cages first) so that when both
+    // shapes are eligible, the fixed 2-3 escape budget doesn't always go entirely to whichever
+    // shape happens to be easier to satisfy (cages, which are nearly always satisfiable, would
+    // otherwise starve lines out of every puzzle that enables both).
+    let tries = 0;
+    while (made < maxEsc && tries < 500 && (cageEligible || lineEligible)) {
+      tries++;
+      const useLine = lineEligible && (!cageEligible || rng() < 0.5);
+      const got = useLine ? attemptLine() : (cageEligible ? attemptCage() : false);
+      if (got) made++;
+    }
+  }
 
   if (V.has('quad')) {
     const verts = [];
@@ -2489,6 +2890,7 @@ function generate(spec, seed, budgetMs) {
 
 root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
 root.SX.makeShadeBlob = makeShadeBlob; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
+root.SX.killerCages = killerCages; root.SX.lookSayCages = lookSayCages;
 root.SX.makeYinYang = makeYinYang; root.SX.sandwichShadeFixed = sandwichShadeFixed; root.SX.sandwichShadeFixedLines = sandwichShadeFixedLines;
 root.SX.randomRegions = randomRegions;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -2544,6 +2946,15 @@ function normalize(o) {
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
   p.olines = ((o && o.olines) || []).filter(l => X.OL_RULES.includes(l.type) && ['xs', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
   p.olines.forEach(l => { l.also = Array.from(new Set((l.also || []).filter(t => X.OL_RULES.includes(t) && t !== l.type))); if (!l.also.length) delete l.also; });
+  p.cages.forEach(cg => { if (cg.escape && !(['xs', 'sw', 'sk', 'nr'].includes(cg.escape.kind) && okRing([cg.escape.r, cg.escape.c]))) delete cg.escape; });
+  const okLkRing = (r, c, dr, dc) => Number.isInteger(r) && Number.isInteger(c) && r >= -1 && r <= N && c >= -1 && c <= N && !inCell(r, c) && (dr === 1 || dr === -1) && (dc === 1 || dc === -1) && inCell(r + dr, c + dc);
+  p.lines.forEach(ln => {
+    if (!ln.escape) return;
+    const e = ln.escape, okPos = e.kind === 'lk' ? okLkRing(e.r, e.c, e.dr, e.dc) : (['xs', 'sw', 'sk', 'nr'].includes(e.kind) && okRing([e.r, e.c]));
+    if (!okPos) { delete ln.escape; return; }
+    e.idx = e.idx === ln.cells.length - 1 ? ln.cells.length - 1 : 0;
+    if (e.kind !== 'lk') { delete e.dr; delete e.dc; }
+  });
   p.quads = ((o && o.quads) || []).filter(q => q.r >= 1 && q.r <= N - 1 && q.c >= 1 && q.c <= N - 1 && Array.isArray(q.digits))
     .map(q => ({ r: q.r, c: q.c, digits: q.digits.filter(d => d >= 1 && d <= 6).slice(0, 4) }));
   p.title = String((o && o.title) || ''); p.sol = Array.isArray(o && o.sol) && o.sol.length === NN ? o.sol : null;
@@ -2584,7 +2995,10 @@ function variantLabels(p) {
   if (!isStd(p)) L.push('Irregular');
   if (o.diag) L.push('Diagonal'); if (o.antiKnight) L.push('Anti-knight'); if (o.antiKing) L.push('Anti-king');
   if (o.disjoint) L.push('Disjoint groups');
-  if (p.cages.length) L.push('Killer');
+  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) L.push('Killer');
+  if (p.cages.some(c => c.type === 'looksay' && !c.escape)) L.push('Look-and-say');
+  if (p.cages.some(c => c.mystery)) L.push('Mystery Cages');
+  if (p.cages.some(c => c.escape) || p.lines.some(l => l.escape)) L.push('Escape the Grid');
   const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
   if (p.quads.length) L.push('Quadruples');
   p.lines.forEach(l => X.lineTypes(l).forEach(t => has.add(nm[t])));
@@ -2612,7 +3026,11 @@ function rulesFor(p) {
   if (o.antiKnight) R.push('Cells a chess knight’s move apart never hold the same digit.');
   if (o.antiKing) R.push('Cells touching at a side or corner never hold the same digit.');
   if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
-  if (p.cages.length) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
+  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
+  if (p.cages.some(c => c.type === 'looksay' && !c.escape)) R.push('Dashed look-and-say cages: digits may repeat. The corner code is read 2 digits at a time, "[quantity][digit]", listed in ascending digit order - e.g. "12" means exactly one 2 is in the cage; "0213" means exactly zero 2s and exactly one 3. Any digit not named is unconstrained, and the cage may hold more cells than the named counts add up to.');
+  if (p.cages.some(c => c.mystery)) R.push('Mystery cages (dashed, no marker): the corner number could be a Killer-style sum (digits sum to it, never repeating) or a look-and-say count (exactly that many of that one digit, rest of the cage unconstrained) - nothing about the cage says which. Each mystery cage is secretly one or the other; work out which from the rest of the grid.');
+  if (p.cages.some(c => c.escape)) R.push('Escaping cages (dashed, reaching a boxed square outside the grid): that outside square is not a Sudoku digit. It counts toward the cage’s own total (or look-and-say code) exactly like any other cage cell, and separately it is the hidden value of the outside-clue rule marked on that square (X, S, ▲ or N) for its row or column. Neither value is shown - work out the hidden one from both rules at once.');
+  if (p.lines.some(l => l.escape)) R.push('Escaping lines (reaching a boxed square outside the grid, marked X, S, ▲, N, or an arrow for Little Killer): that outside square is not a Sudoku digit. It takes part in the line’s own rule exactly like any other cell on the line, and separately it is the hidden value of the outside-clue rule marked there for its row, column or diagonal. Neither value is shown - work out the hidden one from both rules at once.');
   const lt = new Set(); p.lines.forEach(l => X.lineTypes(l).forEach(t => lt.add(t)));
   if (lt.has('thermo')) R.push('Thermometers: digits strictly increase from the bulb to the tip.');
   if (lt.has('arrow')) R.push('Arrows: the digit in the circle equals the sum of the digits along the arrow.');
@@ -2848,6 +3266,19 @@ function regRingAnchor(cells, r, c) {
   const last = cells[cells.length - 1], first = cells[0];
   if (check(last)) return last; if (check(first)) return first; return last;
 }
+/* like regRingAnchor, but a cage's cells aren't ordered like a line's, so every cell is checked
+   (not just the two ends) for whichever one actually touches the given ring slot's edge. */
+function cageRingAnchor(cells, r, c) {
+  const check = cell => {
+    const cr = rowOf(cell), cc = colOf(cell);
+    if (r === -1) return cc === c && cr === 0;
+    if (r === N) return cc === c && cr === N - 1;
+    if (c === -1) return cr === r && cc === 0;
+    if (c === N) return cr === r && cc === N - 1;
+    return false;
+  };
+  return cells.find(check) ?? cells[0];
+}
 function ringRect(r, c) {
   const x = c < 0 ? 0 : c >= N ? RING + N * CELL : gx(c), w = (c < 0 || c >= N) ? RING : CELL;
   const y = r < 0 ? 0 : r >= N ? RING + N * CELL : gy(r), h = (r < 0 || r >= N) ? RING : CELL;
@@ -2979,6 +3410,36 @@ function renderBoard() {
   };
   p.lines.forEach(l => { s += drawLine(X.lineTypes(l), l.cells); });
   s += markerBuf; markerBuf = '';
+  const drawLineEscape = ln => {
+    const { kind, r: rr, c: rcc, dr, dc } = ln.escape;
+    const idx = ln.escape.idx === ln.cells.length - 1 ? ln.cells.length - 1 : 0;
+    const anchor = ln.cells[idx];
+    const rc = ringRect(rr, rcc), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
+    let o = `<line class="ln escape" style="stroke:var(--ink);stroke-dasharray:3 3;stroke-width:1.6;opacity:.85" x1="${cx(anchor)}" y1="${cy(anchor)}" x2="${mx}" y2="${my}"/>`;
+    o += `<rect class="obox" style="stroke:var(--ink)" x="${mx - 20}" y="${my - 17}" width="40" height="34" rx="6"/>`;
+    const key = rr + ',' + rcc;
+    const ent = !editing && P && P.ring[key] ? P.ring[key] : null;
+    let exact = null;
+    if (!editing) { const rg = X.clueRange(kind, X.clueSeq({ kind, r: rr, c: rcc, dr, dc }), g); if (rg && rg[0] === rg[1]) exact = rg[0]; }
+    if (kind === 'lk') {
+      o += `<text class="rtag lk" x="${mx + dc * 12}" y="${my + dr * 12 + 6}">${ARROW[dr + ',' + dc]}</text>`;
+      const vx = mx - dc * 6, vy = my - dr * 6 + 6;
+      if (ent && ent.v) o += `<text class="rval ent" x="${vx}" y="${vy}">${ent.v}</text>`;
+      else if (exact != null) o += `<text class="rval live" x="${vx}" y="${vy}">${exact}</text>`;
+    } else {
+      o += `<text class="rtag sm" x="${rc.x + 3}" y="${rc.y + 9}">${TAG[kind]}</text>`;
+      if (ent && ent.v) o += `<text class="rval ent" x="${mx}" y="${my + 6}">${ent.v}</text>`;
+      else if (exact != null) o += `<text class="rval live" x="${mx}" y="${my + 6}">${exact}</text>`;
+      else if (ent && ent.c.length) {
+        const marks = ent.c.slice(0, 9), rows = Math.ceil(marks.length / 3);
+        marks.forEach((n, j) => {
+          o += `<text class="rcd" x="${mx - 13 + (j % 3) * 13}" y="${(my - (rows - 1) * 5.25 + 3.6 + Math.floor(j / 3) * 10.5).toFixed(1)}">${n}</text>`;
+        });
+      }
+    }
+    return o;
+  };
+  p.lines.forEach(ln => { if (ln.escape) s += drawLineEscape(ln); });
   const drawRegRing = (cells, ring, preview) => {
     const [rr, rc] = ring, rcRect = ringRect(rr, rc), mx = rcRect.x + rcRect.w / 2, my = rcRect.y + rcRect.h / 2;
     const anchor = regRingAnchor(cells, rr, rc), col = preview ? 'var(--accent)' : COL.regsum;
@@ -2992,14 +3453,37 @@ function renderBoard() {
   s += markerBuf; markerBuf = '';
 
   // cages
+  const drawCageEscape = cg => {
+    const { kind, r: rr, c: rcc } = cg.escape, anchor = cageRingAnchor(cg.cells, rr, rcc);
+    const rc = ringRect(rr, rcc), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
+    let o = `<line class="ln escape" style="stroke:var(--ink);stroke-dasharray:3 3;stroke-width:1.6;opacity:.85" x1="${cx(anchor)}" y1="${cy(anchor)}" x2="${mx}" y2="${my}"/>`;
+    o += `<rect class="obox" style="stroke:var(--ink)" x="${mx - 20}" y="${my - 17}" width="40" height="34" rx="6"/>`;
+    o += `<text class="rtag sm" x="${rc.x + 3}" y="${rc.y + 9}">${TAG[kind]}</text>`;
+    const key = rr + ',' + rcc;
+    const ent = !editing && P && P.ring[key] ? P.ring[key] : null;
+    let exact = null;
+    if (!editing) { const rg = X.clueRange(kind, X.clueSeq({ kind, r: rr, c: rcc }), g); if (rg && rg[0] === rg[1]) exact = rg[0]; }
+    if (ent && ent.v) o += `<text class="rval ent" x="${mx}" y="${my + 6}">${ent.v}</text>`;
+    else if (exact != null) o += `<text class="rval live" x="${mx}" y="${my + 6}">${exact}</text>`;
+    else if (ent && ent.c.length) {
+      const marks = ent.c.slice(0, 9), rows = Math.ceil(marks.length / 3);
+      marks.forEach((n, j) => {
+        o += `<text class="rcd" x="${mx - 13 + (j % 3) * 13}" y="${(my - (rows - 1) * 5.25 + 3.6 + Math.floor(j / 3) * 10.5).toFixed(1)}">${n}</text>`;
+      });
+    }
+    return o;
+  };
   p.cages.forEach((cg, k) => {
     s += `<path class="cage${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
-    if (cg.sum != null && cg.sum !== '') {
+    const t = cg.type === 'looksay' ? (cg.runs ? X.lookSayCode(cg.runs) : '')
+      : cg.type === 'mysterydigit' ? X.lookSayCode([{ d: cg.d, n: cg.n }])
+      : (cg.sum != null && cg.sum !== '' ? String(cg.sum) : '');
+    if (t) {
       const first = Math.min(...cg.cells), x = gx(colOf(first)), y = gy(rowOf(first));
-      const t = String(cg.sum);
       s += `<rect class="cbg" x="${x + 3}" y="${y + 3}" width="${t.length * 7 + 5}" height="13"/>`;
       s += `<text class="csum" x="${x + 6}" y="${y + 13}">${t}</text>`;
     }
+    if (cg.escape) s += drawCageEscape(cg);
   });
   if (app.drag && app.drag.kind === 'cage') s += `<path class="cage on" d="${cageOutline(app.drag.cells)}"/>`;
 
@@ -3147,6 +3631,8 @@ function renderBoard() {
   const side = { t: showRing, b: showRing, l: showRing, r: showRing };
   const flag = (r, c) => { if (r < 0) side.t = true; if (r >= N) side.b = true; if (c < 0) side.l = true; if (c >= N) side.r = true; };
   p.clues.forEach(cl => flag(cl.r, cl.c)); p.olines.forEach(ol => ol.cells.forEach(([r, c]) => flag(r, c)));
+  p.cages.forEach(cg => { if (cg.escape) flag(cg.escape.r, cg.escape.c); });
+  p.lines.forEach(ln => { if (ln.escape) flag(ln.escape.r, ln.escape.c); });
   const mt = side.t ? RING : 8, mb = side.b ? RING : 8, ml = side.l ? RING : 8, mr = side.r ? RING : 8;
   app.view = { x: RING - ml, y: RING - mt, w: N * CELL + ml + mr, h: N * CELL + mt + mb };
   const el = $('#board');
@@ -3299,20 +3785,24 @@ function applyRing() {
 function renderAll() { renderBoard(); renderMeta(); renderEditAux(); saveProgress(); }
 
 /* ---------- outside clue notes ---------- */
-const KIND_RANGE = { xs: [1, 21], sw: [0, 14], sk: [1, 6], nr: [1, 6] };
-const KIND_NAME = { xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
+const KIND_RANGE = { xs: [1, 21], sw: [0, 14], sk: [1, 6], nr: [1, 6], lk: [1, 36] };
+const KIND_NAME = { xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', lk: 'Little Killer' };
 function noteCell(r, c) {
   const p = app.puzzle;
   if (p.clues.some(q => q.r === r && q.c === c)) return null;
   for (const ol of p.olines) if (ol.cells.some(([a, b]) => a === r && b === c)) return { kind: ol.kind };
+  for (const cg of p.cages) if (cg.escape && cg.escape.r === r && cg.escape.c === c) return { kind: cg.escape.kind };
+  for (const ln of p.lines) if (ln.escape && ln.escape.r === r && ln.escape.c === c) return { kind: ln.escape.kind };
   return null;
 }
 function outsideCells() {
   const p = app.puzzle, out = [];
   p.olines.forEach(ol => ol.cells.forEach(([r, c]) => { if (noteCell(r, c) && !out.some(o => o[0] === r && o[1] === c)) out.push([r, c, ol.kind]); }));
+  p.cages.forEach(cg => { if (cg.escape) { const { r, c, kind } = cg.escape; if (!out.some(o => o[0] === r && o[1] === c)) out.push([r, c, kind]); } });
+  p.lines.forEach(ln => { if (ln.escape) { const { r, c, kind, dr, dc } = ln.escape; if (!out.some(o => o[0] === r && o[1] === c)) out.push([r, c, kind, dr, dc]); } });
   return out;
 }
-const solValue = (kind, r, c, sol) => sol ? X.outVal(kind, X.clueSeq({ kind, r, c }), sol) : null;
+const solValue = (kind, r, c, sol, dr, dc) => sol ? X.outVal(kind, X.clueSeq({ kind, r, c, dr, dc }), sol) : null;
 function ringLabel(r, c, kind) {
   const side = r === -1 ? 'top of column ' + (c + 1) : r === N ? 'bottom of column ' + (c + 1) : c === -1 ? 'left of row ' + (r + 1) : 'right of row ' + (r + 1);
   return `${KIND_NAME[kind]} clue, ${side}`;
@@ -3597,7 +4087,7 @@ function checkPlay() {
       if (p.marks[i] === 1 || p.marks[i] === 2 || (p.paint[i] & 6)) continue;
       if (((P.col[i] & 2) && !info.shade[i]) || ((P.col[i] & 4) && info.shade[i])) P.wrong.add(i);
     }
-    outsideCells().forEach(([r, c, kind]) => { const e = P.ring[r + ',' + c]; if (e && e.v) { const v = solValue(kind, r, c, info.sol); if (v != null && v !== e.v) P.wrong.add(r + ',' + c); } });
+    outsideCells().forEach(([r, c, kind, dr, dc]) => { const e = P.ring[r + ',' + c]; if (e && e.v) { const v = solValue(kind, r, c, info.sol, dr, dc); if (v != null && v !== e.v) P.wrong.add(r + ',' + c); } });
     flash(P.wrong.size ? `${P.wrong.size} entr${P.wrong.size === 1 ? 'y is' : 'ies are'} wrong.` : 'No mistakes so far.', P.wrong.size ? 'warn' : 'ok');
   } else {
     const bad = X.conflicts(app.puzzle, getModel(), g);
@@ -3619,7 +4109,7 @@ function reveal() {
   if (!info.sol) return flash('This puzzle has no solution.', 'warn');
   pushUndo(); P.vals = info.sol.map((v, i) => app.puzzle.givens[i] ? 0 : v); P.cands.fill(0);
   if (X.usesShade(app.puzzle) && info.shade) P.col = P.col.map((m, i) => (m & ~6) | (info.shade[i] ? 2 : 0));
-  outsideCells().forEach(([r, c, kind]) => { const v = solValue(kind, r, c, info.sol); if (v != null) P.ring[r + ',' + c] = { v, c: [] }; });
+  outsideCells().forEach(([r, c, kind, dr, dc]) => { const v = solValue(kind, r, c, info.sol, dr, dc); if (v != null) P.ring[r + ',' + c] = { v, c: [] }; });
   P.solved = true; P.revealed = true; P.usedReveal = true; P.wrong.clear();
   flash('Solution shown.', ''); renderAll();
 }
@@ -3674,8 +4164,11 @@ function buildGenerator() {
 const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking'],
   ['nonconsecutive', 'diag'], ['nonconsecutive', 'antiknight'], ['nonconsecutive', 'antiking'], ['nonconsecutive', 'disjoint']];
 const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang'];
+const CAGE_EXCL = ['killer', 'looksay', 'escape', 'mysterycage']; // each cage-growth pool claims
+// a big share of the grid on its own, so no two of these ever share a puzzle
 function clash(a, b, set) {
   if (SHADING_EXCL.includes(a) && SHADING_EXCL.includes(b) && a !== b) return true;
+  if (CAGE_EXCL.includes(a) && CAGE_EXCL.includes(b) && a !== b) return true;
   if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
   if (set.has('irregular')) return false;
   return SOFT.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
@@ -3718,6 +4211,8 @@ function feasibleMix(sel) {
     if (s.has('antiknight') && s.has('antiking')) return false;
   }
   if (SHADING_EXCL.filter(k => s.has(k)).length > 1) return false;
+  if (CAGE_EXCL.filter(k => s.has(k)).length > 1) return false;
+  if (s.has('escape') && !['xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'].some(k => s.has(k))) return false;
   return !(s.has('disjoint') && s.has('irregular'));
 }
 function runGenerate(list) {
