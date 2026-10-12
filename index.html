@@ -21,7 +21,7 @@
   --err:#b8281f; --ok:#1c7a45; --warn:#94560a; --diag:rgba(21,29,39,.14); --par:#d3dae2;
   --thermo:#b3bcc7; --arrow:#7c8896; --whisper:#3aa05f; --renban:#b56fd0; --pal:#4b9cd8; --between:#d39b2a; --regsum:#e0705c; --parity:#8d7b6a; --entropic:#e58fb2;
   --rg0:#e6eefb; --rg1:#fbeadf; --rg2:#e4f3e6; --rg3:#f6e6f1; --rg4:#f8f2d4; --rg5:#dff2f2;
-  --c1:#a3abb7; --c2:#f3e9b8; --c3:#f0b3ae; --c4:#f4cf85; --c5:#b5dcae; --c6:#b4cdf3; --c7:#d9bdea; --c8:#8fd0c9;
+  --cage-ls:#0f8a85; --c1:#a3abb7; --c2:#f3e9b8; --c3:#f0b3ae; --c4:#f4cf85; --c5:#b5dcae; --c6:#b4cdf3; --c7:#d9bdea; --c8:#8fd0c9;
   --font:'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 @media (prefers-color-scheme: dark){
@@ -32,7 +32,7 @@
     --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
     --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a; --parity:#b9a591; --entropic:#f0a3c2;
     --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
-    --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f; --c8:#2f6b63;
+    --cage-ls:#4fd1c5; --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f; --c8:#2f6b63;
   }
 }
 :root[data-theme="dark"]{
@@ -42,7 +42,7 @@
   --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
   --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a; --parity:#b9a591; --entropic:#f0a3c2;
   --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
-  --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
+  --cage-ls:#4fd1c5; --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
@@ -237,12 +237,14 @@ details.about p{margin:8px 0 0}
 .lsel{fill:none;stroke:var(--accent);stroke-width:32;opacity:.22;stroke-linecap:round;stroke-linejoin:round} .ln.renban{stroke-width:14;opacity:.55} .ln.palindrome{stroke-width:14;opacity:.55} .ln.between{stroke-width:4}
 .abulb{fill:none;stroke-width:3.5} .ebulb{fill:none;stroke-width:3.5}
 .cage{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85;stroke-linecap:butt}
+.cage.ls{stroke:var(--cage-ls)}
 .cage.on{stroke:var(--accent);stroke-width:2.6;opacity:1}
 .cbg{fill:var(--cell);opacity:.9}
 .csum{font-size:11px;font-weight:700;fill:var(--ink)}
 .gv,.ev,.sv{font-size:34px;text-anchor:middle;dominant-baseline:central}
 .gv{font-weight:700;fill:var(--given)} .ev{font-weight:400;fill:var(--entry)} .sv{font-weight:400;fill:var(--ok)}
 .cd{font-size:12px;fill:var(--muted);text-anchor:middle;dominant-baseline:central}
+.cd.bad{fill:var(--err)}
 .bar{fill:var(--ink)} .dotw{fill:var(--cell);stroke:var(--ink);stroke-width:2} .dotb{fill:var(--ink)}
 .xvbg{fill:var(--cell)} .xv{font-size:16px;font-weight:700;fill:var(--ink);text-anchor:middle;dominant-baseline:central}
 .rtag{font-size:11px;font-weight:700;fill:var(--muted)} .rtag.lk{font-size:17px;font-weight:400;fill:var(--ink);text-anchor:middle}
@@ -2038,6 +2040,46 @@ function lookSayCages(sol, rng) {
   return cages.filter(c => c.cells.length >= 2);
 }
 
+/* Killer + Look-and-say together: each type is tiled on its own (so two cages of the same type never
+   touch), then the two tilings are merged in random order. A cage from one type may overlap cells of
+   the other type's cages, but never on a clue cell: a cage is kept only if its clue cell (top-left-most
+   cell, where the number prints) lies in no other kept cage, and no kept cage's clue cell lies in it. */
+function mixedCages(sol, rng) {
+  const tile = isKiller => {
+    const cageOf = new Array(NN).fill(-1), out = [];
+    for (const s of shuffle([...Array(NN).keys()], rng)) {
+      if (cageOf[s] >= 0) continue;
+      const target = pick(isKiller ? [2, 2, 3, 3, 3, 4] : [2, 2, 3, 3, 3, 4, 4], rng);
+      const cells = [s], digs = isKiller ? new Set([sol[s]]) : null;
+      cageOf[s] = out.length;
+      while (cells.length < target) {
+        const opts = [];
+        for (const c of cells) for (const nb of nbr4[c]) {
+          if (cageOf[nb] >= 0 || (digs && digs.has(sol[nb]))) continue;
+          opts.push(nb);
+        }
+        if (!opts.length) break;
+        const nb = pick(opts, rng); cells.push(nb); cageOf[nb] = out.length; if (digs) digs.add(sol[nb]);
+      }
+      if (cells.length < 2) { cells.forEach(c => { cageOf[c] = -1; }); continue; }
+      if (isKiller) out.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0) });
+      else {
+        const counts = {}; cells.forEach(c => { counts[sol[c]] = (counts[sol[c]] || 0) + 1; });
+        const digits = shuffle([1, 2, 3, 4, 5, 6], rng).slice(0, rng() < 0.5 ? 1 : 2).sort((x, y) => x - y);
+        out.push({ cells, runs: digits.map(d => ({ d, n: counts[d] || 0 })) });
+      }
+    }
+    return out;
+  };
+  const cand = shuffle(tile(true).concat(tile(false)), rng), kept = [];
+  for (const cg of cand) {
+    const clue = Math.min(...cg.cells);
+    if (kept.some(k => k.cells.includes(clue) || cg.cells.includes(Math.min(...k.cells)))) continue;
+    kept.push(cg);
+  }
+  return kept;
+}
+
 /* Mystery cages: a plain dashed cage showing a two-digit number with no marker saying which rule
    governs it - a classic killer sum (distinct digits) or a single look-and-say run (exactly n of
    digit d, everything else in the cage unconstrained). Generation picks a digit (for the
@@ -2378,8 +2420,18 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   // so escape's own cage/line growth (next block) never overlaps them even if ever invoked outside
   // the UI's own exclusivity guard (clash()/feasibleMix() keep 'escape' and 'killer'/'looksay' from
   // ever being selected together there, but this keeps the generator itself sound either way).
-  if (V.has('killer')) killerCages(sol, rng).forEach(cg => { add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })); cg.cells.forEach(c => plainCageCells.add(c)); });
-  if (V.has('looksay')) lookSayCages(sol, rng).forEach(cg => { add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) })); cg.cells.forEach(c => plainCageCells.add(c)); });
+  if (V.has('killer') && V.has('looksay')) {
+    // both active: one shared tiling, each cage flipped to killer or look-and-say, so no cell
+    // ever lands in two cages
+    mixedCages(sol, rng).forEach(cg => {
+      if (cg.runs) add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) }));
+      else add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum }));
+      cg.cells.forEach(c => plainCageCells.add(c));
+    });
+  } else {
+    if (V.has('killer')) killerCages(sol, rng).forEach(cg => { add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })); cg.cells.forEach(c => plainCageCells.add(c)); });
+    if (V.has('looksay')) lookSayCages(sol, rng).forEach(cg => { add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) })); cg.cells.forEach(c => plainCageCells.add(c)); });
+  }
   if (V.has('mysterycage')) mysteryCages(sol, rng).forEach(cg => {
     add('mysterycage', p => p.cages.push(cg.type === 'mysterydigit'
       ? { cells: cg.cells.slice(), type: 'mysterydigit', d: cg.d, n: cg.n, mystery: true }
@@ -2898,7 +2950,7 @@ function generate(spec, seed, budgetMs) {
 
 root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
 root.SX.makeShadeBlob = makeShadeBlob; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
-root.SX.killerCages = killerCages; root.SX.lookSayCages = lookSayCages;
+root.SX.killerCages = killerCages; root.SX.lookSayCages = lookSayCages; root.SX.mixedCages = mixedCages;
 root.SX.makeYinYang = makeYinYang; root.SX.sandwichShadeFixed = sandwichShadeFixed; root.SX.sandwichShadeFixedLines = sandwichShadeFixedLines;
 root.SX.randomRegions = randomRegions;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -3036,6 +3088,7 @@ function rulesFor(p) {
   if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
   if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
   if (p.cages.some(c => c.type === 'looksay' && !c.escape)) R.push('Dashed look-and-say cages: digits may repeat. The corner code is read 2 digits at a time, "[quantity][digit]", listed in ascending digit order - e.g. "12" means exactly one 2 is in the cage; "0213" means exactly zero 2s and exactly one 3. Any digit not named is unconstrained, and the cage may hold more cells than the named counts add up to.');
+  if (p.cages.some(c => c.type === 'looksay' && !c.escape) && p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) R.push('Killer cages (dark outline) and look-and-say cages (teal outline) may overlap, so one cell can belong to both; each cage still obeys its own rule. A cage\'s corner number is never printed on a cell shared with another cage.');
   if (p.cages.some(c => c.mystery)) R.push('Mystery cages (dashed, no marker): the corner number could be a Killer-style sum (digits sum to it, never repeating) or a look-and-say count (exactly that many of that one digit, rest of the cage unconstrained) - nothing about the cage says which. Each mystery cage is secretly one or the other; work out which from the rest of the grid.');
   if (p.cages.some(c => c.escape)) R.push('Escaping cages (dashed, reaching a boxed square outside the grid): that outside square is not a Sudoku digit. It counts toward the cage’s own total (or look-and-say code) exactly like any other cage cell, and separately it is the hidden value of the outside-clue rule marked on that square (X, S, ▲ or N) for its row or column. Neither value is shown - work out the hidden one from both rules at once.');
   if (p.lines.some(l => l.escape)) R.push('Escaping lines (reaching a boxed square outside the grid, marked X, S, ▲, N, or an arrow for Little Killer): that outside square is not a Sudoku digit. It takes part in the line’s own rule exactly like any other cell on the line, and separately it is the hidden value of the outside-clue rule marked there for its row, column or diagonal. Neither value is shown - work out the hidden one from both rules at once.');
@@ -3482,7 +3535,12 @@ function renderBoard() {
     return o;
   };
   p.cages.forEach((cg, k) => {
-    s += `<path class="cage${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
+    // Killer cages keep the default (ink) outline; look-and-say cages (plain or escaping) get a
+    // second color so the two can share a grid and still be told apart at a glance. Mystery cages
+    // are deliberately exempt - their whole point is that you can't tell which rule a cage follows,
+    // so they stay in the neutral default style regardless of which flavor they secretly are.
+    const lsColor = !cg.mystery && cg.type === 'looksay';
+    s += `<path class="cage${lsColor ? ' ls' : ''}${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
     const t = cg.type === 'looksay' ? (cg.runs ? X.lookSayCode(cg.runs) : '')
       : cg.type === 'mysterydigit' ? X.lookSayCode([{ d: cg.d, n: cg.n }])
       : (cg.sum != null && cg.sum !== '' ? String(cg.sum) : '');
@@ -3532,8 +3590,16 @@ function renderBoard() {
     else if (P && P.vals[i]) s += `<text class="ev" x="${x}" y="${y + 1}">${P.vals[i]}</text>`;
     else if (sol && sol[i]) s += `<text class="sv" x="${x}" y="${y + 1}">${sol[i]}</text>`;
     else if (P && P.cands[i] && !editing) {
-      for (let d = 1; d <= 6; d++) if (P.cands[i] & bit(d))
-        s += `<text class="cd" x="${gx(colOf(i)) + CELL * (0.22 + 0.28 * ((d - 1) % 3))}" y="${gy(rowOf(i)) + CELL * (0.38 + 0.28 * (((d - 1) / 3) | 0))}">${d}</text>`;
+      // a pencilled digit already placed on one of this cell's peers (row/column/box, plus
+      // whichever other active-variant peers the model already tracks - anti-knight, diagonal,
+      // disjoint, etc.) can never actually go here, so it's flagged red rather than waiting for
+      // the player to place it and find out. Independent of the "Highlight rule conflicts"
+      // toggle - this is a correctness check on the mark itself, not a rule-violation overlay.
+      const peers = getModel().peers[i];
+      for (let d = 1; d <= 6; d++) if (P.cands[i] & bit(d)) {
+        const dead = peers.some(j => g[j] === d);
+        s += `<text class="cd${dead ? ' bad' : ''}" x="${gx(colOf(i)) + CELL * (0.22 + 0.28 * ((d - 1) % 3))}" y="${gy(rowOf(i)) + CELL * (0.38 + 0.28 * (((d - 1) / 3) | 0))}">${d}</text>`;
+      }
     }
   }
   // edge markers
@@ -4172,11 +4238,12 @@ function buildGenerator() {
 const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking'],
   ['nonconsecutive', 'diag'], ['nonconsecutive', 'antiknight'], ['nonconsecutive', 'antiking'], ['nonconsecutive', 'disjoint']];
 const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang'];
-const CAGE_EXCL = ['killer', 'looksay', 'escape', 'mysterycage']; // each cage-growth pool claims
+const CAGE_EXCL = ['killer', 'looksay', 'escape', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
 // a big share of the grid on its own, so no two of these ever share a puzzle
+const sameCagePair = (a, b) => (a === 'killer' && b === 'looksay') || (a === 'looksay' && b === 'killer');
 function clash(a, b, set) {
   if (SHADING_EXCL.includes(a) && SHADING_EXCL.includes(b) && a !== b) return true;
-  if (CAGE_EXCL.includes(a) && CAGE_EXCL.includes(b) && a !== b) return true;
+  if (CAGE_EXCL.includes(a) && CAGE_EXCL.includes(b) && a !== b && !sameCagePair(a, b)) return true;
   if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
   if (set.has('irregular')) return false;
   return SOFT.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
@@ -4219,7 +4286,7 @@ function feasibleMix(sel) {
     if (s.has('antiknight') && s.has('antiking')) return false;
   }
   if (SHADING_EXCL.filter(k => s.has(k)).length > 1) return false;
-  if (CAGE_EXCL.filter(k => s.has(k)).length > 1) return false;
+  { const cg = CAGE_EXCL.filter(k => s.has(k)); if (cg.length > 1 && !(cg.length === 2 && s.has('killer') && s.has('looksay'))) return false; }
   if (s.has('escape') && !['xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'].some(k => s.has(k))) return false;
   return !(s.has('disjoint') && s.has('irregular'));
 }
