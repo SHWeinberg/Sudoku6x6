@@ -21,7 +21,7 @@
   --err:#b8281f; --ok:#1c7a45; --warn:#94560a; --diag:rgba(21,29,39,.14); --par:#d3dae2;
   --thermo:#b3bcc7; --arrow:#7c8896; --whisper:#3aa05f; --renban:#b56fd0; --pal:#4b9cd8; --between:#d39b2a; --regsum:#e0705c; --parity:#8d7b6a; --entropic:#e58fb2;
   --rg0:#e6eefb; --rg1:#fbeadf; --rg2:#e4f3e6; --rg3:#f6e6f1; --rg4:#f8f2d4; --rg5:#dff2f2;
-  --cage-ls:#0f8a85; --c1:#a3abb7; --c2:#f3e9b8; --c3:#f0b3ae; --c4:#f4cf85; --c5:#b5dcae; --c6:#b4cdf3; --c7:#d9bdea; --c8:#8fd0c9;
+  --cage-ls:#0f8a85; --cage-pr:#c2620a; --c1:#a3abb7; --c2:#f3e9b8; --c3:#f0b3ae; --c4:#f4cf85; --c5:#b5dcae; --c6:#b4cdf3; --c7:#d9bdea; --c8:#8fd0c9;
   --font:'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 @media (prefers-color-scheme: dark){
@@ -32,7 +32,7 @@
     --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
     --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a; --parity:#b9a591; --entropic:#f0a3c2;
     --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
-    --cage-ls:#4fd1c5; --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f; --c8:#2f6b63;
+    --cage-ls:#4fd1c5; --cage-pr:#f0a04b; --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f; --c8:#2f6b63;
   }
 }
 :root[data-theme="dark"]{
@@ -42,7 +42,7 @@
   --err:#ff8a80; --ok:#5fd18b; --warn:#f0b35a; --diag:rgba(231,237,244,.16); --par:#33404c;
   --thermo:#59646f; --arrow:#8996a5; --whisper:#4cc27a; --renban:#c58ade; --pal:#63b1ee; --between:#e2b04a; --regsum:#f08d7a; --parity:#b9a591; --entropic:#f0a3c2;
   --rg0:#1f2b3d; --rg1:#3a2a20; --rg2:#1f3325; --rg3:#38243a; --rg4:#37341c; --rg5:#1b3436;
-  --cage-ls:#4fd1c5; --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
+  --cage-ls:#4fd1c5; --cage-pr:#f0a04b; --c1:#56606e; --c2:#4d4726; --c3:#6a3a37; --c4:#6b5424; --c5:#2f5a33; --c6:#2f4c7c; --c7:#56386f;
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
@@ -238,8 +238,11 @@ details.about p{margin:8px 0 0}
 .abulb{fill:none;stroke-width:3.5} .ebulb{fill:none;stroke-width:3.5}
 .cage{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85;stroke-linecap:butt}
 .cage.ls{stroke:var(--cage-ls)}
+.cage.pr{stroke:var(--cage-pr)}
 .cage.on{stroke:var(--accent);stroke-width:2.6;opacity:1}
 .cbg{fill:var(--cell);opacity:.9}
+.dec{fill:var(--accent);font-weight:700}
+.obox.cbox.sel{stroke:var(--accent);stroke-width:2.6}
 .csum{font-size:11px;font-weight:700;fill:var(--ink)}
 .gv,.ev,.sv{font-size:34px;text-anchor:middle;dominant-baseline:central}
 .gv{font-weight:700;fill:var(--given)} .ev{font-weight:400;fill:var(--entry)} .sv{font-weight:400;fill:var(--ok)}
@@ -607,6 +610,20 @@ function chkSum(g, cells, T, distinct) {
   let mn = 0, mx = 0;
   for (let k = 0; k < unk; k++) { mn += av[k]; mx += av[av.length - 1 - k]; }
   return s + mn <= T && T <= s + mx;
+}
+/* product cage: digits distinct, their product is T. Partial check: the placed digits' product
+   must divide T, and the remaining cells must be fillable with distinct unused digits making up the rest. */
+function chkProd(g, cells, T) {
+  let p = 1, used = 0, unk = 0;
+  for (const i of cells) { const v = g[i]; if (v) { p *= v; used |= bit(v); } else unk++; }
+  if (T % p) return false;
+  const rest = T / p;
+  const go = (k, need, u) => {
+    if (!k) return need === 1;
+    for (let d = 1; d <= 6; d++) if (!(u & bit(d)) && need % d === 0 && go(k - 1, need / d, u | bit(d))) return true;
+    return false;
+  };
+  return go(unk, rest, used);
 }
 function chkXsum(g, seq, T) {
   const a0 = g[seq[0]];
@@ -1066,6 +1083,9 @@ function compile(p) {
       // same primitive as a single-run look-and-say cage, visually indistinguishable from a sum
       // cage of the same size - that's the point (see MysteryCages below)
       addGroup(cg.cells, g => chkLookSay(g, cg.cells, [{ d: cg.d, n: cg.n }]));
+    } else if (cg.type === 'product') {
+      distinct(cg.cells);
+      if (cg.prod != null && cg.prod !== '') { const T = +cg.prod; addGroup(cg.cells, g => chkProd(g, cg.cells, T)); }
     } else {
       distinct(cg.cells);
       if (cg.sum != null && cg.sum !== '') { const T = +cg.sum; addGroup(cg.cells, g => chkSum(g, cg.cells, T, true)); }
@@ -1585,6 +1605,9 @@ function verify(p, g, sh) {
       if (cg.runs && !verifyLookSay(g, cg.cells, cg.runs)) errs.push('look-and-say cage');
     } else if (cg.type === 'mysterydigit') {
       if (!verifyLookSay(g, cg.cells, [{ d: cg.d, n: cg.n }])) errs.push('mystery cage digit count');
+    } else if (cg.type === 'product') {
+      dist(cg.cells, 'cage');
+      if (cg.prod != null && cg.prod !== '' && cg.cells.reduce((a, c) => a * g[c], 1) !== +cg.prod) errs.push('cage product');
     } else {
       dist(cg.cells, 'cage');
       if (cg.sum != null && cg.sum !== '' && cg.cells.reduce((a, c) => a + g[c], 0) !== +cg.sum) errs.push('cage sum');
@@ -1835,6 +1858,8 @@ const VARIANTS = [
   { k: 'irregular', label: 'Irregular regions', group: 'Grid rules' },
   { k: 'killer', label: 'Killer cages', group: 'Sums' },
   { k: 'looksay', label: 'Look-and-say cages', group: 'Sums' },
+  { k: 'product', label: 'Product cages', group: 'Sums' },
+  { k: 'cipher', label: 'Cipher clues', group: 'Sums' },
   { k: 'escape', label: 'Escape the Grid', group: 'Sums' },
   { k: 'mysterycage', label: 'Mystery Cages', group: 'Sums' },
   { k: 'quad', label: 'Quadruples', group: 'Sums' },
@@ -1870,7 +1895,7 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
@@ -2044,13 +2069,14 @@ function lookSayCages(sol, rng) {
    touch), then the two tilings are merged in random order. A cage from one type may overlap cells of
    the other type's cages, but never on a clue cell: a cage is kept only if its clue cell (top-left-most
    cell, where the number prints) lies in no other kept cage, and no kept cage's clue cell lies in it. */
-function mixedCages(sol, rng) {
-  const tile = isKiller => {
-    const cageOf = new Array(NN).fill(-1), out = [];
+function mixedCages(sol, rng, types) {
+  types = types || ['killer', 'looksay'];
+  const tile = type => {
+    const cageOf = new Array(NN).fill(-1), out = [], distinctDigits = type !== 'looksay';
     for (const s of shuffle([...Array(NN).keys()], rng)) {
       if (cageOf[s] >= 0) continue;
-      const target = pick(isKiller ? [2, 2, 3, 3, 3, 4] : [2, 2, 3, 3, 3, 4, 4], rng);
-      const cells = [s], digs = isKiller ? new Set([sol[s]]) : null;
+      const target = pick(distinctDigits ? [2, 2, 3, 3, 3, 4] : [2, 2, 3, 3, 3, 4, 4], rng);
+      const cells = [s], digs = distinctDigits ? new Set([sol[s]]) : null;
       cageOf[s] = out.length;
       while (cells.length < target) {
         const opts = [];
@@ -2062,7 +2088,8 @@ function mixedCages(sol, rng) {
         const nb = pick(opts, rng); cells.push(nb); cageOf[nb] = out.length; if (digs) digs.add(sol[nb]);
       }
       if (cells.length < 2) { cells.forEach(c => { cageOf[c] = -1; }); continue; }
-      if (isKiller) out.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0) });
+      if (type === 'killer') out.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0) });
+      else if (type === 'product') out.push({ cells, type: 'product', prod: cells.reduce((a, c) => a * sol[c], 1) });
       else {
         const counts = {}; cells.forEach(c => { counts[sol[c]] = (counts[sol[c]] || 0) + 1; });
         const digits = shuffle([1, 2, 3, 4, 5, 6], rng).slice(0, rng() < 0.5 ? 1 : 2).sort((x, y) => x - y);
@@ -2071,7 +2098,7 @@ function mixedCages(sol, rng) {
     }
     return out;
   };
-  const cand = shuffle(tile(true).concat(tile(false)), rng), kept = [];
+  const cand = shuffle([].concat(...types.map(tile)), rng), kept = [];
   for (const cg of cand) {
     const clue = Math.min(...cg.cells);
     if (kept.some(k => k.cells.includes(clue) || cg.cells.includes(Math.min(...k.cells)))) continue;
@@ -2420,18 +2447,17 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   // so escape's own cage/line growth (next block) never overlaps them even if ever invoked outside
   // the UI's own exclusivity guard (clash()/feasibleMix() keep 'escape' and 'killer'/'looksay' from
   // ever being selected together there, but this keeps the generator itself sound either way).
-  if (V.has('killer') && V.has('looksay')) {
-    // both active: one shared tiling, each cage flipped to killer or look-and-say, so no cell
-    // ever lands in two cages
-    mixedCages(sol, rng).forEach(cg => {
-      if (cg.runs) add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) }));
-      else add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum }));
-      cg.cells.forEach(c => plainCageCells.add(c));
-    });
-  } else {
-    if (V.has('killer')) killerCages(sol, rng).forEach(cg => { add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum })); cg.cells.forEach(c => plainCageCells.add(c)); });
-    if (V.has('looksay')) lookSayCages(sol, rng).forEach(cg => { add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) })); cg.cells.forEach(c => plainCageCells.add(c)); });
-  }
+  const cageTypes = ['killer', 'looksay', 'product'].filter(k => V.has(k));
+  const addCage = cg => {
+    if (cg.type === 'product') add('product', p => p.cages.push({ cells: cg.cells.slice(), type: 'product', prod: cg.prod }));
+    else if (cg.runs) add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) }));
+    else add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum }));
+    cg.cells.forEach(c => plainCageCells.add(c));
+  };
+  if (cageTypes.length > 1) mixedCages(sol, rng, cageTypes).forEach(addCage); // shared tiling, overlap allowed (see mixedCages)
+  else if (V.has('killer')) killerCages(sol, rng).forEach(addCage);
+  else if (V.has('looksay')) lookSayCages(sol, rng).forEach(addCage);
+  else if (V.has('product')) mixedCages(sol, rng, ['product']).forEach(addCage);
   if (V.has('mysterycage')) mysteryCages(sol, rng).forEach(cg => {
     add('mysterycage', p => p.cages.push(cg.type === 'mysterydigit'
       ? { cells: cg.cells.slice(), type: 'mysterydigit', d: cg.d, n: cg.n, mystery: true }
@@ -2747,6 +2773,92 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
 }
 
 function add2(items, variant, i, v) { items.push({ variant, locked: false, shaded: v === 1, apply: p => { p.paint[i] = v === 1 ? 2 : 4; } }); }
+
+/* ---- Cipher clues: every numeric clue (killer sums, product cages, outside clues) is written in
+   letters, one distinct letter per decimal digit 0-9 (q.cipher.key[d] = the letter for digit d). The
+   puzzle itself still stores the true numbers; only the display is lettered. A cipher puzzle is only
+   valid if the player could settle BOTH the grid and the letters, so uniqueness is counted over
+   (grid, letter assignment) pairs by searching the letter assignments and asking the ordinary solver
+   about the clues each partial assignment has already decoded. ---- */
+const rangeDomain = (a, b) => { const o = []; for (let v = a; v <= b; v++) o.push(v); return o; };
+function prodDomain(n) {
+  const s = new Set(), go = (d, k, p) => { if (!k) { s.add(p); return; } for (let e = d; e <= 6; e++) go(e + 1, k - 1, p * e); };
+  go(1, n, 1); return Array.from(s);
+}
+function cipherClues(q) {
+  const out = [];
+  q.cages.forEach((cg, k) => {
+    if (cg.mystery || cg.type === 'looksay' || cg.type === 'mysterydigit') return;
+    const n = cg.cells.length;
+    if (cg.type === 'product') { if (cg.prod != null && cg.prod !== '') out.push({ cage: true, dom: prodDomain(n), v: +cg.prod, set: (c, v) => { c.cages[k].prod = v; } }); }
+    else if (cg.sum != null && cg.sum !== '') out.push({ cage: true, dom: rangeDomain(n * (n + 1) / 2 + (cg.escape ? 1 : 0), 6 * n - n * (n - 1) / 2 + (cg.escape ? 6 : 0)), v: +cg.sum, set: (c, v) => { c.cages[k].sum = v; } });
+  });
+  q.clues.forEach((cl, k) => {
+    if (cl.val === '' || cl.val == null || isNaN(+cl.val)) return;
+    const R = { xs: [1, 36], sw: [0, 14], sk: [1, 6], nr: [1, 6], lk: [1, 36] }[cl.kind] || [0, 99];
+    out.push({ dom: rangeDomain(R[0], R[1]), v: +cl.val, set: (c, v) => { c.clues[k].val = v; } });
+  });
+  return out;
+}
+const cipherWord = (v, key) => String(v).split('').map(ch => key[+ch]).join('');
+function cipherCount(q, cap, maxNodes, until) {
+  const key = q.cipher.key, hints = (q.cipher.hints) || {};
+  const cl = cipherClues(q).map(c => Object.assign(c, { word: cipherWord(c.v, key) }));
+  const assign = Object.assign({}, hints), used = new Set(Object.values(hints));
+  // digits that are NOT disguised appear as themselves in key; they are fixed from the start
+  for (let d = 0; d <= 9; d++) if (/\d/.test(key[d])) { assign[key[d]] = d; used.add(d); }
+  let found = 0, work = 0, bail = false;
+  const decode = c => { let n = 0; for (const ch of c.word) { if (!(ch in assign)) return null; n = n * 10 + assign[ch]; } return n; };
+  const relaxed = () => {
+    const c2 = JSON.parse(JSON.stringify(q));
+    cl.forEach(c => { const n = decode(c); c.set(c2, n == null ? (c.cage ? null : '') : n); });
+    return c2;
+  };
+  // can this clue still read as some number its kind allows, given the letters fixed so far?
+  const compat = c => {
+    for (const v of c.dom) {
+      const ds = String(v); if (ds.length !== c.word.length) continue;
+      const loc = {}; let ok = true;
+      for (let i = 0; i < ds.length && ok; i++) {
+        const ch = c.word[i], dg = +ds[i];
+        if (ch in assign) ok = assign[ch] === dg;
+        else if (ch in loc) ok = loc[ch] === dg;
+        else { ok = !used.has(dg) && !Object.values(loc).includes(dg); if (ok) loc[ch] = dg; }
+      }
+      if (ok) return true;
+    }
+    return false;
+  };
+  const leadOK = c => c.word.length < 2 || !(c.word[0] in assign) || assign[c.word[0]] !== 0;
+  const dfs = () => {
+    if (until && Date.now() > until) bail = true;
+    if (bail || found >= cap) return;
+    let best = null, bestN = 99;
+    for (const c of cl) { const un = new Set(c.word.split('').filter(ch => !(ch in assign))).size; if (un > 0 && un < bestN) { best = c; bestN = un; } }
+    if (!best) {
+      const r = solvePuzzle(relaxed(), { limit: cap - found, maxNodes: maxNodes || 60000 });
+      if (r.aborted) { bail = true; found = cap; return; }
+      found += r.count; return;
+    }
+    const ch = best.word.split('').find(x => !(x in assign));
+    for (let d = 0; d <= 9; d++) {
+      if (used.has(d)) continue;
+      assign[ch] = d; used.add(d);
+      let ok = cl.every(leadOK) && cl.every(compat);
+      if (ok) {
+        const newly = cl.some(c => c.word.includes(ch) && decode(c) != null);
+        if (newly) { if (++work > 4000) { bail = true; } else { const fr = solvePuzzle(relaxed(), { limit: 1, maxNodes: 20000 }); ok = fr.count > 0 || fr.aborted; } }
+      }
+      if (ok && !bail) dfs();
+      delete assign[ch]; used.delete(d);
+      if (bail || found >= cap) return;
+    }
+  };
+  dfs();
+  return bail ? cap : found;
+}
+root.SX.cipherCount = cipherCount; root.SX.cipherClues = cipherClues; root.SX.cipherWord = cipherWord;
+
 function assemble(base, items, givens, sol) {
   const p = clonePuzzle(base);
   items.forEach(it => it.apply(p));
@@ -2882,11 +2994,28 @@ function tryGenerate(V, diff, rng, deadline, spec) {
 
   let inc = new Set(items);
   const givens = new Set(shuffle([...Array(NN).keys()], rng).slice(0, g0));
-  const build = () => assemble(base, items.filter(it => inc.has(it)), givens, sol);
+  // Cipher: only K digits (default all ten) are written as letters; key[d] is d's letter, or the digit
+  // itself when d is not disguised. Letters are named A, B, C... in a random order over the chosen digits.
+  const cipherK = V.has('cipher') ? Math.max(1, Math.min(10, Math.floor(+spec.cipherLetters) || 10)) : 0;
+  const keyFrom = lset => { const k = '0123456789'.split(''); shuffle(Array.from(lset), rng).forEach((d, i) => { k[d] = 'ABCDEFGHIJ'[i]; }); return k.join(''); };
+  // how many separate clues each digit appears in (a digit doubled inside one clue counts once); a
+  // lettered digit has to recur in at least two clues, so the player can cross-reference them
+  const digitClues = q => { const n = new Array(10).fill(0); cipherClues(q).forEach(c => new Set(String(c.v).split('')).forEach(ch => { n[+ch]++; })); return n; };
+  const recurring = q => { const n = digitClues(q), s = new Set(); n.forEach((k, d) => { if (k >= 2) s.add(d); }); return s; };
+  let cipherKey = null, lset = null;
+  const build = () => { const q = assemble(base, items.filter(it => inc.has(it)), givens, sol); if (cipherKey) q.cipher = { key: cipherKey }; return q; };
+  // a cipher puzzle needs a unique grid even when the numbers are known, which is cheap to rule out first
+  if (cipherK) {
+    const dset = recurring(assemble(base, items, givens, sol));
+    if (!dset.size) return null;
+    lset = new Set(shuffle(Array.from(dset), rng).slice(0, cipherK));
+    cipherKey = keyFrom(lset);
+  }
+  const uniq = (q, n) => cipherKey ? (isUnique(q, n) && cipherCount(q, 2, n, deadline + 1500) === 1) : isUnique(q, n);
 
   // A: make unique
   let guard = 0;
-  while (!isUnique(build(), 80000)) {
+  while (!uniq(build(), 80000)) {
     const rest = [...Array(NN).keys()].filter(i => !givens.has(i));
     if (!rest.length || ++guard > NN) return null;
     givens.add(pick(rest, rng));
@@ -2896,13 +3025,15 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   for (const g of shuffle(Array.from(givens), rng)) {
     if (givens.size <= floorG || Date.now() > deadline) break;
     givens.delete(g);
-    if (!isUnique(build(), 50000)) givens.add(g);
+    if (!uniq(build(), 50000)) givens.add(g);
   }
   // B: drop redundant constraints
   if (hasItems) {
     const lineDens = (spec && spec.density) || 'normal';
     const removable = shuffle(items.filter(it => !it.locked), rng);
-    let budget = diff === 'easy' ? Math.floor(removable.length * 0.4) : 1e9;
+    // cipher puzzles trim less, so that more digits keep recurring across clues
+    let budget = (diff === 'easy' || cipherKey) ? Math.floor(removable.length * 0.4) : 1e9;
+    const repeatOK = () => { if (!cipherKey) return true; const n = digitClues(build()); return Array.from(lset).every(d => n[d] >= 2); };
     for (const it of removable) {
       if (budget <= 0 || Date.now() > deadline) break;
       const cnt = items.filter(x => x.variant === it.variant && inc.has(x)).length;
@@ -2913,7 +3044,7 @@ function tryGenerate(V, diff, rng, deadline, spec) {
       if (LINE_DENSITY_KEYS.has(it.variant) && lineDens === 'normal') mkp = Math.max(mkp, 2);
       if (cnt <= mkp) continue;
       inc.delete(it);
-      if (isUnique(build(), 50000)) budget--; else inc.add(it);
+      if (uniq(build(), 50000) && repeatOK()) budget--; else inc.add(it);
     }
   }
   // D: a shading puzzle always keeps at least one shaded cell revealed from the start - adding a
@@ -2925,6 +3056,21 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     if (cand) inc.add(cand);
   }
   const p = build();
+  if (cipherKey) {
+    if (!cipherClues(p).length) return null;
+    // the letters that matter are the chosen digits that actually occur in the final clues; top the
+    // count back up from other digits that do occur (only when the puzzle stays uniquely solvable)
+    const D = recurring(p), want = Math.min(cipherK, D.size);
+    let act = Array.from(lset).filter(d => D.has(d));
+    for (const d of shuffle(Array.from(D).filter(d => !lset.has(d)), rng)) {
+      if (act.length >= want) break;
+      lset.add(d); cipherKey = keyFrom(lset);
+      if (uniq(build(), 50000)) act.push(d); else lset.delete(d);
+    }
+    if (act.length < want) return null;
+    cipherKey = keyFrom(new Set(act));
+    p.cipher = { key: cipherKey };
+  }
   p.sol = sol.slice();
   p.ssol = ssol ? ssol.slice() : null;
   const labels = [];
@@ -2975,7 +3121,7 @@ const app = {
   model: null, solInfo: null, play: null, drag: null, paint: 0, showConflicts: true, autoClear: true,
   genSel: new Set(['littlekiller', 'xsum']), genDiff: 'medium', whisperDiff: 4, busy: false,
   paintCol: 1, selMark: -1, selQuad: -1, olType: 'thermo', olKind: 'xs', olDiff: 5,
-  extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}
+  extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}, cipherK: 10
 };
 const RULE_LABEL = { thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
 const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality'];
@@ -3017,11 +3163,15 @@ function normalize(o) {
   });
   p.quads = ((o && o.quads) || []).filter(q => q.r >= 1 && q.r <= N - 1 && q.c >= 1 && q.c <= N - 1 && Array.isArray(q.digits))
     .map(q => ({ r: q.r, c: q.c, digits: q.digits.filter(d => d >= 1 && d <= 6).slice(0, 4) }));
+  if (o && o.cipher && typeof o.cipher.key === 'string' && o.cipher.key.length === 10 && new Set(o.cipher.key).size === 10) {
+    p.cipher = { key: o.cipher.key };
+    if (o.cipher.hints && typeof o.cipher.hints === 'object') p.cipher.hints = o.cipher.hints;
+  }
   p.title = String((o && o.title) || ''); p.sol = Array.isArray(o && o.sol) && o.sol.length === NN ? o.sol : null;
   p.meta = (o && o.meta) || null;
   return p;
 }
-const hashOf = p => JSON.stringify([p.regions, p.givens, p.opts, p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads]);
+const hashOf = p => JSON.stringify([p.regions, p.givens, p.opts, p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null]);
 const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
 const getModel = () => app.model || (app.model = X.compile(app.puzzle));
 function getSol() {
@@ -3055,8 +3205,10 @@ function variantLabels(p) {
   if (!isStd(p)) L.push('Irregular');
   if (o.diag) L.push('Diagonal'); if (o.antiKnight) L.push('Anti-knight'); if (o.antiKing) L.push('Anti-king');
   if (o.disjoint) L.push('Disjoint groups');
-  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) L.push('Killer');
+  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && !c.mystery && !c.escape)) L.push('Killer');
   if (p.cages.some(c => c.type === 'looksay' && !c.escape)) L.push('Look-and-say');
+  if (p.cages.some(c => c.type === 'product')) L.push('Product');
+  if (p.cipher) L.push('Cipher');
   if (p.cages.some(c => c.mystery)) L.push('Mystery Cages');
   if (p.cages.some(c => c.escape) || p.lines.some(l => l.escape)) L.push('Escape the Grid');
   const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
@@ -3086,9 +3238,11 @@ function rulesFor(p) {
   if (o.antiKnight) R.push('Cells a chess knight’s move apart never hold the same digit.');
   if (o.antiKing) R.push('Cells touching at a side or corner never hold the same digit.');
   if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
-  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
+  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
   if (p.cages.some(c => c.type === 'looksay' && !c.escape)) R.push('Dashed look-and-say cages: digits may repeat. The corner code is read 2 digits at a time, "[quantity][digit]", listed in ascending digit order - e.g. "12" means exactly one 2 is in the cage; "0213" means exactly zero 2s and exactly one 3. Any digit not named is unconstrained, and the cage may hold more cells than the named counts add up to.');
-  if (p.cages.some(c => c.type === 'looksay' && !c.escape) && p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && !c.mystery && !c.escape)) R.push('Killer cages (dark outline) and look-and-say cages (teal outline) may overlap, so one cell can belong to both; each cage still obeys its own rule. A cage\'s corner number is never printed on a cell shared with another cage.');
+  if (p.cages.some(c => c.type === 'looksay' && !c.escape) && p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && !c.mystery && !c.escape)) R.push('Killer cages (dark outline) and look-and-say cages (teal outline) may overlap, so one cell can belong to both; each cage still obeys its own rule. A cage\'s corner number is never printed on a cell shared with another cage.');
+  if (p.cipher) R.push('Cipher clues: some or all digits in the number clues are written as letters. Each letter stands for one digit from 0 to 9, different letters stand for different digits, and the same letter always means the same digit. Digits shown as digits are ordinary and mean themselves, so a clue such as "A7" is a two-digit number ending in 7. A clue never starts with 0. Work out the letters as part of solving. The boxes under the board are for notes: tap one and enter a value or pencil marks, the same way as an outside clue box. A letter with a value set is replaced by that digit in the clues.' + (p.cipher.hints && Object.keys(p.cipher.hints).length ? ' Revealed: ' + Object.keys(p.cipher.hints).map(L => L + ' = ' + p.cipher.hints[L]).join(', ') + '.' : ''));
+  if (p.cages.some(c => c.type === 'product')) R.push('Product cages (amber outline, number starts with \u00d7): digits multiply to the number in the cage and never repeat inside it.');
   if (p.cages.some(c => c.mystery)) R.push('Mystery cages (dashed, no marker): the corner number could be a Killer-style sum (digits sum to it, never repeating) or a look-and-say count (exactly that many of that one digit, rest of the cage unconstrained) - nothing about the cage says which. Each mystery cage is secretly one or the other; work out which from the rest of the grid.');
   if (p.cages.some(c => c.escape)) R.push('Escaping cages (dashed, reaching a boxed square outside the grid): that outside square is not a Sudoku digit. It counts toward the cage’s own total (or look-and-say code) exactly like any other cage cell, and separately it is the hidden value of the outside-clue rule marked on that square (X, S, ▲ or N) for its row or column. Neither value is shown - work out the hidden one from both rules at once.');
   if (p.lines.some(l => l.escape)) R.push('Escaping lines (reaching a boxed square outside the grid, marked X, S, ▲, N, or an arrow for Little Killer): that outside square is not a Sudoku digit. It takes part in the line’s own rule exactly like any other cell on the line, and separately it is the hidden value of the outside-clue rule marked there for its row, column or diagonal. Neither value is shown - work out the hidden one from both rules at once.');
@@ -3164,19 +3318,19 @@ function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return 
 
 /* ---------- play state ---------- */
 function resetPlay() {
-  app.ringSel = null;
-  app.play = { vals: new Array(NN).fill(0), cands: new Array(NN).fill(0), col: new Array(NN).fill(0), ring: {}, undo: [], redo: [], pencil: false,
+  app.ringSel = null; app.cipherSel = null;
+  app.play = { vals: new Array(NN).fill(0), cands: new Array(NN).fill(0), col: new Array(NN).fill(0), ring: {}, cnotes: {}, undo: [], redo: [], pencil: false,
     elapsed: 0, started: false, solved: false, revealed: false, usedReveal: false, hints: 0, recorded: false, wrong: new Set(), hash: hashOf(app.puzzle) };
 }
-function snapshot() { const P = app.play; return { vals: P.vals.slice(), cands: P.cands.slice(), col: P.col.slice(), ring: JSON.parse(JSON.stringify(P.ring)) }; }
+function snapshot() { const P = app.play; return { vals: P.vals.slice(), cands: P.cands.slice(), col: P.col.slice(), ring: JSON.parse(JSON.stringify(P.ring)), cnotes: JSON.parse(JSON.stringify(P.cnotes || {})) }; }
 function pushUndo() { const P = app.play; P.started = true; P.undo.push(snapshot()); if (P.undo.length > 300) P.undo.shift(); P.redo = []; }
 function undo() {
   const P = app.play; if (!P.undo.length) return;
-  P.redo.push(snapshot()); const s = P.undo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.solved = false; P.wrong.clear(); renderAll();
+  P.redo.push(snapshot()); const s = P.undo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.cnotes = s.cnotes || {}; P.solved = false; P.wrong.clear(); renderAll();
 }
 function redo() {
   const P = app.play; if (!P.redo.length) return;
-  P.undo.push(snapshot()); const s = P.redo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; renderAll();
+  P.undo.push(snapshot()); const s = P.redo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.cnotes = s.cnotes || {}; renderAll();
 }
 function fmtTime(s) {
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
@@ -3228,7 +3382,7 @@ function applyColor(k) {
 
 function enterDigit(d) {
   if (app.tab === 'edit') return editDigit(d);
-  if (app.ringSel) return ringPad(d);
+  if (app.ringSel || app.cipherSel) return ringPad(d);
   const P = app.play, p = app.puzzle;
   if (P.solved && !P.revealed) return;
   const cells = Array.from(app.sel).filter(i => !p.givens[i]);
@@ -3539,15 +3693,18 @@ function renderBoard() {
     // second color so the two can share a grid and still be told apart at a glance. Mystery cages
     // are deliberately exempt - their whole point is that you can't tell which rule a cage follows,
     // so they stay in the neutral default style regardless of which flavor they secretly are.
-    const lsColor = !cg.mystery && cg.type === 'looksay';
-    s += `<path class="cage${lsColor ? ' ls' : ''}${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
+    const lsColor = !cg.mystery && cg.type === 'looksay', prColor = cg.type === 'product';
+    s += `<path class="cage${lsColor ? ' ls' : ''}${prColor ? ' pr' : ''}${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
     const t = cg.type === 'looksay' ? (cg.runs ? X.lookSayCode(cg.runs) : '')
       : cg.type === 'mysterydigit' ? X.lookSayCode([{ d: cg.d, n: cg.n }])
+      : cg.type === 'product' ? (cg.prod != null && cg.prod !== '' ? '\u00d7' + cg.prod : '')
       : (cg.sum != null && cg.sum !== '' ? String(cg.sum) : '');
     if (t) {
       const first = Math.min(...cg.cells), x = gx(colOf(first)), y = gy(rowOf(first));
+      const ciph = p.cipher && !cg.mystery && cg.type !== 'looksay' && cg.type !== 'mysterydigit';
+      const html = ciph ? (cg.type === 'product' ? '\u00d7' : '') + cz(cg.type === 'product' ? cg.prod : cg.sum) : t;
       s += `<rect class="cbg" x="${x + 3}" y="${y + 3}" width="${t.length * 7 + 5}" height="13"/>`;
-      s += `<text class="csum" x="${x + 6}" y="${y + 13}">${t}</text>`;
+      s += `<text class="csum" x="${x + 6}" y="${y + 13}">${html}</text>`;
     }
     if (cg.escape) s += drawCageEscape(cg);
   });
@@ -3654,11 +3811,11 @@ function renderBoard() {
     if (p.olines.some(ol => ol.cells.some(([r, c]) => r === cl.r && c === cl.c))) return;
     const rc = ringRect(cl.r, cl.c), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
     if (cl.kind === 'lk') {
-      s += `<text class="rval" x="${mx - cl.dc * 6}" y="${my - cl.dr * 6 + 6}">${esc(cl.val)}</text>`;
+      s += `<text class="rval" x="${mx - cl.dc * 6}" y="${my - cl.dr * 6 + 6}">${cz(cl.val)}</text>`;
       s += `<text class="rtag lk" x="${mx + cl.dc * 12}" y="${my + cl.dr * 12 + 6}">${ARROW[cl.dr + ',' + cl.dc]}</text>`;
     } else {
       s += `<text class="rtag" x="${rc.x + 5}" y="${rc.y + 13}">${TAG[cl.kind]}</text>`;
-      if (cl.val !== '' && cl.val != null) s += `<text class="rval" x="${mx}" y="${my + 6}">${esc(cl.val)}</text>`;
+      if (cl.val !== '' && cl.val != null) s += `<text class="rval" x="${mx}" y="${my + 6}">${cz(cl.val)}</text>`;
       else if (!editing) {
         const rg = X.clueRange(cl.kind, X.clueSeq({ kind: cl.kind, r: cl.r, c: cl.c }), g);
         if (rg && rg[0] === rg[1]) s += `<text class="rval live" x="${mx}" y="${my + 6}">${rg[0]}</text>`;
@@ -3678,7 +3835,7 @@ function renderBoard() {
     if (!editing && app.ringSel && app.ringSel.r === r && app.ringSel.c === c)
       s += `<rect class="ringsel" x="${mx - bw / 2 - 4}" y="${my - bh / 2 - 4}" width="${bw + 8}" height="${bh + 8}" rx="9"/>`;
     s += `<text class="rtag sm" x="${rc.x + 3}" y="${rc.y + 9}">${TAG[ol.kind]}</text>`;
-    if (given) s += `<text class="rval" x="${mx}" y="${my + 6}">${esc(given.val)}</text>`;
+    if (given) s += `<text class="rval" x="${mx}" y="${my + 6}">${cz(given.val)}</text>`;
     else if (ent && ent.v) s += `<text class="rval ent" x="${mx}" y="${my + 6}">${ent.v}</text>`;
     else {
       if (exact != null) s += `<text class="rval live" x="${mx}" y="${my + 6}">${exact}</text>`;
@@ -3709,6 +3866,31 @@ function renderBoard() {
   p.lines.forEach(ln => { if (ln.escape) flag(ln.escape.r, ln.escape.c); });
   const mt = side.t ? RING : 8, mb = side.b ? RING : 8, ml = side.l ? RING : 8, mr = side.r ? RING : 8;
   app.view = { x: RING - ml, y: RING - mt, w: N * CELL + ml + mr, h: N * CELL + mt + mb };
+  // cipher letter boxes: a row (or two) of separate boxes under the grid, one per letter the clues use
+  app.cstrip = null;
+  const cl = !editing && p.cipher ? cipherLetters(p) : [];
+  if (cl.length) {
+    const PER = 5, BW = 56, BH = 52, GAP = 6, top = app.view.y + app.view.h + 6, boxes = [];
+    cl.forEach((L, k) => {
+      const row = Math.floor(k / PER), inRow = Math.min(PER, cl.length - row * PER), col = k % PER;
+      const x0 = app.view.x + (app.view.w - (inRow * BW + (inRow - 1) * GAP)) / 2;
+      boxes.push({ L, x: x0 + col * (BW + GAP), y: top + row * (BH + GAP), w: BW, h: BH });
+    });
+    const dec = (P && P.cnotes) || {}, hints = p.cipher.hints || {};
+    boxes.forEach(b => {
+      const e = dec[b.L], hv = b.L in hints ? hints[b.L] : null, mx = b.x + b.w / 2, my = b.y + b.h / 2;
+      s += `<rect class="obox cbox${app.cipherSel === b.L ? ' sel' : ''}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
+      s += `<text class="rtag" x="${b.x + 5}" y="${b.y + 14}">${b.L}</text>`;
+      if (hv != null) s += `<text class="rval" x="${mx}" y="${my + 8}">${hv}</text>`;
+      else if (e && typeof e.v === 'number') s += `<text class="rval ent" x="${mx}" y="${my + 8}">${e.v}</text>`;
+      else if (e && e.c.length) {
+        const marks = e.c.slice(0, 10), rows = Math.ceil(marks.length / 4);
+        marks.forEach((n, j) => { s += `<text class="rcd" x="${(mx - 19.5 + (j % 4) * 13).toFixed(1)}" y="${(my - (rows - 1) * 5.25 + 3.6 + Math.floor(j / 4) * 10.5 + 3).toFixed(1)}">${n}</text>`; });
+      }
+    });
+    app.cstrip = boxes;
+    app.view.h += Math.ceil(cl.length / PER) * (BH + GAP) + 6;
+  }
   const el = $('#board');
   el.setAttribute('viewBox', `${app.view.x} ${app.view.y} ${app.view.w} ${app.view.h}`);
   el.innerHTML = s;
@@ -3716,6 +3898,27 @@ function renderBoard() {
 }
 
 /* ---------- header, rules, panels ---------- */
+/* ---------- cipher clues ---------- */
+// letters a puzzle's clues use, and what the player's notes (or revealed hints) have settled so far
+function cipherLetters(p) {
+  const s = new Set(); if (!p.cipher) return [];
+  X.cipherClues(p).forEach(c => X.cipherWord(c.v, p.cipher.key).split('').forEach(ch => { if (/[A-J]/.test(ch)) s.add(ch); }));
+  return Array.from(s).sort();
+}
+function cipherDecoded() {
+  const p = app.puzzle, out = {}; if (!p.cipher) return out;
+  Object.assign(out, p.cipher.hints || {});
+  const N0 = (app.play && app.play.cnotes) || {};
+  for (const L in N0) { const e = N0[L]; if (e && typeof e.v === 'number' && !(L in out)) out[L] = e.v; }
+  return out;
+}
+// a clue number as SVG markup: letters, with any letter whose digit is settled shown as that digit
+function cz(raw) {
+  const p = app.puzzle, s = String(raw);
+  if (!p.cipher || app.tab === 'edit') return esc(s);
+  const dec = cipherDecoded();
+  return s.replace(/\d/g, ch => { const L = p.cipher.key[+ch]; return L in dec ? `<tspan class="dec">${dec[L]}</tspan>` : L; });
+}
 function renderMeta() {
   const p = app.puzzle;
   $('#ptitle').textContent = p.title || 'Untitled puzzle';
@@ -3800,7 +4003,7 @@ function renderEditAux() {
   $('#regionWarn').textContent = okSizes ? 'All six regions have six cells.' : 'Region sizes: ' + sizes.join(', ') + '. Each needs 6.';
   $('#regionWarn').className = 'small ' + (okSizes ? 'okc' : 'warnc');
   $('#cageBox').hidden = !(app.tool === 'cage' && app.selCage >= 0 && p.cages[app.selCage]);
-  if (!$('#cageBox').hidden) { const cg = p.cages[app.selCage]; const inp = $('#cageSum'); if (document.activeElement !== inp) inp.value = cg.sum == null ? '' : cg.sum; }
+  if (!$('#cageBox').hidden) { const cg = p.cages[app.selCage]; const inp = $('#cageSum'); if (document.activeElement !== inp) { const v = cg.type === 'product' ? cg.prod : cg.sum; inp.value = v == null ? '' : v; } }
   $('#ringBox').hidden = !(app.tool === 'clue' && app.selRing);
   if (!$('#ringBox').hidden) renderRingEditor();
   const isLT = LINE_TOOLS.includes(app.tool);
@@ -3882,6 +4085,13 @@ function ringLabel(r, c, kind) {
   return `${KIND_NAME[kind]} clue, ${side}`;
 }
 function renderRingBar() {
+  if (app.cipherSel && app.tab === 'play' && app.puzzle.cipher) {
+    $('#ringBar').hidden = false;
+    $('#rnLabel').textContent = `Cipher letter ${app.cipherSel}`;
+    $('#rnHint').textContent = `Type a digit from 0 to 9. Enter ${app.play.pencil ? 'toggles a pencil mark' : 'sets the value'}. A letter with a set value is replaced by that digit in the clues. Different letters are different digits.`;
+    return;
+  }
+  app.cipherSel = null;
   const bar = $('#ringBar'), rs = app.ringSel, info = rs && app.tab === 'play' ? noteCell(rs.r, rs.c) : null;
   if (rs && !info) app.ringSel = null;
   bar.hidden = !info;
@@ -3897,7 +4107,19 @@ function renderPalette() {
     b.classList.toggle('on', !!(P && cells.length && cells.every(i => (cellMask(i, false) >> k) & 1)));
   });
 }
+function cipherApply(mode) {
+  const L = app.cipherSel, inp = $('#rnVal'), v = parseInt(inp.value, 10);
+  if (!L) return;
+  if (isNaN(v) || v < 0 || v > 9) { flash('Cipher letters stand for a single digit, 0 to 9.', 'warn'); return; }
+  const P = app.play; pushUndo(); P.cnotes = P.cnotes || {};
+  const e = P.cnotes[L] || (P.cnotes[L] = { v: null, c: [] });
+  if (mode === 'pencil') { const j = e.c.indexOf(v); if (j >= 0) e.c.splice(j, 1); else { e.c.push(v); e.c.sort((a, b) => a - b); } }
+  else e.v = e.v === v ? null : v;
+  if (e.v == null && !e.c.length) delete P.cnotes[L];
+  inp.value = ''; flash(''); renderAll();
+}
 function ringApply(mode) {
+  if (app.cipherSel) return cipherApply(mode);
   const rs = app.ringSel, info = rs && noteCell(rs.r, rs.c); if (!info) return;
   const inp = $('#rnVal'), v = parseInt(inp.value, 10), rg = KIND_RANGE[info.kind];
   if (isNaN(v) || v < rg[0] || v > rg[1]) { flash(`${KIND_NAME[info.kind]} clues run from ${rg[0]} to ${rg[1]}.`, 'warn'); return; }
@@ -3910,11 +4132,12 @@ function ringApply(mode) {
   inp.value = ''; P.wrong.clear(); flash(''); renderAll();
 }
 function ringClear() {
+  if (app.cipherSel) { const P = app.play; if (P.cnotes && P.cnotes[app.cipherSel]) { pushUndo(); delete P.cnotes[app.cipherSel]; renderAll(); } return; }
   const rs = app.ringSel; if (!rs) return;
   const P = app.play, key = rs.r + ',' + rs.c; if (!P.ring[key]) return;
   pushUndo(); delete P.ring[key]; P.wrong.clear(); renderAll();
 }
-function ringType(ch) { const inp = $('#rnVal'); inp.value = (inp.value.length >= 2 ? '' : inp.value) + ch; }
+function ringType(ch) { const inp = $('#rnVal'); inp.value = app.cipherSel ? ch : (inp.value.length >= 2 ? '' : inp.value) + ch; }
 function ringPad(d) { if (d === 0) { const inp = $('#rnVal'); inp.value = inp.value.slice(0, -1); } else ringType(String(d)); }
 
 /* ---------- tabs ---------- */
@@ -3979,16 +4202,21 @@ function onDown(e) {
   if (e.button !== undefined && e.button !== 0) return;
   e.preventDefault();
   try { svg().setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-  const { x, y } = toSvg(e), h = hit(x, y), p = app.puzzle;
+  const { x, y } = toSvg(e);
+  if (app.tab !== 'edit' && app.cstrip) {
+    const cb = app.cstrip.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if (cb) { app.cipherSel = cb.L; app.ringSel = null; app.sel.clear(); renderAll(); $('#rnVal').focus(); return; }
+  }
+  const h = hit(x, y), p = app.puzzle;
   const inG = inCell(h.r, h.c), i = inG ? ix(h.r, h.c) : -1;
   if (app.tab !== 'edit' || app.tool === 'given') {
     if (!inG) {
       if (app.tab !== 'edit' && h.r >= -1 && h.r <= N && h.c >= -1 && h.c <= N && noteCell(h.r, h.c)) {
-        app.ringSel = { r: h.r, c: h.c }; app.sel.clear(); renderAll(); $('#rnVal').focus();
+        app.ringSel = { r: h.r, c: h.c }; app.cipherSel = null; app.sel.clear(); renderAll(); $('#rnVal').focus();
       }
       return;
     }
-    app.ringSel = null;
+    app.ringSel = null; app.cipherSel = null;
     if (!(e.shiftKey || e.ctrlKey || e.metaKey)) app.sel.clear();
     app.sel.add(i); app.drag = { kind: 'select' }; renderBoard(); return;
   }
@@ -4238,10 +4466,13 @@ function buildGenerator() {
 const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking'],
   ['nonconsecutive', 'diag'], ['nonconsecutive', 'antiknight'], ['nonconsecutive', 'antiking'], ['nonconsecutive', 'disjoint']];
 const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang'];
-const CAGE_EXCL = ['killer', 'looksay', 'escape', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
+const CAGE_EXCL = ['killer', 'looksay', 'product', 'escape', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
 // a big share of the grid on its own, so no two of these ever share a puzzle
-const sameCagePair = (a, b) => (a === 'killer' && b === 'looksay') || (a === 'looksay' && b === 'killer');
+const CIPHER_NEEDS = ['killer', 'product', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'];
+const OVERLAP_CAGES = ['killer', 'looksay', 'product'];
+const sameCagePair = (a, b) => OVERLAP_CAGES.includes(a) && OVERLAP_CAGES.includes(b);
 function clash(a, b, set) {
+  if ((a === 'cipher' && (b === 'looksay' || b === 'mysterycage')) || (b === 'cipher' && (a === 'looksay' || a === 'mysterycage'))) return true;
   if (SHADING_EXCL.includes(a) && SHADING_EXCL.includes(b) && a !== b) return true;
   if (CAGE_EXCL.includes(a) && CAGE_EXCL.includes(b) && a !== b && !sameCagePair(a, b)) return true;
   if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
@@ -4262,6 +4493,7 @@ function syncGen() {
   $('#genCount').textContent = app.genSel.size ? app.genSel.size + ' selected' : 'Classic (nothing selected)';
   $('#genWhisper').hidden = !(app.genSel.has('whisper') || app.genSel.has('duality'));
   $('#genDual').hidden = !app.genSel.has('duality');
+  if ($('#genCipher')) $('#genCipher').hidden = !app.genSel.has('cipher');
   if (app.genSel.has('duality')) renderDual();
   renderCounts();
 }
@@ -4279,6 +4511,31 @@ function renderCounts() {
   $('#genLenBias').value = app.genLenBias;
   $('#genCounts').innerHTML = keys.map(k => `<label class="cnt"><span>${X.VLABEL[k]}</span><input type="number" min="1" max="12" inputmode="numeric" data-cnt="${k}" placeholder="auto" value="${app.genCounts[k] || ''}"></label>`).join('');
 }
+const ESC_CAGE_TARGETS = ['xsum', 'sandwich', 'skyscraper', 'roomnumbers']; // outside-clue rules an escaping cage or line can reach
+const ESC_LINES = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic']; // line rules that can escape
+// Escape the Grid needs an outside-clue rule to escape into. When none is selected, add one at random
+// (and say so) rather than rejecting the mix.
+function completeCipher(list) {
+  const s = new Set(list);
+  if (!s.has('cipher') || CIPHER_NEEDS.some(k => s.has(k))) return list;
+  const ok = CIPHER_NEEDS.filter(k => feasibleMix(list.concat(k)));
+  if (!ok.length) return list;
+  const add = ok[Math.floor(Math.random() * ok.length)];
+  app.genSel.add(add); syncGen();
+  $('#genNote').textContent = `Cipher clues need numbers to disguise, so ${X.VLABEL[add]} was added.`;
+  return list.concat(add);
+}
+function completeEscape(list) {
+  const s = new Set(list);
+  $('#genNote').textContent = '';
+  if (!s.has('escape') || ESC_CAGE_TARGETS.some(k => s.has(k)) || (s.has('littlekiller') && ESC_LINES.some(k => s.has(k)))) return list;
+  const ok = ESC_CAGE_TARGETS.filter(k => feasibleMix(list.concat(k)));
+  if (!ok.length) return list;
+  const add = ok[Math.floor(Math.random() * ok.length)];
+  app.genSel.add(add); syncGen();
+  $('#genNote').textContent = `Escape the Grid needs an outside-clue rule to escape into, so ${X.VLABEL[add]} was added.`;
+  return list.concat(add);
+}
 function feasibleMix(sel) {
   const s = new Set(sel);
   if (!s.has('irregular')) {
@@ -4286,23 +4543,27 @@ function feasibleMix(sel) {
     if (s.has('antiknight') && s.has('antiking')) return false;
   }
   if (SHADING_EXCL.filter(k => s.has(k)).length > 1) return false;
-  { const cg = CAGE_EXCL.filter(k => s.has(k)); if (cg.length > 1 && !(cg.length === 2 && s.has('killer') && s.has('looksay'))) return false; }
-  if (s.has('escape') && !['xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'].some(k => s.has(k))) return false;
+  { const cg = CAGE_EXCL.filter(k => s.has(k)); if (cg.length > 1 && !cg.every(k => OVERLAP_CAGES.includes(k))) return false; }
+  if (s.has('cipher') && (s.has('looksay') || s.has('mysterycage'))) return false;
+  if (s.has('cipher') && !CIPHER_NEEDS.some(k => s.has(k))) return false;
+  if (s.has('escape') && !ESC_CAGE_TARGETS.some(k => s.has(k)) && !(s.has('littlekiller') && ESC_LINES.some(k => s.has(k)))) return false;
   return !(s.has('disjoint') && s.has('irregular'));
 }
 function runGenerate(list) {
   if (app.busy) return;
+  list = completeCipher(completeEscape(list));
   if (!feasibleMix(list)) { $('#genStatus').textContent = 'No valid grid exists for that mix of grid rules.'; return; }
   app.busy = true; $('#genBtn').disabled = true; $('#surpriseBtn').disabled = true;
   $('#genStatus').textContent = 'Building and checking for a single solution…';
   setTimeout(() => {
     const t0 = Date.now();
     let q = null, spec = null;
-    const counts = {}; COUNT_KEYS.forEach(k => { if (list.includes(k) && app.genCounts[k]) counts[k] = app.genCounts[k]; }); spec = { variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff, density: app.genDensity, lineLength: app.genLenBias, counts, dualityRules: Array.from(app.dualRules), dualityMax: app.dualMax };
+    const counts = {}; COUNT_KEYS.forEach(k => { if (list.includes(k) && app.genCounts[k]) counts[k] = app.genCounts[k]; }); spec = { cipherLetters: app.cipherK, variants: list, difficulty: app.genDiff, whisperDiff: app.whisperDiff, density: app.genDensity, lineLength: app.genLenBias, counts, dualityRules: Array.from(app.dualRules), dualityMax: app.dualMax };
     try { q = X.generate(spec, null, 9000); } catch (err) { q = null; }
     app.busy = false; $('#genBtn').disabled = false; $('#surpriseBtn').disabled = false;
     if (!q) { $('#genStatus').textContent = Object.keys(spec.counts).length ? 'Could not place those exact line counts. Lower a count, set it to auto, or try again.' : 'Could not build that mix. Try again, or remove a variant.'; return; }
     $('#genStatus').textContent = `Done in ${((Date.now() - t0) / 1000).toFixed(1)} s. One solution, verified.`;
+    if (q.cipher) { const nl = cipherLetters(q).length; if (nl < app.cipherK) $('#genNote').textContent = `Only ${nl} different digit${nl === 1 ? '' : 's'} appear in this puzzle's clues, so it has ${nl} letter${nl === 1 ? '' : 's'} to find instead of ${app.cipherK}.`; }
     loadPuzzle(q, 'play');
   }, 40);
 }
@@ -4372,13 +4633,13 @@ function replayById(id) {
   if (!q) return flash('That puzzle is no longer stored on this device.', 'warn');
   loadPuzzle(q, 'play');
 }
-const emptyPlay = P => !P.vals.some(x => x) && !P.cands.some(x => x) && !P.col.some(x => x) && !Object.keys(P.ring).length && !P.elapsed;
+const emptyPlay = P => !P.vals.some(x => x) && !P.cands.some(x => x) && !P.col.some(x => x) && !Object.keys(P.ring).length && !Object.keys(P.cnotes || {}).some(k => P.cnotes[k]) && !P.elapsed;
 function saveProgress() {
   const P = app.play, p = app.puzzle;
   if (!P || !p || P.hash !== hashOf(p)) return;
   const id = pid(p), all = lsGet(PKEY, {});
   if (P.solved || emptyPlay(P)) { if (all[id]) { delete all[id]; lsSet(PKEY, all); } return; }
-  all[id] = { vals: P.vals, cands: P.cands, col: P.col, ring: P.ring, elapsed: P.elapsed, hints: P.hints, usedReveal: P.usedReveal, pencil: P.pencil, at: Date.now() };
+  all[id] = { vals: P.vals, cands: P.cands, col: P.col, ring: P.ring, cnotes: P.cnotes, elapsed: P.elapsed, hints: P.hints, usedReveal: P.usedReveal, pencil: P.pencil, at: Date.now() };
   Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(12).forEach(k => delete all[k]);
   lsSet(PKEY, all);
 }
@@ -4386,7 +4647,7 @@ function restoreProgress() {
   const P = app.play, sv = lsGet(PKEY, {})[pid(app.puzzle)];
   if (!sv || !Array.isArray(sv.vals) || sv.vals.length !== NN) return;
   P.vals = sv.vals; P.cands = Array.isArray(sv.cands) && sv.cands.length === NN ? sv.cands : P.cands;
-  P.col = Array.isArray(sv.col) && sv.col.length === NN ? sv.col : P.col; P.ring = sv.ring || {};
+  P.col = Array.isArray(sv.col) && sv.col.length === NN ? sv.col : P.col; P.ring = sv.ring || {}; P.cnotes = {}; if (sv.cnotes && typeof sv.cnotes === 'object') for (const L in sv.cnotes) { const e = sv.cnotes[L]; if (e && typeof e === 'object' && Array.isArray(e.c)) P.cnotes[L] = e; }
   P.started = true; P.elapsed = sv.elapsed || 0; P.hints = sv.hints || 0; P.usedReveal = !!sv.usedReveal; P.pencil = !!sv.pencil;
 }
 
@@ -4406,6 +4667,7 @@ function renderLibrary() {
 
 /* ---------- wiring ---------- */
 function bind() {
+
   const sv = svg();
   sv.addEventListener('pointerdown', onDown); sv.addEventListener('pointermove', onMove);
   sv.addEventListener('pointerup', onUp); sv.addEventListener('pointercancel', onUp);
@@ -4423,7 +4685,7 @@ function bind() {
   $('#rnVal').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); ringApply(app.play.pencil ? 'pencil' : 'set'); }
     else if ((e.key === 'c' || e.key === 'p') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); app.play.pencil = !app.play.pencil; renderMeta(); }
-    else if (e.key === 'Escape') { app.ringSel = null; e.target.blur(); renderAll(); }
+    else if (e.key === 'Escape') { app.ringSel = null; app.cipherSel = null; e.target.blur(); renderAll(); }
   });
   $('#colorSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-col]'); if (b) applyColor(+b.dataset.col); });
   $('#paintSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-col]'); if (b) { app.paintCol = +b.dataset.col; renderEditAux(); } });
@@ -4457,7 +4719,7 @@ function bind() {
   });
   $('#regionSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-rg]'); if (b) { app.paint = +b.dataset.rg; renderEditAux(); } });
   $('#resetRegions').addEventListener('click', () => { app.puzzle.regions = X.stdRegions(); touch(); });
-  $('#cageSum').addEventListener('input', e => { const cg = app.puzzle.cages[app.selCage]; if (!cg) return; const v = e.target.value.trim(); cg.sum = v === '' ? null : +v; touch(true); });
+  $('#cageSum').addEventListener('input', e => { const cg = app.puzzle.cages[app.selCage]; if (!cg) return; const v = e.target.value.trim(); cg[cg.type === 'product' ? 'prod' : 'sum'] = v === '' ? null : +v; touch(true); });
   $('#cageSum').addEventListener('keydown', e => { if (e.key === 'Enter') { app.selCage = -1; renderAll(); } });
   $('#cageDel').addEventListener('click', () => { app.puzzle.cages.splice(app.selCage, 1); app.selCage = -1; touch(); });
   $('#ringKind').addEventListener('change', applyRing); $('#ringVal').addEventListener('input', applyRing);
@@ -4472,6 +4734,11 @@ function bind() {
   $('#editBtn').addEventListener('click', () => setTab('edit'));
   // generator
   $$('#genDiff input').forEach(r => r.addEventListener('change', () => { app.genDiff = r.value; }));
+  $('#genWhisper').insertAdjacentHTML('afterend', `<div class="inline" id="genCipher" hidden>
+    <label for="cipherK" style="font-weight:700">Letters to find</label>
+    <input id="cipherK" type="number" min="1" max="10" inputmode="numeric" value="${app.cipherK}" style="width:4.5em">
+    <span class="small">1 to 10. The other digits stay plain, and every letter appears in at least two clues.</span></div>`);
+  $('#cipherK').addEventListener('change', e => { const v = Math.max(1, Math.min(10, Math.floor(+e.target.value) || 10)); app.cipherK = v; e.target.value = v; });
   $('#whisperGen').addEventListener('change', e => { app.whisperDiff = +e.target.value; if (app.genSel.has('duality')) renderDual(); });
   $('#genDensity').addEventListener('change', e => { app.genDensity = e.target.value; });
   $('#genLenBias').addEventListener('change', e => { app.genLenBias = e.target.value; });
@@ -4506,7 +4773,7 @@ function bind() {
     if (e.target.closest('input,textarea,select')) return;
     if (app.tab !== 'play' && app.tab !== 'edit') return;
     const k = e.key;
-    if (app.tab === 'play' && app.ringSel) {
+    if (app.tab === 'play' && (app.ringSel || app.cipherSel)) {
       if (/^[0-9]$/.test(k)) { e.preventDefault(); $('#rnVal').focus(); ringType(k); return; }
       if (k === 'Backspace' || k === 'Delete') { e.preventDefault(); ringPad(0); return; }
       if (k === 'Enter') { e.preventDefault(); ringApply(app.play.pencil ? 'pencil' : 'set'); return; }
@@ -4523,7 +4790,7 @@ function bind() {
     else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (k.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey && app.tab === 'play') { applyColor(1); }
-    else if (k === 'Escape') { app.ringSel = null; app.sel.clear(); app.selCage = -1; renderAll(); }
+    else if (k === 'Escape') { app.ringSel = null; app.cipherSel = null; app.sel.clear(); app.selCage = -1; renderAll(); }
   });
   $('#tab-history').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
