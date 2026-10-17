@@ -2437,7 +2437,7 @@ function noRegionReentry(cells, regions) {
 
 function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   const items = [];
-  const add = (variant, apply, locked) => items.push({ variant, apply, locked: !!locked });
+  const add = (variant, apply, locked, tag) => items.push({ variant, apply, locked: !!locked, tag });
   const usedRing = new Set();
   const usedEndpoints = new Set(); // shared across every line pool below, so no two lines ever start/end on the same cell
   const cellCross = new Map(); // shared across every line pool: caps crossings per cell at 2 and steers lines away from crossing a same-type line
@@ -2594,7 +2594,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       usedEndpoints.add(path[0]); usedEndpoints.add(path[path.length - 1]);
       const escape = { kind, r: rr, c: rcc, idx: escIdx };
       if (kind === 'lk') { escape.dr = dr; escape.dc = dc; }
-      add('escape', p => p.lines.push({ type, cells: cells.slice(), escape: Object.assign({}, escape) }));
+      add('escape', p => p.lines.push({ type, cells: cells.slice(), escape: Object.assign({}, escape) }), false, 'escline');
       return true;
     };
 
@@ -2603,6 +2603,11 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     // shape happens to be easier to satisfy (cages, which are nearly always satisfiable, would
     // otherwise starve lines out of every puzzle that enables both).
     let tries = 0;
+    // Guarantee at least one escaping line whenever one is possible: random line candidates rarely
+    // satisfy their own rule, so without a dedicated pass cages crowd them out of the budget.
+    if (lineEligible) {
+      for (let k = 0; k < 400 && !made; k++) if (attemptLine()) made++;
+    }
     while (made < maxEsc && tries < 500 && (cageEligible || lineEligible)) {
       tries++;
       const useLine = lineEligible && (!cageEligible || rng() < 0.5);
@@ -3043,6 +3048,7 @@ function tryGenerate(V, diff, rng, deadline, spec) {
       // usually lets pruning remove every "unnecessary" line down to the bare MIN_KEEP floor of 1.
       if (LINE_DENSITY_KEYS.has(it.variant) && lineDens === 'normal') mkp = Math.max(mkp, 2);
       if (cnt <= mkp) continue;
+      if (it.tag === 'escline' && !items.some(x => x !== it && x.tag === 'escline' && inc.has(x))) continue; // keep one escaping line
       inc.delete(it);
       if (uniq(build(), 50000) && repeatOK()) budget--; else inc.add(it);
     }
@@ -3087,7 +3093,7 @@ function generate(spec, seed, budgetMs) {
   const deadline = Date.now() + (budgetMs || 9000);
   const V = new Set(spec.variants);
   const diff = spec.difficulty || 'medium';
-  for (let attempt = 0; attempt < 80 && Date.now() < deadline; attempt++) {
+  for (let attempt = 0; attempt < 400 && Date.now() < deadline; attempt++) {
     const p = tryGenerate(V, diff, rng, deadline, spec);
     if (p) return p;
   }
@@ -3112,7 +3118,8 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const CELL = 60, RING = 54, W = 6 * CELL + 2 * RING;
-const cx = i => RING + (colOf(i) + .5) * CELL, cy = i => RING + (rowOf(i) + .5) * CELL;
+const VPT = {}; // virtual points (outside-box centres) for escape lines, keyed by index >= NN
+const cx = i => i >= NN ? VPT[i].x : RING + (colOf(i) + .5) * CELL, cy = i => i >= NN ? VPT[i].y : RING + (rowOf(i) + .5) * CELL;
 const gx = c => RING + c * CELL, gy = r => RING + r * CELL;
 const inCell = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
 
@@ -3244,7 +3251,13 @@ function rulesFor(p) {
   if (p.cipher) R.push('Cipher clues: some or all digits in the number clues are written as letters. Each letter stands for one digit from 0 to 9, different letters stand for different digits, and the same letter always means the same digit. Digits shown as digits are ordinary and mean themselves, so a clue such as "A7" is a two-digit number ending in 7. A clue never starts with 0. Work out the letters as part of solving. The boxes under the board are for notes: tap one and enter a value or pencil marks, the same way as an outside clue box. A letter with a value set is replaced by that digit in the clues.' + (p.cipher.hints && Object.keys(p.cipher.hints).length ? ' Revealed: ' + Object.keys(p.cipher.hints).map(L => L + ' = ' + p.cipher.hints[L]).join(', ') + '.' : ''));
   if (p.cages.some(c => c.type === 'product')) R.push('Product cages (amber outline, number starts with \u00d7): digits multiply to the number in the cage and never repeat inside it.');
   if (p.cages.some(c => c.mystery)) R.push('Mystery cages (dashed, no marker): the corner number could be a Killer-style sum (digits sum to it, never repeating) or a look-and-say count (exactly that many of that one digit, rest of the cage unconstrained) - nothing about the cage says which. Each mystery cage is secretly one or the other; work out which from the rest of the grid.');
-  if (p.cages.some(c => c.escape)) R.push('Escaping cages (dashed, reaching a boxed square outside the grid): that outside square is not a Sudoku digit. It counts toward the cage’s own total (or look-and-say code) exactly like any other cage cell, and separately it is the hidden value of the outside-clue rule marked on that square (X, S, ▲ or N) for its row or column. Neither value is shown - work out the hidden one from both rules at once.');
+  if (p.cages.some(c => c.escape)) R.push('Escaping cages (dashed, reaching a boxed square outside the grid): that outside square is not a Sudoku digit. It counts toward the cage’s own total (or look-and-say code) exactly like any other cage cell, and separately it is the hidden value of the outside-clue rule marked on that square (X, S, ▲ or N) for its row or column. Neither value is shown - work out the hidden one from both rules at once.' + (function () {
+    const cl = [];
+    if (p.cages.some(c => c.escape && !c.type && !c.mystery) || p.cages.some(c => !c.type && !c.mystery)) cl.push('dark = killer (sum)');
+    if (p.cages.some(c => c.type === 'looksay' && !c.mystery)) cl.push('teal = look-and-say (code)');
+    if (p.cages.some(c => c.type === 'product')) cl.push('orange = product');
+    return cl.length ? ' Cage outline colors: ' + cl.join(', ') + '. The outline around the outside square uses the same color as its cage.' : '';
+  })());
   if (p.lines.some(l => l.escape)) R.push('Escaping lines (reaching a boxed square outside the grid, marked X, S, ▲, N, or an arrow for Little Killer): that outside square is not a Sudoku digit. It takes part in the line’s own rule exactly like any other cell on the line, and separately it is the hidden value of the outside-clue rule marked there for its row, column or diagonal. Neither value is shown - work out the hidden one from both rules at once.');
   const lt = new Set(); p.lines.forEach(l => X.lineTypes(l).forEach(t => lt.add(t)));
   if (lt.has('thermo')) R.push('Thermometers: digits strictly increase from the bulb to the tip.');
@@ -3433,7 +3446,7 @@ function loadPuzzle(o, tab) {
 const COL = { parity: 'var(--parity)', entropic: 'var(--entropic)', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
 const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
 
-function cageOutline(cells) {
+function cageOutline(cells, esc) {
   const set = new Set(cells), d = 4; let out = '';
   const has = (r, c) => inCell(r, c) && set.has(ix(r, c));
   for (const i of cells) {
@@ -3441,19 +3454,23 @@ function cageOutline(cells) {
     const end = (nOk, dOk, base, sign) => nOk ? (dOk ? base - sign * d : base) : base + sign * d; // sign +1 = low end
     if (!has(r - 1, c)) { // top
       const a = end(has(r, c - 1), has(r - 1, c - 1), x0, 1), b = end(has(r, c + 1), has(r - 1, c + 1), x1, -1);
-      out += `M${a},${y0 + d}L${b},${y0 + d}`;
+      if (esc && esc.r === -1 && r === 0 && c === esc.c) out += `M${a},${y0 + d}L${a},${d}L${b},${d}L${b},${y0 + d}`;
+      else out += `M${a},${y0 + d}L${b},${y0 + d}`;
     }
     if (!has(r + 1, c)) {
       const a = end(has(r, c - 1), has(r + 1, c - 1), x0, 1), b = end(has(r, c + 1), has(r + 1, c + 1), x1, -1);
-      out += `M${a},${y1 - d}L${b},${y1 - d}`;
+      if (esc && esc.r === N && r === N - 1 && c === esc.c) out += `M${a},${y1 - d}L${a},${W - d}L${b},${W - d}L${b},${y1 - d}`;
+      else out += `M${a},${y1 - d}L${b},${y1 - d}`;
     }
     if (!has(r, c - 1)) {
       const a = end(has(r - 1, c), has(r - 1, c - 1), y0, 1), b = end(has(r + 1, c), has(r + 1, c - 1), y1, -1);
-      out += `M${x0 + d},${a}L${x0 + d},${b}`;
+      if (esc && esc.c === -1 && c === 0 && r === esc.r) out += `M${x0 + d},${a}L${d},${a}L${d},${b}L${x0 + d},${b}`;
+      else out += `M${x0 + d},${a}L${x0 + d},${b}`;
     }
     if (!has(r, c + 1)) {
       const a = end(has(r - 1, c), has(r - 1, c + 1), y0, 1), b = end(has(r + 1, c), has(r + 1, c + 1), y1, -1);
-      out += `M${x1 - d},${a}L${x1 - d},${b}`;
+      if (esc && esc.c === N && c === N - 1 && r === esc.r) out += `M${x1 - d},${a}L${W - d},${a}L${W - d},${b}L${x1 - d},${b}`;
+      else out += `M${x1 - d},${a}L${x1 - d},${b}`;
     }
   }
   return out;
@@ -3566,6 +3583,9 @@ function renderBoard() {
   // Point markers (bulbs, arrowheads, between-end circles) are buffered here and painted after
   // every line stroke, so a line that crosses later never visually chops off another line's marker.
   let markerBuf = '';
+  // Thin strokes (arrow and between bodies) are buffered and painted after every thicker line, so a
+  // thin line that shares cells with a thick line from a different rule always shows on top of it.
+  let thinBuf = '';
   // A white/background "halo" drawn under every stroke so that a later line crossing an earlier
   // one visually breaks the earlier line's color where they overlap (bridge-gap / overpass look),
   // instead of the two colors blending into each other at the crossing cell.
@@ -3598,15 +3618,13 @@ function renderBoard() {
     thin.forEach(type => {
       const col = preview ? 'var(--accent)' : COL[type];
       if (type === 'between') {
-        o += halo('ln', pts(cells), 11);
-        o += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
+        thinBuf += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
         [cells[0], cells[L - 1]].forEach(c => { markerBuf += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
       } else if (L >= 2) {
         const dx0 = cx(cells[1]) - cx(cells[0]), dy0 = cy(cells[1]) - cy(cells[0]), l0 = Math.hypot(dx0, dy0) || 1;
         const sx = cx(cells[0]) + dx0 / l0 * 23, sy = cy(cells[0]) + dy0 / l0 * 23;
         const bodyPts = `${sx.toFixed(1)},${sy.toFixed(1)} ${pts(cells.slice(1))}`;
-        o += halo('ln', bodyPts, 9);
-        o += `<polyline class="ln arrow" style="stroke:${col}" points="${bodyPts}"/>`;
+        thinBuf += `<polyline class="ln arrow" style="stroke:${col}" points="${bodyPts}"/>`;
         markerBuf += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
         markerBuf += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
       }
@@ -3614,7 +3632,7 @@ function renderBoard() {
     if (types.includes('regsum') && L >= 2) {
       const col = preview ? 'var(--accent)' : COL.regsum;
       for (let k = 0; k + 1 < L; k++) {
-        if (p.regions[cells[k]] === p.regions[cells[k + 1]]) continue;
+        if (cells[k] >= NN || cells[k + 1] >= NN || p.regions[cells[k]] === p.regions[cells[k + 1]]) continue;
         const x0 = cx(cells[k]), y0 = cy(cells[k]), x1 = cx(cells[k + 1]), y1 = cy(cells[k + 1]);
         const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
         const px = -dy / len * 11, py = dx / len * 11;
@@ -3623,15 +3641,36 @@ function renderBoard() {
     }
     return o;
   };
-  p.lines.forEach(l => { s += drawLine(X.lineTypes(l), l.cells); });
+  // Escape lines extend through the grid into their outside box: the hidden outside value is
+  // the line's extra end, so the bulb / circle / arrowhead sit on the box when it is that end.
+  const escInfo = new Map();
+  p.lines.forEach((l, li) => {
+    if (!l.escape) return;
+    const V = NN + 10 + li, L = l.cells.length, atEnd = l.escape.idx === L - 1 && L > 0;
+    const rc = ringRect(l.escape.r, l.escape.c);
+    let x = rc.x + rc.w / 2, y = rc.y + rc.h / 2;
+    const types = X.lineTypes(l);
+    if (atEnd && types.includes('arrow') && L >= 1) { // stop the arrowhead tip at the box edge
+      const a = l.cells[L - 1], dx = x - cx(a), dy = y - cy(a), n = Math.hypot(dx, dy) || 1;
+      const half = Math.abs(dx) > Math.abs(dy) ? 20 : 17;
+      x -= dx / n * (half + 4); y -= dy / n * (half + 4);
+    }
+    VPT[V] = { x, y };
+    escInfo.set(l, { V, atEnd, chain: atEnd ? l.cells.concat([V]) : [V].concat(l.cells), types });
+  });
+  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells); });
+  s += thinBuf; thinBuf = '';
   s += markerBuf; markerBuf = '';
   const drawLineEscape = ln => {
     const { kind, r: rr, c: rcc, dr, dc } = ln.escape;
     const idx = ln.escape.idx === ln.cells.length - 1 ? ln.cells.length - 1 : 0;
     const anchor = ln.cells[idx];
     const rc = ringRect(rr, rcc), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
-    let o = `<line class="ln escape" style="stroke:var(--ink);stroke-dasharray:3 3;stroke-width:1.6;opacity:.85" x1="${cx(anchor)}" y1="${cy(anchor)}" x2="${mx}" y2="${my}"/>`;
-    o += `<rect class="obox" style="stroke:var(--ink)" x="${mx - 20}" y="${my - 17}" width="40" height="34" rx="6"/>`;
+    const ei = escInfo.get(ln), tys = ei.types, atStart = !ei.atEnd;
+    const mark = (atStart && (tys.includes('thermo') || tys.includes('arrow'))) || tys.includes('between');
+    const bc = tys.includes('arrow') || tys.includes('between') || !tys.length ? COL[tys[0]] : COL[tys.slice().sort((x, y) => LW[y] - LW[x])[0]];
+    const bw = mark ? 32 : 40, bh = mark ? 26 : 34;
+    let o = `<rect class="obox" style="stroke:${bc || 'var(--ink)'}" x="${mx - bw / 2}" y="${my - bh / 2}" width="${bw}" height="${bh}" rx="6"/>`;
     const key = rr + ',' + rcc;
     const ent = !editing && P && P.ring[key] ? P.ring[key] : null;
     let exact = null;
@@ -3665,14 +3704,14 @@ function renderBoard() {
   p.lines.forEach(l => { if (X.lineTypes(l).includes('regsum') && l.ring) s += drawRegRing(l.cells, l.ring); });
   if (app.drag && app.drag.kind === 'line' && app.drag.ringEnd) s += drawRegRing(app.drag.path, app.drag.ringEnd, true);
   if (app.drag && app.drag.kind === 'line' && app.drag.path.length) s += drawLine([app.tool], app.drag.path, true);
+  s += thinBuf; thinBuf = '';
   s += markerBuf; markerBuf = '';
 
   // cages
   const drawCageEscape = cg => {
     const { kind, r: rr, c: rcc } = cg.escape, anchor = cageRingAnchor(cg.cells, rr, rcc);
     const rc = ringRect(rr, rcc), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
-    let o = `<line class="ln escape" style="stroke:var(--ink);stroke-dasharray:3 3;stroke-width:1.6;opacity:.85" x1="${cx(anchor)}" y1="${cy(anchor)}" x2="${mx}" y2="${my}"/>`;
-    o += `<rect class="obox" style="stroke:var(--ink)" x="${mx - 20}" y="${my - 17}" width="40" height="34" rx="6"/>`;
+    let o = '';
     o += `<text class="rtag sm" x="${rc.x + 3}" y="${rc.y + 9}">${TAG[kind]}</text>`;
     const key = rr + ',' + rcc;
     const ent = !editing && P && P.ring[key] ? P.ring[key] : null;
@@ -3694,7 +3733,7 @@ function renderBoard() {
     // are deliberately exempt - their whole point is that you can't tell which rule a cage follows,
     // so they stay in the neutral default style regardless of which flavor they secretly are.
     const lsColor = !cg.mystery && cg.type === 'looksay', prColor = cg.type === 'product';
-    s += `<path class="cage${lsColor ? ' ls' : ''}${prColor ? ' pr' : ''}${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells)}"/>`;
+    s += `<path class="cage${lsColor ? ' ls' : ''}${prColor ? ' pr' : ''}${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells, cg.escape)}"/>`;
     const t = cg.type === 'looksay' ? (cg.runs ? X.lookSayCode(cg.runs) : '')
       : cg.type === 'mysterydigit' ? X.lookSayCode([{ d: cg.d, n: cg.n }])
       : cg.type === 'product' ? (cg.prod != null && cg.prod !== '' ? '\u00d7' + cg.prod : '')
@@ -3776,6 +3815,7 @@ function renderBoard() {
   });
   // lines through outside squares
   const ringPt = ([r, c]) => { const rc = ringRect(r, c); return [rc.x + rc.w / 2, rc.y + rc.h / 2]; };
+  let oTop = ''; // outside-line arrows, painted after every other outside line
   const drawOLine = (ol, preview) => {
     const P0 = ol.cells.map(ringPt), L = P0.length;
     const fmt = q => q[0].toFixed(1) + ',' + q[1].toFixed(1);
@@ -3797,15 +3837,16 @@ function renderBoard() {
         const off = Math.abs(qx - px) > Math.abs(qy - py) ? 25 : 22;
         const ex = qx - (qx - px) / dl * off, ey = qy - (qy - py) / dl * off;
         const body = P0.slice(1, L - 1).map(fmt).concat(fmt([ex, ey])).join(' ');
-        o += `<polyline class="ln arrow" style="stroke:${col};stroke-width:3.5" points="${fmt(st)} ${body}"/>`;
-        o += `<polygon style="fill:${col}" points="${arrowHeadXY(px, py, ex, ey)}"/>`;
+        oTop += `<polyline class="ln arrow" style="stroke:${col};stroke-width:3.5" points="${fmt(st)} ${body}"/>`;
+        oTop += `<polygon style="fill:${col}" points="${arrowHeadXY(px, py, ex, ey)}"/>`;
       }
-      o += `<circle class="abulb" style="stroke:${col};fill:var(--cell)" cx="${P0[0][0]}" cy="${P0[0][1]}" r="24"/>`;
+      oTop += `<circle class="abulb" style="stroke:${col};fill:var(--cell)" cx="${P0[0][0]}" cy="${P0[0][1]}" r="24"/>`;
     }
     return o;
   };
   p.olines.forEach(ol => { s += drawOLine(ol); });
   if (app.drag && app.drag.kind === 'oline') s += drawOLine({ type: app.olType, kind: app.olKind, cells: app.drag.cells }, true);
+  s += oTop; oTop = '';
   // ring clues
   p.clues.forEach(cl => {
     if (p.olines.some(ol => ol.cells.some(([r, c]) => r === cl.r && c === cl.c))) return;
@@ -4542,6 +4583,8 @@ function feasibleMix(sel) {
     if (s.has('diag') && (s.has('antiknight') || s.has('antiking') || s.has('disjoint'))) return false;
     if (s.has('antiknight') && s.has('antiking')) return false;
   }
+  // non-consecutive leaves no valid standard-region grid together with any other no-repeat rule
+  if (!s.has('irregular') && s.has('nonconsecutive') && (s.has('diag') || s.has('antiknight') || s.has('antiking') || s.has('disjoint'))) return false;
   if (SHADING_EXCL.filter(k => s.has(k)).length > 1) return false;
   { const cg = CAGE_EXCL.filter(k => s.has(k)); if (cg.length > 1 && !cg.every(k => OVERLAP_CAGES.includes(k))) return false; }
   if (s.has('cipher') && (s.has('looksay') || s.has('mysterycage'))) return false;
