@@ -483,6 +483,8 @@ details.about p{margin:8px 0 0}
         <label><input type="checkbox" id="optKnight"> Anti-knight</label>
         <label><input type="checkbox" id="optKing"> Anti-king</label>
         <label><input type="checkbox" id="optDisjoint"> Disjoint groups</label>
+        <label><input type="checkbox" id="optWindows"> Extra windows (four shaded 2×2 squares hold different digits)</label>
+        <label><input type="checkbox" id="optBalanced"> Balanced 2×2 (every 2×2 block holds two odd and two even digits)</label>
         <label><input type="checkbox" id="optNonconsec"> Unmarked neighbors are never consecutive</label>
         <label><input type="checkbox" id="optKropki"> Every Kropki pair is marked (dots)</label>
         <label><input type="checkbox" id="optXV"> Every XV pair is marked</label>
@@ -597,11 +599,11 @@ function stdRegions() {
 function newPuzzle() {
   return {
     v: 4, title: '', regions: stdRegions(), givens: new Array(NN).fill(0),
-    opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false,
+    opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false, windows: false, balanced: false,
             nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
             waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false,
             landConn: false, noPoolLand: false, sandwichShade: false },
-    cages: [], lines: [], edges: [], ext: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
+    cages: [], lines: [], edges: [], ext: [], hop: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
     marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
     sol: null, ssol: null, meta: null
   };
@@ -722,6 +724,86 @@ function chkZipper(g, cs) {
   }
   return true;
 }
+/* Hop arrows: a cell holding d points along a ray; the cell d steps away holds 7-d. ray = cells after the arrow cell. */
+function hopRay(i, dr, dc) {
+  const out = []; let r = rowOf(i) + dr, c = colOf(i) + dc;
+  while (inGrid(r, c)) { out.push(ix(r, c)); r += dr; c += dc; }
+  return out;
+}
+function chkHop(g, i, ray) {
+  const d = g[i];
+  if (d) { if (d > ray.length) return false; const t = g[ray[d - 1]]; return !t || t === 7 - d; }
+  for (let k = 1; k <= Math.min(6, ray.length); k++) { const t = g[ray[k - 1]]; if (!t || t === 7 - k) return true; }
+  return false;
+}
+/* Double arrow: the two end digits add up to the sum of the cells between them. */
+function chkDarrow(g, cs) {
+  const L = cs.length, a = g[cs[0]], b = g[cs[L - 1]]; let s0 = 0, u = 0;
+  for (let k = 1; k < L - 1; k++) { const v = g[cs[k]]; if (v) s0 += v; else u++; }
+  const el = (a || 1) + (b || 1), eh = (a || 6) + (b || 6);
+  return Math.max(el, s0 + u) <= Math.min(eh, s0 + 6 * u);
+}
+/* Even-count cage: distinct digits; exactly E of the cells hold an even digit. */
+function chkEvens(g, cells, E) {
+  let ce = 0, co = 0;
+  for (const i of cells) { const v = g[i]; if (v) { if (v % 2) co++; else ce++; } }
+  const n = cells.length, needE = E - ce, needO = (n - E) - co;
+  return E <= 3 && n - E <= 3 && needE >= 0 && needO >= 0 && ce <= 3 && co <= 3;
+}
+const isPrime = n => n === 2 || n === 3 || n === 5 || n === 7 || n === 11;
+/* Mountain line: strictly rise to one peak (never at an end), then strictly fall. Exact search over the completions. */
+function chkMountain(g, cs) {
+  const L = cs.length, a = cs.map(i => g[i]);
+  const rec = (k, prev, state) => {
+    if (k === L) return state === 1;
+    const lo = a[k] || 1, hi = a[k] || 6;
+    for (let v = lo; v <= hi; v++) {
+      if (k === 0) { if (rec(1, v, 0)) return true; continue; }
+      if (v === prev) continue;
+      if (v > prev) { if (state === 1) continue; if (rec(k + 1, v, 0)) return true; }
+      else { if (k === 1) continue; if (rec(k + 1, v, 1)) return true; }
+    }
+    return false;
+  };
+  return rec(0, 0, 0);
+}
+/* Equal-gap line: every pair of neighbors differs by the same non-zero amount d (up or down). */
+function chkGap(g, cs) {
+  const L = cs.length, a = cs.map(i => g[i]);
+  for (let d = 1; d <= 5; d++) {
+    const rec = (k, prev) => {
+      if (k === L) return true;
+      const lo = a[k] || 1, hi = a[k] || 6;
+      for (let v = lo; v <= hi; v++) { if (k > 0 && Math.abs(v - prev) !== d) continue; if (rec(k + 1, v)) return true; }
+      return false;
+    };
+    if (rec(0, 0)) return true;
+  }
+  return false;
+}
+/* Six locator: the cell holds d, and the 6 of its row sits in column d. */
+function chkLoc(g, i) {
+  const r = rowOf(i), d = g[i];
+  let p = -1; for (let c = 0; c < N; c++) if (g[ix(r, c)] === 6) p = c;
+  if (p >= 0) return !d || d === p + 1;
+  if (!d) return true;
+  const t = g[ix(r, d - 1)];
+  return !t || t === 6;
+}
+/* Range cage: distinct digits; largest minus smallest is R. */
+function chkRange(g, cells, R) {
+  let mn = 9, mx = 0, u = 0;
+  for (const i of cells) { const v = g[i]; if (v) { if (v < mn) mn = v; if (v > mx) mx = v; } else u++; }
+  if (cells.length > R + 1) return false;
+  for (let lo = 1; lo + R <= 6; lo++) {
+    if (mx && (mn < lo || mx > lo + R)) continue;
+    let need = 0; if (!cells.some(i => g[i] === lo)) need++; if (!cells.some(i => g[i] === lo + R)) need++;
+    if (need <= u) return true;
+  }
+  return false;
+}
+/* 2x2 corner helpers (Battenburg, corner max arrows). cells are [TL, TR, BL, BR]. */
+const WINDOWS = [[1, 1], [1, 3], [3, 1], [3, 3]].map(([r, c]) => [ix(r, c), ix(r, c + 1), ix(r + 1, c), ix(r + 1, c + 1)]);
 /* Counting circles: for every digit d, the number of circles holding d is 0 or d. */
 function chkCount(g, cells) {
   const cnt = [0, 0, 0, 0, 0, 0, 0]; let u = 0;
@@ -937,7 +1019,7 @@ function branchOK(cells, br) {
   for (let k = 0; k + 1 < full.length; k++) if (!nbr8[full[k]].includes(full[k + 1])) return false;
   return !diagCross(cells, full);
 }
-const OWN_LINE_RULES = ['zipper'];
+const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap'];
 const LINE_ALL = LINE_RULES.concat(OWN_LINE_RULES);
 const OL_RULES = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'parity'];
 const lineTypes = ln => { const a = [ln.type]; (ln.also || []).forEach(t => { if (t && !a.includes(t)) a.push(t); }); return a; };
@@ -984,6 +1066,20 @@ function lineOK(types, v, complete, ctx) {
         if (mx - mn > (Lt || 6) - 1) return false;
       } else if (t === 'between' && j > 0 && (!Lt || Lt >= 3) && v[j] === v[0]) return false;
       else if (t === 'arrow' && j > 0) { let s0 = 0; for (let a = 1; a <= j; a++) s0 += v[a]; if (s0 > v[0]) return false; }
+      else if (t === 'mountain' && j > 0) {
+        if (v[j] === v[j - 1]) return false;
+        if (j === 1 && v[1] < v[0]) return false;
+        if (v[j] > v[j - 1]) { for (let a = 1; a < j; a++) if (v[a] < v[a - 1]) return false; }
+        if (Lt && j === Lt - 1 && v[j] > v[j - 1]) return false;
+      }
+      else if (t === 'gap' && j > 0) { if (v[j] === v[j - 1]) return false; if (j > 1 && Math.abs(v[j] - v[j - 1]) !== Math.abs(v[1] - v[0])) return false; }
+      else if (t === 'slow' && j > 0 && v[j] < v[j - 1]) return false;
+      else if (t === 'nabner') { for (let a = 0; a < j; a++) if (Math.abs(v[a] - v[j]) < 2) return false; }
+      else if (t === 'darrow' && j > 0) {
+        let sm = 0; for (let a = 1; a < j; a++) sm += v[a];
+        if (Lt && j === Lt - 1) { if (Lt < 3 || sm !== v[0] + v[j]) return false; }
+        else if (sm > v[0] + 6) return false;
+      }
     }
     return true;
   }
@@ -993,6 +1089,15 @@ function lineOK(types, v, complete, ctx) {
     else if (t === 'parity') { for (let k = 0; k + 1 < n; k++) if ((v[k] + v[k + 1]) % 2 === 0) return false; }
     else if (t === 'entropic') { if (n >= 3) for (let k = 0; k + 2 < n; k++) if (new Set([grpOf(v[k]), grpOf(v[k + 1]), grpOf(v[k + 2])]).size !== 3) return false; }
     else if (t === 'palindrome') { for (let k = 0; k < n; k++) if (v[k] !== v[n - 1 - k]) return false; }
+    else if (t === 'mountain') {
+      if (n < 3) return false; let st = 0;
+      for (let k = 1; k < n; k++) { if (v[k] === v[k - 1]) return false; if (v[k] > v[k - 1]) { if (st) return false; } else { if (k === 1) return false; st = 1; } }
+      if (!st) return false;
+    }
+    else if (t === 'gap') { if (n < 3) return false; const d = Math.abs(v[1] - v[0]); if (!d) return false; for (let k = 1; k < n; k++) if (Math.abs(v[k] - v[k - 1]) !== d) return false; }
+    else if (t === 'slow') { for (let k = 0; k + 1 < n; k++) if (v[k] > v[k + 1]) return false; }
+    else if (t === 'nabner') { for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (Math.abs(v[a] - v[b]) < 2) return false; }
+    else if (t === 'darrow') { if (n < 3) return false; let sm = 0; for (let k = 1; k < n - 1; k++) sm += v[k]; if (sm !== v[0] + v[n - 1]) return false; }
     else if (t === 'zipper') { if (n % 2 === 0 || n < 3) return false; const m = (n - 1) >> 1; for (let k = 0; k < m; k++) if (v[k] + v[n - 1 - k] !== v[m]) return false; }
     else if (t === 'renban') { if (new Set(v).size !== n || Math.max(...v) - Math.min(...v) !== n - 1) return false; }
     else if (t === 'between') {
@@ -1130,6 +1235,8 @@ function compile(p) {
     regList.forEach(cells => { const s = cells.slice().sort((a, b) => a - b); s.forEach((cell, k) => (byPos[k] = byPos[k] || []).push(cell)); });
     byPos.forEach(g => { if (g.length > 1) distinct(g); });
   }
+  if (o.windows) WINDOWS.forEach(distinct);
+  const ALLQ = []; for (let r = 1; r < N; r++) for (let c = 1; c < N; c++) ALLQ.push(quadCells(r, c));
   if (o.antiKing) for (let i = 0; i < NN; i++) for (const j of nbr8[i]) peerSet[i].add(j);
   if (o.antiKnight) for (let i = 0; i < NN; i++) {
     const r = rowOf(i), c = colOf(i);
@@ -1154,7 +1261,7 @@ function compile(p) {
   for (const cg of p.cages) {
     why = cg.escape ? 'escaping ' + (cg.type === 'looksay' ? 'look-and-say cage' : 'cage with total ' + cg.sum)
       : cg.type === 'looksay' ? 'look-and-say cage' : cg.type === 'mysterydigit' ? 'mystery cage'
-      : cg.type === 'product' ? 'product cage (' + cg.prod + ')' : 'cage with sum ' + cg.sum;
+      : cg.type === 'product' ? 'product cage (' + cg.prod + ')' : cg.type === 'range' ? 'range cage (' + cg.rg + ')' : cg.type === 'evens' ? 'even-count cage (' + cg.ev + ')' : 'cage with sum ' + cg.sum;
     if (cg.escape) {
       const boxes = escBoxes(cg), eseqs = boxes.map(b => clueSeq(b));
       const cells2 = Array.from(new Set(cg.cells.concat(...eseqs)));
@@ -1180,6 +1287,12 @@ function compile(p) {
     } else if (cg.type === 'product') {
       distinct(cg.cells);
       if (cg.prod != null && cg.prod !== '') { const T = +cg.prod; addGroup(cg.cells, g => chkProd(g, cg.cells, T)); }
+    } else if (cg.type === 'evens') {
+      distinct(cg.cells);
+      if (cg.ev != null && cg.ev !== '') { const E = +cg.ev; addGroup(cg.cells, g => chkEvens(g, cg.cells, E)); }
+    } else if (cg.type === 'range') {
+      distinct(cg.cells);
+      if (cg.rg != null && cg.rg !== '') { const R = +cg.rg; addGroup(cg.cells, g => chkRange(g, cg.cells, R)); }
     } else {
       distinct(cg.cells);
       if (cg.sum != null && cg.sum !== '') { const T = +cg.sum; addGroup(cg.cells, g => chkSum(g, cg.cells, T, true)); }
@@ -1203,7 +1316,7 @@ function compile(p) {
       continue;
     }
     for (const ty of lineTypes(ln)) {
-    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zipper: 'zipper line (each mirrored pair sums to the center digit)' }[ty] || (ty + ' line');
+    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', nabner: 'Nabner line (no two digits on it are the same or consecutive)' }[ty] || (ty + ' line');
     if (ty === 'thermo') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
       for (let k = 0; k < L; k++) {
@@ -1254,6 +1367,22 @@ function compile(p) {
       }
     } else if (ty === 'parity') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => (a + b) % 2 === 1);
+    } else if (ty === 'mountain') {
+      if (L >= 3) { for (const k of [0, L - 1]) cand0[cs[k]] &= ~bit(6); addGroup(cs, g => chkMountain(g, cs)); }
+    } else if (ty === 'gap') {
+      if (L >= 3) addGroup(cs, g => chkGap(g, cs));
+    } else if (ty === 'slow') {
+      for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a <= b);
+    } else if (ty === 'nabner') {
+      for (let a = 0; a < L; a++) for (let b = a + 1; b < L; b++) addBin(cs[a], cs[b], (x, y) => Math.abs(x - y) >= 2);
+    } else if (ty === 'darrow') {
+      if (L >= 3) {
+        const mid = L - 2; let me = 0, mm = 0;
+        for (let d = 1; d <= 6; d++) { if (d + 6 >= mid) me |= bit(d); if (d <= 13 - mid) mm |= bit(d); }
+        cand0[cs[0]] &= me; cand0[cs[L - 1]] &= me;
+        for (let k = 1; k < L - 1; k++) cand0[cs[k]] &= mm;
+        addGroup(cs, g => chkDarrow(g, cs));
+      }
     } else if (ty === 'zipper') {
       if (L >= 3 && L % 2 === 1) {
         const m = (L - 1) >> 1;
@@ -1273,12 +1402,13 @@ function compile(p) {
   const key = (a, b) => a < b ? a + ',' + b : b + ',' + a;
   const have = { cons: new Set(), white: new Set(), black: new Set(), X: new Set(), V: new Set() };
   for (const e of p.edges) {
-    why = { cons: 'consecutive marker', white: 'white Kropki dot (differ by ' + (+e.n || 1) + ')', black: 'black Kropki dot (one is ' + (+e.n || 2) + ' times the other)', gt: 'greater-than sign', X: 'X marker (sum 10)', V: 'V marker (sum 5)' }[e.t] || 'pair marker';
+    why = { cons: 'consecutive marker', white: 'white Kropki dot (differ by ' + (+e.n || 1) + ')', black: 'black Kropki dot (one is ' + (+e.n || 2) + ' times the other)', gt: 'greater-than sign', prime: 'prime dot (the two digits sum to a prime)', X: 'X marker (sum 10)', V: 'V marker (sum 5)' }[e.t] || 'pair marker';
     have[e.t] && have[e.t].add(key(e.a, e.b));
     if (e.t === 'cons') addBin(e.a, e.b, (a, b) => Math.abs(a - b) === 1);
     else if (e.t === 'white') { const n = +e.n || 1; addBin(e.a, e.b, (a, b) => Math.abs(a - b) === n); }
     else if (e.t === 'black') { const n = +e.n || 2; addBin(e.a, e.b, (a, b) => a === n * b || b === n * a); }
     else if (e.t === 'gt') addBin(e.a, e.b, (a, b) => a > b);
+    else if (e.t === 'prime') addBin(e.a, e.b, (a, b) => isPrime(a + b));
     else if (e.t === 'X') addBin(e.a, e.b, (a, b) => a + b === 10);
     else if (e.t === 'V') addBin(e.a, e.b, (a, b) => a + b === 5);
   }
@@ -1288,6 +1418,25 @@ function compile(p) {
     const R = cg.regs || [];
     for (let j = 1; j < R.length; j++) for (let k = 0; k < R[0].length; k++) addBin(R[0][k], R[j][k], (a, b) => a === b);
   });
+  if (o.balanced) { why = 'balanced 2x2 blocks (every 2x2 block holds two odd and two even digits)'; ALLQ.forEach(q => addGroup(q, g => { let od = 0, ev = 0; for (const i of q) { if (g[i]) { if (g[i] % 2) od++; else ev++; } } return od <= 2 && ev <= 2; })); }
+  for (const x of (p.loc || [])) { why = 'six locator (the digit is the column of the 6 in its row)'; const row = []; for (let c = 0; c < N; c++) row.push(ix(rowOf(x), c)); addGroup(row.includes(x) ? row : row.concat(x), g => chkLoc(g, x)); }
+  for (const x of (p.cmax || [])) {
+    const cs4 = quadCells(x.r, x.c); if (!cs4) continue;
+    why = 'corner arrow (points to the largest of the four cells around the corner)';
+    cs4.forEach((c, k) => { if (k !== x.k) addBin(cs4[x.k], c, (a, b) => a > b); });
+  }
+  for (const x of (p.bat || [])) {
+    const cs4 = quadCells(x.r, x.c); if (!cs4) continue;
+    why = 'Battenburg corner (the four cells alternate even and odd like a checkerboard)';
+    addBin(cs4[0], cs4[1], (a, b) => (a + b) % 2 === 1); addBin(cs4[0], cs4[2], (a, b) => (a + b) % 2 === 1);
+    addBin(cs4[3], cs4[1], (a, b) => (a + b) % 2 === 1); addBin(cs4[3], cs4[2], (a, b) => (a + b) % 2 === 1);
+    addBin(cs4[0], cs4[3], (a, b) => (a + b) % 2 === 0); addBin(cs4[1], cs4[2], (a, b) => (a + b) % 2 === 0);
+  }
+  for (const h of (p.hop || [])) {
+    why = 'hop arrow (a cell holding d points to the cell d steps away, which holds 7-d)';
+    const ray = hopRay(h.cell, h.dr, h.dc), cells = [h.cell].concat(ray);
+    addGroup(cells, g => chkHop(g, h.cell, ray));
+  }
   for (const x of (p.ext || [])) {
     why = x.t === 'max' ? 'extreme cell (higher than every neighbor)' : 'extreme cell (lower than every neighbor)';
     for (const nb of nbr4[x.cell]) addBin(x.cell, nb, x.t === 'max' ? (a, b) => a > b : (a, b) => a < b);
@@ -1705,6 +1854,7 @@ function verify(p, g, sh) {
     if (p.parity[i] === 1 && g[i] % 2 === 0) errs.push('odd ' + i);
   }
   if (o.diag) { dist([0, 1, 2, 3, 4, 5].map(i => ix(i, i)), 'diag1'); dist([0, 1, 2, 3, 4, 5].map(i => ix(i, 5 - i)), 'diag2'); }
+  if (o.windows) WINDOWS.forEach((w, k) => dist(w, 'window ' + (k + 1)));
   if (o.disjoint) {
     for (let k = 0; k < 6; k++) dist(regList.map(cells => cells.slice().sort((a, b) => a - b)[k]), 'disjoint ' + k);
   }
@@ -1730,6 +1880,12 @@ function verify(p, g, sh) {
       if (cg.runs && !verifyLookSay(g, cg.cells, cg.runs)) errs.push('look-and-say cage');
     } else if (cg.type === 'mysterydigit') {
       if (!verifyLookSay(g, cg.cells, [{ d: cg.d, n: cg.n }])) errs.push('mystery cage digit count');
+    } else if (cg.type === 'evens') {
+      dist(cg.cells, 'cage');
+      if (cg.ev != null && cg.ev !== '' && cg.cells.filter(c => g[c] % 2 === 0).length !== +cg.ev) errs.push('cage evens');
+    } else if (cg.type === 'range') {
+      dist(cg.cells, 'cage');
+      if (cg.rg != null && cg.rg !== '') { const vs = cg.cells.map(c => g[c]); if (Math.max(...vs) - Math.min(...vs) !== +cg.rg) errs.push('cage range'); }
     } else if (cg.type === 'product') {
       dist(cg.cells, 'cage');
       if (cg.prod != null && cg.prod !== '' && cg.cells.reduce((a, c) => a * g[c], 1) !== +cg.prod) errs.push('cage product');
@@ -1773,6 +1929,11 @@ function verify(p, g, sh) {
     }
     else if (ty === 'parity') { for (let k = 0; k + 1 < L; k++) if ((v[k] + v[k + 1]) % 2 === 0) errs.push('parity'); }
     else if (ty === 'entropic') { if (L >= 3) for (let k = 0; k + 2 < L; k++) if (new Set([grpOf(v[k]), grpOf(v[k + 1]), grpOf(v[k + 2])]).size !== 3) errs.push('entropic'); }
+    else if (ty === 'mountain') { if (L >= 3 && !lineOK(['mountain'], v, true, {})) errs.push('mountain'); }
+    else if (ty === 'gap') { if (L >= 3 && !lineOK(['gap'], v, true, {})) errs.push('equal-gap'); }
+    else if (ty === 'slow') { for (let k = 0; k + 1 < L; k++) if (v[k] > v[k + 1]) errs.push('slow thermo'); }
+    else if (ty === 'nabner') { for (let a = 0; a < L; a++) for (let b = a + 1; b < L; b++) if (Math.abs(v[a] - v[b]) < 2) errs.push('Nabner'); }
+    else if (ty === 'darrow') { if (L >= 3) { let sm = 0; for (let k = 1; k < L - 1; k++) sm += v[k]; if (sm !== v[0] + v[L - 1]) errs.push('double arrow'); } }
     else if (ty === 'zipper') { if (L >= 3 && L % 2 === 1) { const m = (L - 1) >> 1; for (let k = 0; k < m; k++) if (v[k] + v[L - 1 - k] !== v[m]) errs.push('zipper'); } }
     }
   }
@@ -1785,11 +1946,17 @@ function verify(p, g, sh) {
     if (e.t === 'white' && Math.abs(a - b) !== (+e.n || 1)) errs.push('white');
     if (e.t === 'black' && !(a === (+e.n || 2) * b || b === (+e.n || 2) * a)) errs.push('black');
     if (e.t === 'gt' && !(a > b)) errs.push('gt');
+    if (e.t === 'prime' && !isPrime(a + b)) errs.push('prime');
     if (e.t === 'X' && a + b !== 10) errs.push('X');
     if (e.t === 'V' && a + b !== 5) errs.push('V');
   }
   if (p.cc && p.cc.length) { const cnt = [0, 0, 0, 0, 0, 0, 0]; p.cc.forEach(i => { cnt[g[i]]++; }); for (let d = 1; d <= 6; d++) if (cnt[d] && cnt[d] !== d) errs.push('counting circles'); }
   for (const cg of (p.clones || [])) { const R = cg.regs || []; for (let j = 1; j < R.length; j++) for (let k = 0; k < R[0].length; k++) if (g[R[0][k]] !== g[R[j][k]]) errs.push('clone'); }
+  if (o.balanced) for (let r = 1; r < N; r++) for (let c = 1; c < N; c++) { const q = quadCells(r, c); if (q.filter(i => g[i] % 2).length !== 2) errs.push('balanced block'); }
+  for (const x of (p.loc || [])) if (g[ix(rowOf(x), g[x] - 1)] !== 6) errs.push('six locator');
+  for (const x of (p.cmax || [])) { const c4 = quadCells(x.r, x.c); if (c4) c4.forEach((c, k) => { if (k !== x.k && !(g[c4[x.k]] > g[c])) errs.push('corner arrow'); }); }
+  for (const x of (p.bat || [])) { const c4 = quadCells(x.r, x.c); if (c4) { const q = c4.map(c => g[c] % 2); if (!(q[0] !== q[1] && q[0] !== q[2] && q[3] !== q[1] && q[3] !== q[2] && q[0] === q[3] && q[1] === q[2])) errs.push('Battenburg'); } }
+  for (const h of (p.hop || [])) { const ray = hopRay(h.cell, h.dr, h.dc), d = g[h.cell]; if (d > ray.length || g[ray[d - 1]] !== 7 - d) errs.push('hop'); }
   for (const x of (p.ext || [])) for (const nb of nbr4[x.cell]) if (x.t === 'max' ? !(g[x.cell] > g[nb]) : !(g[x.cell] < g[nb])) errs.push('extreme');
   for (const [i, j] of orthPairs) {
     const a = g[i], b = g[j], k = key(i, j);
@@ -1963,7 +2130,7 @@ function conflicts(p, model, grid) {
 
 const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
 
-root.SX = { N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
+root.SX = { chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1988,17 +2155,24 @@ const VARIANTS = [
   { k: 'killer', label: 'Killer cages', group: 'Sums' },
   { k: 'looksay', label: 'Look-and-say cages', group: 'Sums' },
   { k: 'product', label: 'Product cages', group: 'Sums' },
+  { k: 'range', label: 'Range cages', group: 'Sums' },
+  { k: 'evens', label: 'Even-count cages', group: 'Sums' },
   { k: 'cipher', label: 'Cipher clues', group: 'Sums' },
   { k: 'escape', label: 'Escape the Grid', group: 'Sums' },
   { k: 'mysterycage', label: 'Mystery Cages', group: 'Sums' },
   { k: 'quad', label: 'Quadruples', group: 'Sums' },
   { k: 'arrow', label: 'Arrow', group: 'Sums' },
+  { k: 'darrow', label: 'Double arrow', group: 'Sums' },
   { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
   { k: 'sandwich', label: 'Sandwich', group: 'Sums' },
   { k: 'skyscraper', label: 'Skyscraper', group: 'Sums' },
   { k: 'roomnumbers', label: 'Numbered Rooms', group: 'Sums' },
   { k: 'thermo', label: 'Thermo', group: 'Lines' },
+  { k: 'slow', label: 'Slow thermo', group: 'Lines' },
+  { k: 'mountain', label: 'Mountain lines', group: 'Lines' },
+  { k: 'gap', label: 'Equal-gap lines', group: 'Lines' },
+  { k: 'nabner', label: 'Nabner lines', group: 'Lines' },
   { k: 'whisper', label: 'German whispers', group: 'Lines' },
   { k: 'renban', label: 'Renban', group: 'Lines' },
   { k: 'palindrome', label: 'Palindrome', group: 'Lines' },
@@ -2013,7 +2187,14 @@ const VARIANTS = [
   { k: 'xv', label: 'XV', group: 'Pair clues' },
   { k: 'kropkin', label: 'Numbered Kropki', group: 'Pair clues' },
   { k: 'inequality', label: 'Greater-than signs', group: 'Pair clues' },
+  { k: 'prime', label: 'Prime dots', group: 'Pair clues' },
   { k: 'extremes', label: 'Extremes', group: 'Pair clues' },
+  { k: 'hop', label: 'Hop arrows', group: 'Grid rules' },
+  { k: 'cmax', label: 'Corner max arrows', group: 'Grid rules' },
+  { k: 'bat', label: 'Battenburg', group: 'Grid rules' },
+  { k: 'windows', label: 'Extra windows', group: 'Grid rules' },
+  { k: 'balanced', label: 'Balanced 2x2', group: 'Grid rules' },
+  { k: 'locator', label: 'Six locators', group: 'Grid rules' },
   { k: 'clone', label: 'Clone regions', group: 'Grid rules' },
   { k: 'countcircles', label: 'Counting circles', group: 'Grid rules' },
   { k: 'zipper', label: 'Zipper lines', group: 'Lines' },
@@ -2030,12 +2211,12 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, zipper: 1, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, locator: 3, prime: 2, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
-const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper']);
+const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap']);
 
 function randomRegions(rng) {
   for (let attempt = 0; attempt < 800; attempt++) {
@@ -2156,8 +2337,9 @@ function sampleLines(sol, rng, o) {
   return lines;
 }
 
-function killerCages(sol, rng) {
+function killerCages(sol, rng, blocked) {
   const cageOf = new Array(NN).fill(-1), cages = [];
+  if (blocked) blocked.forEach(i => { cageOf[i] = 1e9; }); // cells already claimed (escaping cages/lines)
   for (const s of shuffle([...Array(NN).keys()], rng)) {
     if (cageOf[s] >= 0) continue;
     const target = pick([2, 2, 3, 3, 3, 4], rng);
@@ -2179,8 +2361,9 @@ function killerCages(sol, rng) {
    clue: any digit it doesn't name is completely unconstrained, and the named counts don't need to
    add up to the cage's own cell count - a count of 0 ("this digit never appears here") is just as
    valid a fact as a positive one. */
-function lookSayCages(sol, rng) {
+function lookSayCages(sol, rng, blocked) {
   const cageOf = new Array(NN).fill(-1), cages = [];
+  if (blocked) blocked.forEach(i => { cageOf[i] = 1e9; });
   for (const s of shuffle([...Array(NN).keys()], rng)) {
     if (cageOf[s] >= 0) continue;
     const target = pick([2, 2, 3, 3, 3, 4, 4], rng);
@@ -2204,10 +2387,11 @@ function lookSayCages(sol, rng) {
    touch), then the two tilings are merged in random order. A cage from one type may overlap cells of
    the other type's cages, but never on a clue cell: a cage is kept only if its clue cell (top-left-most
    cell, where the number prints) lies in no other kept cage, and no kept cage's clue cell lies in it. */
-function mixedCages(sol, rng, types) {
+function mixedCages(sol, rng, types, blocked) {
   types = types || ['killer', 'looksay'];
   const tile = type => {
     const cageOf = new Array(NN).fill(-1), out = [], distinctDigits = type !== 'looksay';
+    if (blocked) blocked.forEach(i => { cageOf[i] = 1e9; });
     for (const s of shuffle([...Array(NN).keys()], rng)) {
       if (cageOf[s] >= 0) continue;
       const target = pick(distinctDigits ? [2, 2, 3, 3, 3, 4] : [2, 2, 3, 3, 3, 4, 4], rng);
@@ -2225,6 +2409,12 @@ function mixedCages(sol, rng, types) {
       if (cells.length < 2) { cells.forEach(c => { cageOf[c] = -1; }); continue; }
       if (type === 'killer') out.push({ cells, sum: cells.reduce((a, c) => a + sol[c], 0) });
       else if (type === 'product') out.push({ cells, type: 'product', prod: cells.reduce((a, c) => a * sol[c], 1) });
+      else if (type === 'evens') {
+        const ev = cells.filter(c => sol[c] % 2 === 0).length;
+        if (ev === 0) { cells.forEach(c => { cageOf[c] = -1; }); continue; } // a count of 0 is never printed (keeps Cipher clues valid)
+        out.push({ cells, type: 'evens', ev });
+      }
+      else if (type === 'range') out.push({ cells, type: 'range', rg: Math.max(...cells.map(c => sol[c])) - Math.min(...cells.map(c => sol[c])) });
       else {
         const counts = {}; cells.forEach(c => { counts[sol[c]] = (counts[sol[c]] || 0) + 1; });
         const digits = shuffle([1, 2, 3, 4, 5, 6], rng).slice(0, rng() < 0.5 ? 1 : 2).sort((x, y) => x - y);
@@ -2582,17 +2772,26 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   // so escape's own cage/line growth (next block) never overlaps them even if ever invoked outside
   // the UI's own exclusivity guard (clash()/feasibleMix() keep 'escape' and 'killer'/'looksay' from
   // ever being selected together there, but this keeps the generator itself sound either way).
-  const cageTypes = ['killer', 'looksay', 'product'].filter(k => V.has(k));
+  const cageTypes = ['killer', 'looksay', 'product', 'range', 'evens'].filter(k => V.has(k));
   const addCage = cg => {
     if (cg.type === 'product') add('product', p => p.cages.push({ cells: cg.cells.slice(), type: 'product', prod: cg.prod }));
+    else if (cg.type === 'range') add('range', p => p.cages.push({ cells: cg.cells.slice(), type: 'range', rg: cg.rg }));
+    else if (cg.type === 'evens') add('evens', p => p.cages.push({ cells: cg.cells.slice(), type: 'evens', ev: cg.ev }));
     else if (cg.runs) add('looksay', p => p.cages.push({ cells: cg.cells.slice(), type: 'looksay', runs: cg.runs.map(r => Object.assign({}, r)) }));
     else add('killer', p => p.cages.push({ cells: cg.cells.slice(), sum: cg.sum }));
     cg.cells.forEach(c => plainCageCells.add(c));
   };
-  if (cageTypes.length > 1) mixedCages(sol, rng, cageTypes).forEach(addCage); // shared tiling, overlap allowed (see mixedCages)
-  else if (V.has('killer')) killerCages(sol, rng).forEach(addCage);
-  else if (V.has('looksay')) lookSayCages(sol, rng).forEach(addCage);
-  else if (V.has('product')) mixedCages(sol, rng, ['product']).forEach(addCage);
+  // With Escape the Grid, the escaping cages and lines are placed first (below) and the plain cages
+  // then fill only the cells that are left; without it, plain cages tile the grid right away.
+  const makePlainCages = blocked => {
+    if (cageTypes.length > 1) mixedCages(sol, rng, cageTypes, blocked).forEach(addCage); // shared tiling, overlap allowed (see mixedCages)
+    else if (V.has('killer')) killerCages(sol, rng, blocked).forEach(addCage);
+    else if (V.has('looksay')) lookSayCages(sol, rng, blocked).forEach(addCage);
+    else if (V.has('product')) mixedCages(sol, rng, ['product'], blocked).forEach(addCage);
+    else if (V.has('range')) mixedCages(sol, rng, ['range'], blocked).forEach(addCage);
+    else if (V.has('evens')) mixedCages(sol, rng, ['evens'], blocked).forEach(addCage);
+  };
+  if (!V.has('escape')) makePlainCages(null);
   if (V.has('mysterycage')) mysteryCages(sol, rng).forEach(cg => {
     add('mysterycage', p => p.cages.push(cg.type === 'mysterydigit'
       ? { cells: cg.cells.slice(), type: 'mysterydigit', d: cg.d, n: cg.n, mystery: true }
@@ -2617,7 +2816,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     const escLineTypes = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic'].filter(t => V.has(t));
     const cageEligible = sumTargets.length || codeTargets.length;
     const lineEligible = lineTargets.length && escLineTypes.length;
-    const escClaimed = new Set(plainCageCells);
+    const escClaimed = new Set(plainCageCells), escCageCells = new Set(); // cells held by escaping CAGES (plain cages avoid these; lines may be overlapped)
     const maxEsc = 3;
     let made = 0;
     // A Yin-Yang+Sandwich combo ties a couple of specific rows/cols to a locked, must-keep Sandwich
@@ -2714,7 +2913,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
         const x = pick(ok, rng); taken.add(slotKey(x)); boxes.push({ kind: k2, r: x.r, c: x.c });
       }
       if (wantBoxes && boxes.length < wantBoxes) return false;
-      boxes.forEach(b => usedRing.add(slotKey(b))); cells.forEach(c => escClaimed.add(c));
+      boxes.forEach(b => usedRing.add(slotKey(b))); cells.forEach(c => { escClaimed.add(c); escCageCells.add(c); });
       const vals = boxes.map(b => S.outVal(b.kind, clueSeq(b), sol));
       const mk = () => { const o = { escape: Object.assign({}, boxes[0]) }; if (boxes.length > 1) o.escs = boxes.map(b => Object.assign({}, b)); return o; };
       if (useCode) {
@@ -2821,6 +3020,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       const got = useLine ? attemptLine() : (cageEligible ? attemptCage() : false);
       if (got) made++;
     }
+    if (cageTypes.length) makePlainCages(escCageCells);
   }
 
   if (V.has('quad')) {
@@ -2871,12 +3071,43 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       add('arrow', p => { const ln = { type: 'arrow', cells: cs.slice() }; if (br) ln.branch = br.slice(); p.lines.push(ln); }, lk('arrow'), br ? ['branch'] : undefined);
     });
   }
+  if (V.has('slow')) {
+    // a slow thermo is only worth drawing when it actually uses a tie (two equal digits on non-peer cells)
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: capOf('slow', 5), attempts: 6000, lenBias, usedEndpoints, cellCross, lineKey: 'slow',
+      prefixOK: (v, c, Lt) => S.lineOK(['slow'], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(['slow'], v, true, { wd: wdv }) && v.some((x, k) => k > 0 && x === v[k - 1]) })
+      .forEach(cs => add('slow', p => p.lines.push({ type: 'slow', cells: cs.slice() }), lk('slow')));
+  }
+  if (V.has('mountain')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: capOf('mountain', 5), attempts: 9000, lenBias, usedEndpoints, cellCross, lineKey: 'mountain',
+      prefixOK: (v, c, Lt) => S.lineOK(['mountain'], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(['mountain'], v, true, { wd: wdv }) })
+      .forEach(cs => add('mountain', p => p.lines.push({ type: 'mountain', cells: cs.slice() }), lk('mountain')));
+  }
+  if (V.has('gap')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 5, max: capOf('gap', 5), attempts: 9000, lenBias, usedEndpoints, cellCross, lineKey: 'gap',
+      prefixOK: (v, c, Lt) => S.lineOK(['gap'], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(['gap'], v, true, { wd: wdv }) })
+      .forEach(cs => add('gap', p => p.lines.push({ type: 'gap', cells: cs.slice() }), lk('gap')));
+  }
+  if (V.has('nabner')) {
+    sampleLines(sol, rng, { lens: [2, 3, 3], minL: 2, maxL: 3, max: capOf('nabner', 5), attempts: 6000, lenBias, usedEndpoints, cellCross, lineKey: 'nabner',
+      prefixOK: (v, c, Lt) => S.lineOK(['nabner'], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(['nabner'], v, true, { wd: wdv }) })
+      .forEach(cs => add('nabner', p => p.lines.push({ type: 'nabner', cells: cs.slice() }), lk('nabner')));
+  }
   plain('renban', 3, 5, 5, 3000);
   plain('whisper', 3, 6, 5, 4000);
   plain('palindrome', 3, 5, 4, 9000);
   plain('between', 3, 5, 4, 6000);
   plain('parity', 3, 7, 5, 2000);
   plain('entropic', 3, 7, 5, 3000);
+  if (V.has('darrow')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 6, max: capOf('darrow', 3), attempts: 6000, lenBias, usedEndpoints, cellCross, lineKey: 'darrow',
+      prefixOK: (v, c, Lt) => S.lineOK(['darrow'], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(['darrow'], v, true, { wd: wdv }) })
+      .forEach(cs => add('darrow', p => p.lines.push({ type: 'darrow', cells: cs.slice() }), lk('darrow')));
+  }
   if (V.has('zipper')) {
     sampleLines(sol, rng, { lens: [3, 5, 7], minL: 3, maxL: 7, max: capOf('zipper', 4), attempts: 9000, lenBias, usedEndpoints, cellCross, lineKey: 'zipper',
       prefixOK: (v, c, Lt) => S.lineOK(['zipper'], v, false, { wd: wdv, L: Lt }),
@@ -3009,6 +3240,8 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       if (hi % lo === 0 && rng() < 0.5) add('kropkin', p => p.edges.push({ a, b, t: 'black', n: hi / lo }));
       else add('kropkin', p => p.edges.push({ a, b, t: 'white', n: hi - lo }));
     }
+  if (V.has('prime'))
+    for (const [a, b] of orthPairs) if (S.isPrime(sol[a] + sol[b])) add('prime', p => p.edges.push({ a, b, t: 'prime' }));
   if (V.has('inequality'))
     for (const [a, b] of orthPairs) {
       const big = sol[a] > sol[b] ? a : b, small = big === a ? b : a;
@@ -3020,6 +3253,42 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       if (nb.every(j => sol[i] > sol[j])) add('extremes', p => p.ext.push({ cell: i, t: 'max' }));
       else if (nb.every(j => sol[i] < sol[j])) add('extremes', p => p.ext.push({ cell: i, t: 'min' }));
     }
+  if (V.has('hop')) {
+    // one arrow per cell, in a direction whose d-th cell holds 7-d; about 8 candidates, pruning trims to what is needed
+    const cands = [];
+    for (let i = 0; i < NN; i++) {
+      const d = sol[i], ds = [];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const ray = S.hopRay(i, dr, dc);
+        if (d <= ray.length && sol[ray[d - 1]] === 7 - d) ds.push([dr, dc]);
+      }
+      if (ds.length) { const [dr, dc] = pick(ds, rng); cands.push({ cell: i, dr, dc }); }
+    }
+    shuffle(cands, rng).slice(0, 8).forEach(h => { add('hop', p => p.hop.push({ cell: h.cell, dr: h.dr, dc: h.dc })); items[items.length - 1].hopCell = h.cell; });
+  }
+  if (V.has('locator')) {
+    // one candidate per row: the cell whose digit is the column (1-6) of that row's 6
+    for (let r = 0; r < N; r++) {
+      let p6 = -1; for (let c = 0; c < N; c++) if (sol[S.ix(r, c)] === 6) p6 = c;
+      for (let c = 0; c < N; c++) if (sol[S.ix(r, c)] === p6 + 1) { const cell = S.ix(r, c); add('locator', p => p.loc.push(cell)); }
+    }
+  }
+  if (V.has('cmax')) {
+    // about 8 candidate corners whose four cells have one strictly largest digit; pruning trims to what is needed
+    const cs = [];
+    for (let r = 1; r < N; r++) for (let c = 1; c < N; c++) {
+      const c4 = S.quadCells(r, c), v4 = c4.map(i => sol[i]), mx = Math.max(...v4);
+      if (v4.filter(x => x === mx).length === 1) cs.push({ r, c, k: v4.indexOf(mx) });
+    }
+    shuffle(cs, rng).slice(0, 8).forEach(x => add('cmax', p => p.cmax.push({ r: x.r, c: x.c, k: x.k })));
+  }
+  if (V.has('bat')) {
+    for (let r = 1; r < N; r++) for (let c = 1; c < N; c++) {
+      const q = S.quadCells(r, c).map(i => sol[i] % 2);
+      if (q[0] !== q[1] && q[0] !== q[2] && q[3] !== q[1] && q[3] !== q[2] && q[0] === q[3] && q[1] === q[2]) add('bat', p => p.bat.push({ r, c }));
+    }
+  }
   if (V.has('clone')) cloneGroups(sol, rng).forEach(regs => add('clone', p => p.clones.push({ regs: regs.map(r => r.slice()) })));
   if (V.has('xv'))
     for (const [a, b] of orthPairs) {
@@ -3090,12 +3359,31 @@ function prodDomain(n) {
   const s = new Set(), go = (d, k, p) => { if (!k) { s.add(p); return; } for (let e = d; e <= 6; e++) go(e + 1, k - 1, p * e); };
   go(1, n, 1); return Array.from(s);
 }
+/* every look-and-say code a cage of m cells (counting hidden outside values) with r runs can show: pairs of
+   [quantity 0..m][digit 1..6], digits in ascending order. Codes are strings, so a leading 0 survives. */
+function lookSayDomain(m, r) {
+  const out = [], pair = (d0, k, acc) => {
+    if (!k) { out.push(acc); return; }
+    for (let d = d0; d <= 6; d++) for (let q = 0; q <= m; q++) pair(d + 1, k - 1, acc + q + '' + d);
+  };
+  pair(1, r, ''); return out;
+}
+const parseLookSay = str => { const r = []; for (let i = 0; i + 1 < str.length; i += 2) r.push({ n: +str[i], d: +str[i + 1] }); return r; };
 function cipherClues(q) {
   const out = [];
   q.cages.forEach((cg, k) => {
-    if (cg.mystery || cg.type === 'looksay' || cg.type === 'mysterydigit') return;
+    if (cg.mystery || cg.type === 'mysterydigit') return;
+    if (cg.type === 'looksay') {
+      if (cg.runs && cg.runs.length) {
+        const m = cg.cells.length + S.escBoxes(cg).length;
+        out.push({ cage: true, ls: true, dom: lookSayDomain(m, cg.runs.length), v: S.lookSayCode(cg.runs), set: (c, v) => { c.cages[k].runs = v == null || v === '' ? [] : parseLookSay(String(v)); } });
+      }
+      return;
+    }
     const n = cg.cells.length;
     if (cg.type === 'product') { if (cg.prod != null && cg.prod !== '') out.push({ cage: true, dom: prodDomain(n), v: +cg.prod, set: (c, v) => { c.cages[k].prod = v; } }); }
+    else if (cg.type === 'evens') { if (cg.ev != null && cg.ev !== '') out.push({ cage: true, dom: rangeDomain(1, Math.min(3, n)), v: +cg.ev, set: (c, v) => { c.cages[k].ev = v; } }); }
+    else if (cg.type === 'range') { if (cg.rg != null && cg.rg !== '') out.push({ cage: true, dom: rangeDomain(Math.max(1, n - 1), 5), v: +cg.rg, set: (c, v) => { c.cages[k].rg = v; } }); }
     else if (cg.sum != null && cg.sum !== '') {
       // an escaping cage's total also counts its hidden outside values, whose ranges depend on the box's rule
       const HR = { xs: [1, 21], sw: [0, 14], sk: [1, 6], nr: [1, 6], lk: [1, 36] };
@@ -3119,7 +3407,7 @@ function cipherCount(q, cap, maxNodes, until) {
   // digits that are NOT disguised appear as themselves in key; they are fixed from the start
   for (let d = 0; d <= 9; d++) if (/\d/.test(key[d])) { assign[key[d]] = d; used.add(d); }
   let found = 0, work = 0, bail = false;
-  const decode = c => { let n = 0; for (const ch of c.word) { if (!(ch in assign)) return null; n = n * 10 + assign[ch]; } return n; };
+  const decode = c => { if (c.ls) { let t = ''; for (const ch of c.word) { if (!(ch in assign)) return null; t += assign[ch]; } return t; } let n = 0; for (const ch of c.word) { if (!(ch in assign)) return null; n = n * 10 + assign[ch]; } return n; };
   const relaxed = () => {
     const c2 = JSON.parse(JSON.stringify(q));
     cl.forEach(c => { const n = decode(c); c.set(c2, n == null ? (c.cage ? null : '') : n); });
@@ -3140,7 +3428,7 @@ function cipherCount(q, cap, maxNodes, until) {
     }
     return false;
   };
-  const leadOK = c => c.word.length < 2 || !(c.word[0] in assign) || assign[c.word[0]] !== 0;
+  const leadOK = c => c.ls || c.word.length < 2 || !(c.word[0] in assign) || assign[c.word[0]] !== 0;
   const dfs = () => {
     if (until && Date.now() > until) bail = true;
     if (bail || found >= cap) return;
@@ -3168,7 +3456,7 @@ function cipherCount(q, cap, maxNodes, until) {
   dfs();
   return bail ? cap : found;
 }
-root.SX.cipherCount = cipherCount; root.SX.cipherClues = cipherClues; root.SX.cipherWord = cipherWord;
+root.SX.lookSayDomain = lookSayDomain; root.SX.cipherCount = cipherCount; root.SX.cipherClues = cipherClues; root.SX.cipherWord = cipherWord;
 
 function assemble(base, items, givens, sol) {
   const p = clonePuzzle(base);
@@ -3186,6 +3474,8 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   base.opts.antiKnight = V.has('antiknight');
   base.opts.antiKing = V.has('antiking');
   base.opts.disjoint = V.has('disjoint') && !V.has('irregular');
+  base.opts.windows = V.has('windows');
+  base.opts.balanced = V.has('balanced');
   const whisperDiff = spec.whisperDiff || 4;
   base.opts.whisperDiff = whisperDiff;
   const negChoice = k => spec.negative && spec.negative[k] !== undefined ? !!spec.negative[k] : rng() < 0.5;
@@ -3313,6 +3603,7 @@ function tryGenerate(V, diff, rng, deadline, spec) {
 
   let inc = new Set(items);
   const noGive = new Set(base.cc || []); // counting circles always start empty
+  items.forEach(it => { if (it.hopCell != null) noGive.add(it.hopCell); }); // hop arrow cells keep their digit hidden
   const givens = new Set(shuffle([...Array(NN).keys()].filter(i => !noGive.has(i)), rng).slice(0, g0));
   // Cipher: only K digits (default all ten) are written as letters; key[d] is d's letter, or the digit
   // itself when d is not disguised. Letters are named A, B, C... in a random order over the chosen digits.
@@ -3788,8 +4079,9 @@ const app = {
   extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}, cipherK: 10,
   assist: { on: false, level: 2, cur: null, C: null, sig: '', auto: false, timer: null }
 };
-const RULE_LABEL = { zipper: 'Zipper', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
-const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper'];
+const RULE_LABEL = { zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
+const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap']; // line rules that stand alone (never layered with another rule)
+const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap'];
 const PAL = ['Clear', 'Shade', 'Land', 'Red', 'Amber', 'Green', 'Blue', 'Purple', 'Teal'];
 
 /* ---------- puzzle helpers ---------- */
@@ -3806,14 +4098,14 @@ function normalize(o) {
   p.ssol = Array.isArray(o && o.ssol) && o.ssol.length === NN ? o.ssol : null;
   p.cages = ((o && o.cages) || []).filter(c => Array.isArray(c.cells) && c.cells.length && c.cells.every(i => i >= 0 && i < NN));
   p.lines = ((o && o.lines) || []).filter(l => Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(i => i >= 0 && i < NN));
-  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)));
+  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)) && (l.type !== 'darrow' || l.cells.length >= 3) && (l.type !== 'nabner' || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || l.cells.length >= 3));
   p.lines.forEach(l => {
-    l.also = l.type === 'zipper' ? [] : Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
+    l.also = SOLO_LINES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
     if (!l.also.length) delete l.also;
     if (!X.lineTypes(l).includes('regsum') || !Array.isArray(l.ring) || l.ring.length !== 2) delete l.ring;
     if (l.branch && !(l.type === 'arrow' && !l.also && !l.escape && X.branchOK(l.cells, l.branch))) delete l.branch;
   });
-  p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN && e.a !== e.b && ['cons', 'white', 'black', 'X', 'V', 'gt'].includes(e.t)).map(e => {
+  p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN && e.a !== e.b && ['cons', 'white', 'black', 'X', 'V', 'gt', 'prime'].includes(e.t)).map(e => {
     const q = { a: e.a, b: e.b, t: e.t };
     if ((e.t === 'white' || e.t === 'black') && Number.isInteger(+e.n) && +e.n >= (e.t === 'white' ? 1 : 2) && +e.n <= 6) q.n = +e.n;
     return q;
@@ -3829,6 +4121,11 @@ function normalize(o) {
   }
   p.cc = Array.from(new Set(((o && o.cc) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
   p.ext = ((o && o.ext) || []).filter(x => x && Number.isInteger(x.cell) && x.cell >= 0 && x.cell < NN && (x.t === 'max' || x.t === 'min')).map(x => ({ cell: x.cell, t: x.t }));
+  { const seen = new Set();
+    p.hop = ((o && o.hop) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && [-1, 0, 1].includes(h.dr) && [-1, 0, 1].includes(h.dc) && (h.dr || h.dc) && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !seen.has(h.cell) && seen.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc })); }
+  { const sv = new Set(); p.cmax = ((o && o.cmax) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && [0, 1, 2, 3].includes(x.k) && !sv.has(x.r + ',' + x.c) && sv.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c, k: x.k }));
+    const sb = new Set(); p.bat = ((o && o.bat) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && !sb.has(x.r + ',' + x.c) && sb.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c })); }
+  p.loc = Array.from(new Set(((o && o.loc) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
   p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'sw', 'sk', 'nr'].includes(c.kind));
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
   p.olines = ((o && o.olines) || []).filter(l => X.OL_RULES.includes(l.type) && ['xs', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
@@ -3870,7 +4167,8 @@ function normalize(o) {
   p.meta = (o && o.meta) || null;
   return p;
 }
-const hashOf = p => JSON.stringify([p.regions, p.givens, p.opts, p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : []));
+const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; return q; };
+const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : []));
 const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
 const getModel = () => app.model || (app.model = X.compile(app.puzzle));
 function getSol() {
@@ -3904,13 +4202,17 @@ function variantLabels(p) {
   if (!isStd(p)) L.push('Irregular');
   if (o.diag) L.push('Diagonal'); if (o.antiKnight) L.push('Anti-knight'); if (o.antiKing) L.push('Anti-king');
   if (o.disjoint) L.push('Disjoint groups');
-  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && !c.mystery && !c.escape)) L.push('Killer');
+  if (o.windows) L.push('Extra windows');
+  if (o.balanced) L.push('Balanced 2x2');
+  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && c.type !== 'range' && c.type !== 'evens' && !c.mystery && !c.escape)) L.push('Killer');
   if (p.cages.some(c => c.type === 'looksay' && !c.escape)) L.push('Look-and-say');
   if (p.cages.some(c => c.type === 'product')) L.push('Product');
+  if (p.cages.some(c => c.type === 'range')) L.push('Range cages');
+  if (p.cages.some(c => c.type === 'evens')) L.push('Even-count cages');
   if (p.cipher) L.push('Cipher');
   if (p.cages.some(c => c.mystery)) L.push('Mystery Cages');
   if (p.cages.some(c => c.escape) || p.lines.some(l => l.escape)) L.push('Escape the Grid');
-  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', zipper: 'Zipper' };
+  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines' };
   if (p.quads.length) L.push('Quadruples');
   p.lines.forEach(l => X.lineTypes(l).forEach(t => has.add(nm[t])));
   has.forEach(x => x && L.push(x));
@@ -3919,7 +4221,7 @@ function variantLabels(p) {
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && !x.n)) L.push('Kropki');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && x.n)) L.push('Numbered Kropki');
-  if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
+  if (e.has('prime')) L.push('Prime dots'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
   if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
   const nk = (p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater;
@@ -3940,10 +4242,14 @@ function rulesFor(p) {
   if (o.antiKnight) R.push('Cells a chess knight’s move apart never hold the same digit.');
   if (o.antiKing) R.push('Cells touching at a side or corner never hold the same digit.');
   if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
-  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
+  if (o.balanced) R.push('Balanced blocks: every 2×2 block of four cells in the grid, overlapping ones included, holds exactly two odd digits and two even digits.');
+  if (o.windows) R.push('Extra windows (shaded 2×2 squares): each shaded square also holds four different digits.');
+  if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && c.type !== 'range' && c.type !== 'evens' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
   if (p.cages.some(c => c.type === 'looksay' && !c.escape)) R.push('Dashed look-and-say cages: digits may repeat. The corner code is read 2 digits at a time, "[quantity][digit]", listed in ascending digit order - e.g. "12" means exactly one 2 is in the cage; "0213" means exactly zero 2s and exactly one 3. Any digit not named is unconstrained, and the cage may hold more cells than the named counts add up to.');
-  if (p.cages.some(c => c.type === 'looksay' && !c.escape) && p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && !c.mystery && !c.escape)) R.push('Killer cages (dark outline) and look-and-say cages (teal outline) may overlap, so one cell can belong to both; each cage still obeys its own rule. A cage\'s corner number is never printed on a cell shared with another cage.');
-  if (p.cipher) R.push('Cipher clues: some or all digits in the number clues are written as letters. Each letter stands for one digit from 0 to 9, different letters stand for different digits, and the same letter always means the same digit. Digits shown as digits are ordinary and mean themselves, so a clue such as "A7" is a two-digit number ending in 7. A clue never starts with 0. Work out the letters as part of solving. The boxes under the board are for notes: tap one and enter a value or pencil marks, the same way as an outside clue box. A letter with a value set is replaced by that digit in the clues.' + (p.cipher.hints && Object.keys(p.cipher.hints).length ? ' Revealed: ' + Object.keys(p.cipher.hints).map(L => L + ' = ' + p.cipher.hints[L]).join(', ') + '.' : ''));
+  if (p.cages.some(c => c.type === 'looksay' && !c.escape) && p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && c.type !== 'range' && c.type !== 'evens' && !c.mystery && !c.escape)) R.push('Killer cages (dark outline) and look-and-say cages (teal outline) may overlap, so one cell can belong to both; each cage still obeys its own rule. A cage\'s corner number is never printed on a cell shared with another cage.');
+  if (p.cipher) R.push('Cipher clues: some or all digits in the number clues are written as letters. Each letter stands for one digit from 0 to 9, different letters stand for different digits, and the same letter always means the same digit. Digits shown as digits are ordinary and mean themselves, so a clue such as "A7" is a two-digit number ending in 7. A clue never starts with 0' + (p.cages.some(c => c.type === 'looksay' && c.runs && c.runs.length && !c.mystery) ? ' (except a look-and-say code, whose first digit is a quantity and can be 0). In a lettered look-and-say code every character is a letter or digit as usual: the code is still read two at a time, quantity then digit, so the odd-numbered characters are quantities, the even-numbered ones are digits from 1 to 6, and the digits ascend' : '') + '. Work out the letters as part of solving. The boxes under the board are for notes: tap one and enter a value or pencil marks, the same way as an outside clue box. A letter with a value set is replaced by that digit in the clues.' + (p.cipher.hints && Object.keys(p.cipher.hints).length ? ' Revealed: ' + Object.keys(p.cipher.hints).map(L => L + ' = ' + p.cipher.hints[L]).join(', ') + '.' : ''));
+  if (p.cages.some(c => c.type === 'evens')) R.push('Even-count cages (pink outline, number starts with "ev"): digits never repeat inside the cage, and exactly that many of its cells hold an even digit (2, 4 or 6). For example, a cage marked ev1 holding 3, 4 and 5 fits, because only the 4 is even.');
+  if (p.cages.some(c => c.type === 'range')) R.push('Range cages (violet outline, number starts with \u2195): digits never repeat inside the cage, and the largest digit minus the smallest digit equals the number. For example, a cage marked \u21953 holding 2, 4 and 5 fits, because 5 \u2212 2 = 3.');
   if (p.cages.some(c => c.type === 'product')) R.push('Product cages (amber outline, number starts with \u00d7): digits multiply to the number in the cage and never repeat inside it.');
   if (p.cages.some(c => c.mystery)) R.push('Mystery cages (dashed, no marker): the corner number could be a Killer-style sum (digits sum to it, never repeating) or a look-and-say count (exactly that many of that one digit, rest of the cage unconstrained) - nothing about the cage says which. Each mystery cage is secretly one or the other; work out which from the rest of the grid.');
   if (p.cages.some(c => c.escape)) R.push('Escaping cages (dashed, reaching a boxed square outside the grid): that outside square is not a Sudoku digit. It counts toward the cage’s own total (or look-and-say code) exactly like any other cage cell, and separately it is the hidden value of the outside-clue rule marked on that square (X, S, ▲ or N) for its row or column. Neither value is shown - work out the hidden one from both rules at once.' + (p.cages.some(c => X.escBoxes(c).length > 1) ? ' A cage can reach two or three outside squares (all inside the one dashed outline): each is a separate hidden value from its own rule, and all of them count toward the total.' : '') + (function () {
@@ -3951,6 +4257,8 @@ function rulesFor(p) {
     if (p.cages.some(c => c.escape && !c.type && !c.mystery) || p.cages.some(c => !c.type && !c.mystery)) cl.push('dark = killer (sum)');
     if (p.cages.some(c => c.type === 'looksay' && !c.mystery)) cl.push('teal = look-and-say (code)');
     if (p.cages.some(c => c.type === 'product')) cl.push('orange = product');
+    if (p.cages.some(c => c.type === 'range')) cl.push('violet = range');
+    if (p.cages.some(c => c.type === 'evens')) cl.push('pink = even count');
     return cl.length ? ' Cage outline colors: ' + cl.join(', ') + '. The outline around the outside square uses the same color as its cage.' : '';
   })());
   if (p.lines.some(l => l.escape)) R.push('Escaping lines (reaching a boxed square outside the grid, marked X, S, ▲, N, or an arrow for Little Killer): that outside square is not a Sudoku digit. It takes part in the line’s own rule exactly like any other cell on the line, and separately it is the hidden value of the outside-clue rule marked there for its row, column or diagonal. Neither value is shown - work out the hidden one from both rules at once.' + (p.lines.some(l => X.escBoxes(l).length > 1 || X.escBoxes(l).some(b => b.pos > 0 && b.pos < l.cells.length)) ? ' A line can pass through two or three outside squares in a row (stepping along the border, or across a corner) and may come back into the grid. Every outside square is its own link in the line, with its own hidden value from the rule marked on it.' : ''));
@@ -3961,6 +4269,11 @@ function rulesFor(p) {
   if (lt.has('renban')) R.push('Renban (purple): the line holds a set of consecutive digits, in any order, with no repeats.');
   if (lt.has('palindrome')) R.push('Palindrome (blue): the line reads the same in both directions.');
   if (lt.has('parity')) R.push('Parity lines (taupe): neighboring digits on the line alternate between odd and even.');
+  if (lt.has('mountain')) R.push('Mountain lines (burnt orange): digits strictly rise to a single peak and then strictly fall. The peak is never at an end of the line, and the peak cell is not marked.');
+  if (lt.has('gap')) R.push('Equal-gap lines (indigo): every pair of neighboring digits on the line differs by the same amount, which is not given. The line can step up or down at each cell, so 2, 4, 2, 4, 6 and 2, 5, 2, 5 both follow a gap rule.');
+  if (lt.has('slow')) R.push('Slow thermometers (teal, with a bulb): digits never decrease from the bulb to the tip. Two neighbors on the line may hold the same digit, but only when their cells do not share a row, column or box.');
+  if (lt.has('nabner')) R.push('Nabner lines (plum): no two digits on the line are the same or consecutive, whether or not the cells touch. Any two differ by at least 2.');
+  if (lt.has('darrow')) R.push('Double arrows (a circle at each end): the digits at the two ends add up to the sum of the digits on the cells between them.');
   if (lt.has('zipper')) R.push('Zipper lines (lime-green): the line has an odd number of cells, and the cell in the middle is marked with a diamond. Each pair of cells the same distance from the middle cell adds up to the digit in the middle cell.');
   if (lt.has('entropic')) R.push('Entropic lines (pink): every three consecutive cells on the line hold one digit from each of 1–2, 3–4 and 5–6.');
   if (p.lines.some(l => l.also)) R.push('Duality lines (layered colors): a line drawn with several layers obeys every rule shown by its layers at once.');
@@ -3978,9 +4291,14 @@ function rulesFor(p) {
   }
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && !x.n) || o.kropkiNeg) R.push('White dot: digits differ by 1. Black dot: one digit is double the other (1 and 2 use black).' + (o.kropkiNeg ? ' Every such pair is marked.' : ''));
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && x.n)) R.push('Numbered dots: the number in a white dot is the difference between its two digits. The number in a black dot is their ratio - the larger digit is that many times the smaller.' + (p.edges.some(x => (x.t === 'white' || x.t === 'black') && !x.n) ? ' A dot with no number keeps its usual meaning (white: differ by 1, black: one is double the other).' : ''));
+  if (et.has('prime')) R.push('Prime dots (marked P): the two digits add up to a prime number, which is 3, 5, 7 or 11. Not every pair that adds to a prime is marked.');
   if (et.has('gt')) R.push('Greater-than signs between cells: the sign points toward the smaller digit, so the open side faces the larger one.');
   if (p.clones && p.clones.some(g => g.regs.length > 1)) R.push('Clone regions (tinted cells with a matching letter): every region with the same letter has the same shape, and cells in the same position within those regions hold the same digit. For example, if one A region reads 3 then 5, the other A region reads 3 then 5 in the same arrangement.');
   if (p.cc && p.cc.length) R.push('Counting circles (violet rings): the digit in a circle tells how many circles hold that digit. If a 3 is in a circle, exactly three circles hold a 3. A digit that is in no circle has no limit. Circle cells start empty.');
+  if (p.loc && p.loc.length) R.push('Six locators (red dashed circles with a red 6): the digit in a circled cell tells which column holds the 6 in that row, counting columns 1 to 6 from the left. If a circled cell holds a 4, the 6 in its row is in column 4.');
+  if (p.cmax && p.cmax.length) R.push('Corner arrows (orange arrow on a corner where four cells meet): the arrow points at one of the four cells, and that cell holds a digit larger than each of the other three.');
+  if (p.bat && p.bat.length) R.push('Battenburg corners (small checkerboard where four cells meet): the four cells alternate between odd and even like a checkerboard, so cells that touch at a side differ in parity and diagonal cells match. The colors do not say which cells are odd.');
+  if (p.hop && p.hop.length) R.push('Hop arrows (teal arrows): the digit in an arrow cell is how many steps the arrow hops. The cell that many steps away in the arrow\'s direction (straight or diagonal) holds 7 minus that digit. For example, if the arrow cell holds a 2, the cell two steps along the arrow holds a 5. The arrow cell\'s own digit is not given.');
   if (p.ext && p.ext.length) R.push('Extremes: a cell with an upward triangle (peak) holds a digit larger than every cell touching it at a side. A downward triangle (valley) holds a digit smaller than every cell touching it at a side. Not every peak or valley in the grid is marked.');
   if (et.has('X') || et.has('V') || o.xvNeg) R.push('X: neighboring digits sum to 10. V: neighboring digits sum to 5.' + (o.xvNeg ? ' Every such pair is marked.' : ''));
   if (p.parity.some(x => x)) R.push('Grey squares hold even digits. Grey circles hold odd digits.');
@@ -4149,7 +4467,7 @@ function loadPuzzle(o, tab) {
 }
 
 /* ---------- board drawing ---------- */
-const COL = { zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
+const COL = { mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
 const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
 
 // Dashed outline around a cage's cells and, for escaping cages, its outside boxes: every tile (a grid
@@ -4275,12 +4593,35 @@ function renderBoard() {
   // counting circles
   let cloneTxt = '';
   (p.cc || []).forEach(i => { cloneTxt += `<circle cx="${cx(i)}" cy="${cy(i)}" r="25" style="fill:none;stroke:#7c5cd6;stroke-width:3;opacity:.85"/>`; });
+  // six locators: a dashed red ring with a small red 6 badge
+  (p.loc || []).forEach(i => {
+    cloneTxt += `<circle cx="${cx(i)}" cy="${cy(i)}" r="23" style="fill:none;stroke:#d64550;stroke-width:3;stroke-dasharray:5 3.5;opacity:.9"/><circle cx="${gx(colOf(i)) + CELL - 11}" cy="${gy(rowOf(i)) + 11}" r="8" style="fill:#d64550"/><text x="${gx(colOf(i)) + CELL - 11}" y="${gy(rowOf(i)) + 11.5}" style="font-size:11px;font-weight:800;fill:#fff;text-anchor:middle;dominant-baseline:central">6</text>`;
+  });
+  // hop arrows: a short teal arrow in the cell
+  (p.hop || []).forEach(h => {
+    const l = Math.hypot(h.dr, h.dc), ux = h.dc / l, uy = h.dr / l, x0 = cx(h.cell), y0 = cy(h.cell);
+    const bx = x0 + ux * 5, by = y0 + uy * 5, tx = x0 + ux * 17, ty = y0 + uy * 17;
+    cloneTxt += `<g style="stroke:#1f9d8b;fill:#1f9d8b;opacity:.9"><line x1="${(x0 - ux * 15).toFixed(1)}" y1="${(y0 - uy * 15).toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" style="stroke-width:3.5;stroke-linecap:round"/><polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${(bx - uy * 7).toFixed(1)},${(by + ux * 7).toFixed(1)} ${(bx + uy * 7).toFixed(1)},${(by - ux * 7).toFixed(1)}" style="stroke-width:1;stroke-linejoin:round"/></g>`;
+  });
   // clone regions: tint per group, letter on the first cell of each copy
   const CLC = ['#e0705c', '#4b9cd8', '#d39b2a', '#3aa05f', '#b56fd0', '#2bb5b0'];
   (p.clones || []).forEach((cg, gi) => cg.regs.forEach(reg => {
     reg.forEach(i => { s += `<rect x="${gx(colOf(i)) + 2}" y="${gy(rowOf(i)) + 2}" width="${CELL - 4}" height="${CELL - 4}" rx="4" style="fill:${CLC[gi % 6]};opacity:.24"/>`; });
     if (cg.regs.length > 1 || editing) { const i0 = reg[0]; cloneTxt += `<text x="${gx(colOf(i0)) + CELL - 6}" y="${gy(rowOf(i0)) + 5}" style="font-size:12px;font-weight:800;fill:${CLC[gi % 6]};text-anchor:end;dominant-baseline:hanging;filter:brightness(.85)">${'ABCDEF'[gi]}</text>`; }
   }));
+  // extra windows: four tinted 2x2 squares
+  if (p.opts.windows) X.WINDOWS.forEach(w => { const r0 = rowOf(w[0]), c0 = colOf(w[0]); s += `<rect x="${gx(c0) + 2}" y="${gy(r0) + 2}" width="${2 * CELL - 4}" height="${2 * CELL - 4}" rx="6" style="fill:#5aa0d8;opacity:.17"/>`; });
+  // corner max arrows: an orange arrow on the 2x2 corner pointing at one of its four cells
+  (p.cmax || []).forEach(m => {
+    const dx = (m.k % 2 ? 1 : -1) * .7071, dy = (m.k < 2 ? -1 : 1) * .7071, x0 = gx(m.c), y0 = gy(m.r);
+    const bx = x0 + dx * 7, by = y0 + dy * 7, tx = x0 + dx * 25, ty = y0 + dy * 25;
+    cloneTxt += `<g style="stroke:#d9731f;fill:#d9731f"><circle cx="${x0}" cy="${y0}" r="4" style="stroke:none"/><line x1="${x0}" y1="${y0}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" style="stroke-width:3.6;stroke-linecap:round"/><polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${(bx - dy * 8).toFixed(1)},${(by + dx * 8).toFixed(1)} ${(bx + dy * 8).toFixed(1)},${(by - dx * 8).toFixed(1)}" style="stroke-width:1;stroke-linejoin:round"/></g>`;
+  });
+  // Battenburg: a small checkerboard centered on the corner
+  (p.bat || []).forEach(b => {
+    const x0 = gx(b.c), y0 = gy(b.r), h = 11;
+    cloneTxt += `<g style="stroke:#c2417a;stroke-width:1.6"><rect x="${x0 - h}" y="${y0 - h}" width="${h}" height="${h}" style="fill:#e7799f"/><rect x="${x0}" y="${y0}" width="${h}" height="${h}" style="fill:#e7799f"/><rect x="${x0}" y="${y0 - h}" width="${h}" height="${h}" style="fill:#ffe9a8"/><rect x="${x0 - h}" y="${y0}" width="${h}" height="${h}" style="fill:#ffe9a8"/></g>`;
+  });
   // extremes: a faint triangle behind the digit (peak points up, valley points down)
   (p.ext || []).forEach(x => {
     const gx0 = gx(colOf(x.cell)), gy0 = gy(rowOf(x.cell)), m = 9, h = CELL - 2 * m;
@@ -4290,7 +4631,7 @@ function renderBoard() {
   });
   // lines
   if (editing && app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine]) s += `<polyline class="lsel" points="${pts(p.lines[app.selLine].cells)}"/>`;
-  const LW = { zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, regsum: 9, whisper: 8 };
+  const LW = { mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, regsum: 9, whisper: 8 };
   /* perpendicular unit normal at vertex i of a polyline, bisecting the incoming/outgoing segments
      (falls back to a single segment's normal at a sharp near-reversal, e.g. a V-shaped line) */
   const normalAt = (P, i) => {
@@ -4314,8 +4655,8 @@ function renderBoard() {
   const halo = (cls, ptsStr, w) => `<polyline class="ln halo" style="stroke:var(--cell);stroke-width:${w}" points="${ptsStr}"/>`;
   const drawLine = (typesIn, cells, preview) => {
     const types = Array.isArray(typesIn) ? typesIn : [typesIn], L = cells.length, multi = types.length > 1;
-    const thick = types.filter(t => t !== 'arrow' && t !== 'between').sort((x, y) => LW[y] - LW[x]);
-    const thin = types.filter(t => t === 'arrow' || t === 'between');
+    const thick = types.filter(t => t !== 'arrow' && t !== 'between' && t !== 'darrow').sort((x, y) => LW[y] - LW[x]);
+    const thin = types.filter(t => t === 'arrow' || t === 'between' || t === 'darrow');
     let o = '';
     if (multi && thick.length > 1) {
       // duality (2+ rules): draw each rule as its own thin strand running alongside the others,
@@ -4333,13 +4674,21 @@ function renderBoard() {
       thick.forEach(type => {
         const col = preview ? 'var(--accent)' : COL[type];
         o += halo('ln', pts(cells), (LW[type] || 10) + 6);
-        o += `<polyline class="ln ${type}" style="stroke:${col}" points="${pts(cells)}"/>`;
-        if (type === 'thermo') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
+        o += `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:.92' : ''}" points="${pts(cells)}"/>`;
+        if (type === 'thermo' || type === 'slow') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
       });
     }
     thin.forEach(type => {
       const col = preview ? 'var(--accent)' : COL[type];
-      if (type === 'between') {
+      if (type === 'darrow') {
+        if (L >= 2) {
+          const trim = (a, b) => { const dx = cx(b) - cx(a), dy = cy(b) - cy(a), l = Math.hypot(dx, dy) || 1; return `${(cx(a) + dx / l * 23).toFixed(1)},${(cy(a) + dy / l * 23).toFixed(1)}`; };
+          const inner = L > 2 ? pts(cells.slice(1, L - 1)) : '';
+          const bodyPts = `${trim(cells[0], cells[1])} ${inner} ${trim(cells[L - 1], cells[L - 2])}`.replace(/\s+/g, ' ').trim();
+          thinBuf += `<polyline class="ln arrow" style="stroke:${col}" points="${bodyPts}"/>`;
+          [cells[0], cells[L - 1]].forEach(c => { markerBuf += `<circle class="abulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="23"/>`; });
+        }
+      } else if (type === 'between') {
         thinBuf += `<polyline class="ln between" style="stroke:${col}" points="${pts(cells)}"/>`;
         [cells[0], cells[L - 1]].forEach(c => { markerBuf += `<circle class="ebulb" style="stroke:${col}" cx="${cx(c)}" cy="${cy(c)}" r="19"/>`; });
       } else if (L >= 2) {
@@ -4452,16 +4801,18 @@ function renderBoard() {
     // second color so the two can share a grid and still be told apart at a glance. Mystery cages
     // are deliberately exempt - their whole point is that you can't tell which rule a cage follows,
     // so they stay in the neutral default style regardless of which flavor they secretly are.
-    const lsColor = !cg.mystery && cg.type === 'looksay', prColor = cg.type === 'product';
-    s += `<path class="cage${lsColor ? ' ls' : ''}${prColor ? ' pr' : ''}${editing && k === app.selCage ? ' on' : ''}" d="${cageOutline(cg.cells, cg.escape ? X.escBoxes(cg) : null)}"/>`;
+    const lsColor = !cg.mystery && cg.type === 'looksay', prColor = cg.type === 'product', rgColor = cg.type === 'range', evColor = cg.type === 'evens';
+    s += `<path class="cage${lsColor ? ' ls' : ''}${prColor ? ' pr' : ''}${editing && k === app.selCage ? ' on' : ''}"${rgColor ? ' style="stroke:#8a63d2"' : evColor ? ' style="stroke:#d6457f"' : ''} d="${cageOutline(cg.cells, cg.escape ? X.escBoxes(cg) : null)}"/>`;
     const t = cg.type === 'looksay' ? (cg.runs ? X.lookSayCode(cg.runs) : '')
       : cg.type === 'mysterydigit' ? X.lookSayCode([{ d: cg.d, n: cg.n }])
       : cg.type === 'product' ? (cg.prod != null && cg.prod !== '' ? '\u00d7' + cg.prod : '')
+      : cg.type === 'range' ? (cg.rg != null && cg.rg !== '' ? '\u2195' + cg.rg : '')
+      : cg.type === 'evens' ? (cg.ev != null && cg.ev !== '' ? 'ev' + cg.ev : '')
       : (cg.sum != null && cg.sum !== '' ? String(cg.sum) : '');
     if (t) {
       const first = Math.min(...cg.cells), x = gx(colOf(first)), y = gy(rowOf(first));
-      const ciph = p.cipher && !cg.mystery && cg.type !== 'looksay' && cg.type !== 'mysterydigit';
-      const html = ciph ? (cg.type === 'product' ? '\u00d7' : '') + cz(cg.type === 'product' ? cg.prod : cg.sum) : t;
+      const ciph = p.cipher && !cg.mystery && cg.type !== 'mysterydigit';
+      const html = ciph ? (cg.type === 'looksay' ? cz(t) : (cg.type === 'product' ? '\u00d7' : cg.type === 'range' ? '\u2195' : cg.type === 'evens' ? 'ev' : '') + cz(cg.type === 'product' ? cg.prod : cg.type === 'range' ? cg.rg : cg.type === 'evens' ? cg.ev : cg.sum)) : t;
       s += `<rect class="cbg" x="${x + 3}" y="${y + 3}" width="${t.length * 7 + 5}" height="13"/>`;
       s += `<text class="csum" x="${x + 6}" y="${y + 13}">${html}</text>`;
     }
@@ -4536,6 +4887,7 @@ function renderBoard() {
         const tx = x + ux * 5, ty = y + uy * 5, bx = x - ux * 5, by = y - uy * 5, px = -uy * 8, py = ux * 8;
         s += `<circle class="xvbg" cx="${x}" cy="${y}" r="11"/><polyline class="gts" points="${(bx + px).toFixed(1)},${(by + py).toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)} ${(bx - px).toFixed(1)},${(by - py).toFixed(1)}"/>`;
       }
+      else if (e.t === 'prime') s += `<circle class="xvbg" cx="${x}" cy="${y}" r="9.5" style="stroke:#2f8f5b"/><text class="xv" x="${x}" y="${y + 1}" style="fill:#2f8f5b">P</text>`;
       else s += `<circle class="xvbg" cx="${x}" cy="${y}" r="9.5"/><text class="xv" x="${x}" y="${y + 1}">${e.t}</text>`;
     });
   });
@@ -4818,7 +5170,7 @@ function conflictModel() {
   X.cipherClues(q).forEach(c => {
     let n = '', ok = true;
     for (const ch of String(c.v)) { const L = key[+ch]; if (/\d/.test(L)) n += L; else if (L in dec) n += dec[L]; else { ok = false; break; } }
-    c.set(q, ok ? +n : (c.cage ? null : ''));
+    c.set(q, ok ? (c.ls ? n : +n) : (c.cage ? null : ''));
   });
   const m = X.compile(q); app.cmodel = { puz: p, key: dk, m, q }; return m;
 }
@@ -4838,15 +5190,15 @@ function renderMeta() {
 }
 
 const TOOLS = [
-  { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['region', 'Region']] },
-  { g: 'Sums', t: [['cage', 'Killer cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple']] },
-  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['zipper', 'Zipper'], ['lrule', 'Edit line rules']] },
+  { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['hop', 'Hop arrow'], ['loc', 'Six locator'], ['region', 'Region']] },
+  { g: 'Sums', t: [['cage', 'Killer cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple'], ['cmax', 'Corner arrow'], ['bat', 'Battenburg']] },
+  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
-  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black']] },
+  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)']] },
   { g: 'Clean up', t: [['erase', 'Eraser']] }
 ];
-const OPTS = [['optDiag', 'diag'], ['optKnight', 'antiKnight'], ['optKing', 'antiKing'], ['optDisjoint', 'disjoint'], ['optNonconsec', 'nonconsec'], ['optKropki', 'kropkiNeg'], ['optXV', 'xvNeg'],
+const OPTS = [['optDiag', 'diag'], ['optKnight', 'antiKnight'], ['optKing', 'antiKing'], ['optDisjoint', 'disjoint'], ['optWindows', 'windows'], ['optBalanced', 'balanced'], ['optNonconsec', 'nonconsec'], ['optKropki', 'kropkiNeg'], ['optXV', 'xvNeg'],
   ['optWater', 'waterConn'], ['optPool', 'noPool'], ['optNkLand', 'nkLand'], ['optNkWater', 'nkWater'], ['optShadeWhisper', 'shadeWhisper']];
 const HINTS = {
   given: 'Select cells, then type 1–6. Backspace clears.',
@@ -4867,6 +5219,16 @@ const HINTS = {
   entropic: 'Drag along the line (three cells or more). Every three consecutive cells hold one digit from each of 1–2, 3–4 and 5–6.',
   zipper: 'Drag along the line (an odd number of cells, 3 or more). The middle cell gets a diamond. Each pair of cells the same distance from the middle adds up to the middle cell’s digit.',
   clone: 'Pick a group below, then drag across neighboring cells to mark a region. Add a second (or third) region of the same shape to the group: cells in the same position hold the same digit. Click a clone region to remove it.',
+  mountain: 'Drag along the line, three or more cells. Digits strictly rise to a peak and then strictly fall. The peak is not at either end.',
+  gap: 'Drag along the line, three or more cells. Every pair of neighbors differs by the same amount, up or down.',
+  loc: 'Click a cell to add or remove a six locator. The digit in the circled cell is the column (1 to 6 from the left) that holds the 6 in that row.',
+  slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
+  nabner: 'Drag along a line of 2 or 3 cells. No two digits on it are the same or consecutive.',
+  prime: 'Click the edge between two cells to add or remove a prime dot. The two digits add up to 3, 5, 7 or 11.',
+  darrow: 'Drag along the line, three or more cells. Both ends get a circle. The digits in the two circles add up to the sum of the cells between them.',
+  cmax: 'Click a corner where four cells meet to add an arrow, then click again to turn it toward each of the four cells, and once more to remove it. The cell it points at is larger than the other three.',
+  bat: 'Click a corner where four cells meet to add or remove a Battenburg marker. The four cells alternate between odd and even like a checkerboard.',
+  hop: 'Click a cell to add a hop arrow, then click again to turn it through the 8 directions (up, up-right, right, ...), and once more to remove it. The cell d steps along the arrow holds 7 minus d, where d is the digit in the arrow cell.',
   ccirc: 'Click a cell to add or remove a counting circle. The digit in a circle is how many circles hold that digit.',
   emax: 'Click a cell to mark it as a peak: larger than every cell touching it at a side. Click again to remove.',
   emin: 'Click a cell to mark it as a valley: smaller than every cell touching it at a side. Click again to remove.',
@@ -4914,10 +5276,10 @@ function renderEditAux() {
   $('#regionWarn').textContent = okSizes ? 'All six regions have six cells.' : 'Region sizes: ' + sizes.join(', ') + '. Each needs 6.';
   $('#regionWarn').className = 'small ' + (okSizes ? 'okc' : 'warnc');
   $('#cageBox').hidden = !(app.tool === 'cage' && app.selCage >= 0 && p.cages[app.selCage]);
-  if (!$('#cageBox').hidden) { const cg = p.cages[app.selCage]; const inp = $('#cageSum'); if (document.activeElement !== inp) { const v = cg.type === 'product' ? cg.prod : cg.sum; inp.value = v == null ? '' : v; } }
+  if (!$('#cageBox').hidden) { const cg = p.cages[app.selCage]; const inp = $('#cageSum'); if (document.activeElement !== inp) { const v = cg.type === 'product' ? cg.prod : cg.type === 'range' ? cg.rg : cg.type === 'evens' ? cg.ev : cg.sum; inp.value = v == null ? '' : v; } }
   $('#ringBox').hidden = !(app.tool === 'clue' && app.selRing);
   if (!$('#ringBox').hidden) renderRingEditor();
-  const isLT = LINE_TOOLS.includes(app.tool) && app.tool !== 'zipper';
+  const isLT = LINE_TOOLS.includes(app.tool) && !SOLO_LINES.includes(app.tool);
   $('#cloneBox').hidden = app.tool !== 'clone';
   if (app.tool === 'clone') {
     const sel = $('#cloneGrp'), cur = sel.value, n = p.clones.length;
@@ -5104,8 +5466,8 @@ function setPaint(i, k, add) {
 }
 const adj8 = (a, b) => a !== b && Math.abs(rowOf(a) - rowOf(b)) <= 1 && Math.abs(colOf(a) - colOf(b)) <= 1;
 const adj4 = (a, b) => Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
-const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'zipper'];
-const curRules = () => { const t = app.tool; if (t === 'zipper') return ['zipper']; return LINE_TOOLS.includes(t) ? [t].concat(app.extras.filter(x => x !== t)) : [t]; };
+const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap'];
+const curRules = () => { const t = app.tool; if (SOLO_LINES.includes(t)) return [t]; return LINE_TOOLS.includes(t) ? [t].concat(app.extras.filter(x => x !== t)) : [t]; };
 const comboCache = {};
 function comboNote(types) {
   const wd = app.puzzle.opts.whisperDiff || 4, key = types.join('+') + wd;
@@ -5150,6 +5512,31 @@ function onDown(e) {
     app.drag = { kind: 'clone', cells: [i] }; renderBoard();
   } else if (t === 'ccirc') {
     if (!inG) return; const k = p.cc.indexOf(i); if (k >= 0) p.cc.splice(k, 1); else p.cc.push(i); p.cc.sort((a, b) => a - b); touch(true);
+  } else if (t === 'cmax') {
+    const v = vertexAt(h.fx, h.fy); if (!v) return;
+    const k = p.cmax.findIndex(x => x.r === v[0] && x.c === v[1]);
+    if (k < 0) p.cmax.push({ r: v[0], c: v[1], k: 0 });
+    else if (p.cmax[k].k < 3) p.cmax[k].k++;
+    else p.cmax.splice(k, 1);
+    touch(true);
+  } else if (t === 'bat') {
+    const v = vertexAt(h.fx, h.fy); if (!v) return;
+    const k = p.bat.findIndex(x => x.r === v[0] && x.c === v[1]);
+    if (k >= 0) p.bat.splice(k, 1); else p.bat.push({ r: v[0], c: v[1] });
+    touch(true);
+  } else if (t === 'hop') {
+    if (!inG) return;
+    const DIRS = [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1]];
+    const ok = ([dr, dc]) => X.hopRay(i, dr, dc).length >= 1;
+    const k = p.hop.findIndex(x => x.cell === i);
+    let n = k >= 0 ? DIRS.findIndex(([dr, dc]) => dr === p.hop[k].dr && dc === p.hop[k].dc) + 1 : 0;
+    while (n < DIRS.length && !ok(DIRS[n])) n++;
+    if (n >= DIRS.length) { if (k >= 0) p.hop.splice(k, 1); }
+    else if (k >= 0) { p.hop[k].dr = DIRS[n][0]; p.hop[k].dc = DIRS[n][1]; }
+    else p.hop.push({ cell: i, dr: DIRS[n][0], dc: DIRS[n][1] });
+    touch(true);
+  } else if (t === 'loc') {
+    if (!inG) return; const k = p.loc.indexOf(i); if (k >= 0) p.loc.splice(k, 1); else p.loc.push(i); p.loc.sort((a, b) => a - b); touch(true);
   } else if (t === 'emax' || t === 'emin') {
     if (!inG) return; const want = t === 'emax' ? 'max' : 'min';
     const k = p.ext.findIndex(x => x.cell === i);
@@ -5177,7 +5564,7 @@ function onDown(e) {
   } else if (t === 'lrule') {
     if (!inG) return;
     let k = -1; for (let n = p.lines.length - 1; n >= 0; n--) if (p.lines[n].cells.includes(i) || (p.lines[n].branch || []).includes(i)) { k = n; break; }
-    if (k >= 0 && p.lines[k].type === 'zipper') { app.selLine = -1; renderBoard(); renderEditAux(); flash('Zipper lines stand alone and cannot take other rules.', 'warn'); return; }
+    if (k >= 0 && SOLO_LINES.includes(p.lines[k].type)) { app.selLine = -1; renderBoard(); renderEditAux(); flash((RULE_LABEL[p.lines[k].type] || 'This') + ' lines stand alone and cannot take other rules.', 'warn'); return; }
     app.selLine = k; renderBoard(); renderEditAux();
   } else if (LINE_TOOLS.includes(t)) {
     if (!inG) return; app.drag = { kind: 'line', path: [i] }; renderBoard();
@@ -5198,7 +5585,7 @@ function onDown(e) {
     else if (k >= 0) p.edges[k].n = n;
     else p.edges.push({ a: ed.a, b: ed.b, t: ty, n });
     touch(true);
-  } else if (['cons', 'white', 'black', 'X', 'V'].includes(t)) {
+  } else if (['cons', 'white', 'black', 'X', 'V', 'prime'].includes(t)) {
     const ed = edgeAt(h.fx, h.fy); if (!ed) return;
     const k = p.edges.findIndex(m => Math.min(m.a, m.b) === ed.a && Math.max(m.a, m.b) === ed.b && m.t === t);
     if (k >= 0) p.edges.splice(k, 1);
@@ -5230,6 +5617,9 @@ function onDown(e) {
     }
     const vq = vertexAt(h.fx, h.fy);
     if (vq) {
+      const nb = p.cmax.length + p.bat.length;
+      p.cmax = p.cmax.filter(x => !(x.r === vq[0] && x.c === vq[1])); p.bat = p.bat.filter(x => !(x.r === vq[0] && x.c === vq[1]));
+      if (p.cmax.length + p.bat.length !== nb) { touch(true); return; }
       const before = p.quads.length;
       p.quads = p.quads.filter(q => !(q.r === vq[0] && q.c === vq[1]));
       if (p.quads.length !== before) { app.selQuad = -1; touch(true); return; }
@@ -5243,6 +5633,8 @@ function onDown(e) {
       if (k >= 0) { p.cages.splice(k, 1); app.selCage = -1; touch(); return; }
       { const kc = p.cc.indexOf(i); if (kc >= 0) { p.cc.splice(kc, 1); touch(true); return; } }
       { const ke = p.ext.findIndex(x => x.cell === i); if (ke >= 0) { p.ext.splice(ke, 1); touch(true); return; } }
+      { const kl = p.loc.indexOf(i); if (kl >= 0) { p.loc.splice(kl, 1); touch(true); return; } }
+      { const kh = p.hop.findIndex(x => x.cell === i); if (kh >= 0) { p.hop.splice(kh, 1); touch(true); return; } }
       if (p.parity[i]) { p.parity[i] = 0; touch(true); return; }
       if (p.marks[i]) { p.marks[i] = 0; p.mval[i] = 0; app.selMark = -1; touch(); return; }
       if (p.paint[i]) { p.paint[i] = 0; touch(true); return; }
@@ -5314,7 +5706,9 @@ function onUp() {
         host.branch = br; touch(true); flash('Second arrow added. Each arrow adds up to the circle.', 'ok'); return;
       }
     }
-    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('zipper') ? 3 : 2;
+    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') ? 3 : 2;
+    if (rules[0] === 'nabner' && d.path.length > 3) { renderBoard(); flash('Nabner lines hold at most 3 cells, because 1 to 6 has no four digits that all differ by 2 or more.', 'warn'); return; }
+    if (['darrow', 'slow', 'nabner', 'mountain', 'gap'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
     if (rules[0] === 'zipper' && d.path.length >= 3) {
       if (d.path.length % 2 === 0) { renderBoard(); flash('Zipper lines need an odd number of cells (3, 5 or 7), so there is a middle cell.', 'warn'); return; }
       if (!X.lineFeasible(['zipper'], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a zipper on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
@@ -5338,7 +5732,7 @@ function onUp() {
       }
       p.lines.push(ln); touch(true);
     }
-    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : rules.includes('zipper') ? 'Zipper' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
+    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : rules.includes('zipper') ? 'Zipper' : rules.includes('darrow') ? 'Double arrow' : rules.includes('mountain') ? 'Mountain' : rules.includes('gap') ? 'Equal-gap' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
   } else if (d.kind === 'oline') {
     if (d.cells.length >= 2) { { const ex = app.olExtras.filter(t => t !== app.olType), ol = { type: app.olType, kind: app.olKind, cells: d.cells.map(c => c.slice()) }; if (ex.length) ol.also = ex; if ([app.olType].concat(ex).includes('whisper')) ol.diff = app.olDiff; p.olines.push(ol); } touch(true); }
     else renderBoard();
@@ -5450,16 +5844,19 @@ function buildGenerator() {
 const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking'],
   ['nonconsecutive', 'diag'], ['nonconsecutive', 'antiknight'], ['nonconsecutive', 'antiking'], ['nonconsecutive', 'disjoint']];
 const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang'];
-const CAGE_EXCL = ['killer', 'looksay', 'product', 'escape', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
+const CAGE_EXCL = ['killer', 'looksay', 'product', 'range', 'evens', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
 // a big share of the grid on its own, so no two of these ever share a puzzle
-const CIPHER_NEEDS = ['killer', 'product', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'];
-const OVERLAP_CAGES = ['killer', 'looksay', 'product'];
+const CIPHER_NEEDS = ['killer', 'product', 'range', 'evens', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'];
+const OVERLAP_CAGES = ['killer', 'looksay', 'product', 'range', 'evens'];
 const sameCagePair = (a, b) => OVERLAP_CAGES.includes(a) && OVERLAP_CAGES.includes(b);
 function clash(a, b, set) {
-  if ((a === 'cipher' && (b === 'looksay' || b === 'mysterycage')) || (b === 'cipher' && (a === 'looksay' || a === 'mysterycage'))) return true;
+  if ((a === 'cipher' && b === 'mysterycage') || (b === 'cipher' && a === 'mysterycage')) return true;
   if (SHADING_EXCL.includes(a) && SHADING_EXCL.includes(b) && a !== b) return true;
   if (CAGE_EXCL.includes(a) && CAGE_EXCL.includes(b) && a !== b && !sameCagePair(a, b)) return true;
+  if ((a === 'escape' && b === 'mysterycage') || (b === 'escape' && a === 'mysterycage')) return true;
   if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
+  if ((a === 'windows' && b === 'nonconsecutive') || (b === 'windows' && a === 'nonconsecutive')) return true;
+  if ((a === 'balanced' && (b === 'nonconsecutive' || b === 'diag')) || (b === 'balanced' && (a === 'nonconsecutive' || a === 'diag'))) return true;
   if (set.has('irregular')) return false;
   return SOFT.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
 }
@@ -5531,7 +5928,10 @@ function feasibleMix(sel) {
   if (SHADING_EXCL.filter(k => s.has(k)).length > 1) return false;
   if (s.has('countcircles') && SHADING_EXCL.some(k => s.has(k))) return false;
   { const cg = CAGE_EXCL.filter(k => s.has(k)); if (cg.length > 1 && !cg.every(k => OVERLAP_CAGES.includes(k))) return false; }
-  if (s.has('cipher') && (s.has('looksay') || s.has('mysterycage'))) return false;
+  if (s.has('windows') && s.has('nonconsecutive')) return false;
+  if (s.has('balanced') && (s.has('nonconsecutive') || s.has('diag'))) return false;
+  if (s.has('escape') && s.has('mysterycage')) return false;
+  if (s.has('cipher') && s.has('mysterycage')) return false;
   if (s.has('cipher') && !CIPHER_NEEDS.some(k => s.has(k))) return false;
   if (s.has('escape') && !ESC_CAGE_TARGETS.some(k => s.has(k)) && !(s.has('littlekiller') && ESC_LINES.some(k => s.has(k)))) return false;
   return !(s.has('disjoint') && s.has('irregular'));
@@ -5733,7 +6133,7 @@ function bind() {
   });
   $('#regionSwatches').addEventListener('click', e => { const b = e.target.closest('button[data-rg]'); if (b) { app.paint = +b.dataset.rg; renderEditAux(); } });
   $('#resetRegions').addEventListener('click', () => { app.puzzle.regions = X.stdRegions(); touch(); });
-  $('#cageSum').addEventListener('input', e => { const cg = app.puzzle.cages[app.selCage]; if (!cg) return; const v = e.target.value.trim(); cg[cg.type === 'product' ? 'prod' : 'sum'] = v === '' ? null : +v; touch(true); });
+  $('#cageSum').addEventListener('input', e => { const cg = app.puzzle.cages[app.selCage]; if (!cg) return; const v = e.target.value.trim(); cg[cg.type === 'product' ? 'prod' : cg.type === 'range' ? 'rg' : cg.type === 'evens' ? 'ev' : 'sum'] = v === '' ? null : +v; touch(true); });
   $('#cageSum').addEventListener('keydown', e => { if (e.key === 'Enter') { app.selCage = -1; renderAll(); } });
   $('#cageDel').addEventListener('click', () => { app.puzzle.cages.splice(app.selCage, 1); app.selCage = -1; touch(); });
   $('#ringKind').addEventListener('change', applyRing); $('#ringVal').addEventListener('input', applyRing);
