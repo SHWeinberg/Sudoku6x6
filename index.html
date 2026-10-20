@@ -752,6 +752,15 @@ function chkEvens(g, cells, E) {
 }
 const isPrime = n => n === 2 || n === 3 || n === 5 || n === 7 || n === 11;
 /* Mountain line: strictly rise to one peak (never at an end), then strictly fall. Exact search over the completions. */
+/* Greater Lots: cs[0] is the circle. Its digit equals how many of the other cells on the line hold a larger digit. */
+function chkLots(g, cs) {
+  const L = cs.length;
+  const ok = d => { let gt = 0, unk = 0; for (let k = 1; k < L; k++) { const x = g[cs[k]]; if (!x) unk++; else if (x > d) gt++; } return gt <= d && gt + unk >= d; };
+  const c0 = g[cs[0]];
+  if (c0) return ok(c0);
+  for (let d = 1; d <= 5; d++) if (ok(d)) return true;
+  return false;
+}
 function chkMountain(g, cs) {
   const L = cs.length, a = cs.map(i => g[i]);
   const rec = (k, prev, state) => {
@@ -1019,7 +1028,7 @@ function branchOK(cells, br) {
   for (let k = 0; k + 1 < full.length; k++) if (!nbr8[full[k]].includes(full[k + 1])) return false;
   return !diagCross(cells, full);
 }
-const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap'];
+const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'];
 const LINE_ALL = LINE_RULES.concat(OWN_LINE_RULES);
 const OL_RULES = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'parity'];
 const lineTypes = ln => { const a = [ln.type]; (ln.also || []).forEach(t => { if (t && !a.includes(t)) a.push(t); }); return a; };
@@ -1072,6 +1081,11 @@ function lineOK(types, v, complete, ctx) {
         if (v[j] > v[j - 1]) { for (let a = 1; a < j; a++) if (v[a] < v[a - 1]) return false; }
         if (Lt && j === Lt - 1 && v[j] > v[j - 1]) return false;
       }
+      else if (t === 'lots') {
+        const d = v[0]; if (d === 6 || (Lt && d > Lt - 1)) return false;
+        let gt = 0; for (let a = 1; a <= j; a++) if (v[a] > d) gt++;
+        if (gt > d || (Lt && gt + (Lt - 1 - j) < d)) return false;
+      }
       else if (t === 'gap' && j > 0) { if (v[j] === v[j - 1]) return false; if (j > 1 && Math.abs(v[j] - v[j - 1]) !== Math.abs(v[1] - v[0])) return false; }
       else if (t === 'slow' && j > 0 && v[j] < v[j - 1]) return false;
       else if (t === 'nabner') { for (let a = 0; a < j; a++) if (Math.abs(v[a] - v[j]) < 2) return false; }
@@ -1094,6 +1108,7 @@ function lineOK(types, v, complete, ctx) {
       for (let k = 1; k < n; k++) { if (v[k] === v[k - 1]) return false; if (v[k] > v[k - 1]) { if (st) return false; } else { if (k === 1) return false; st = 1; } }
       if (!st) return false;
     }
+    else if (t === 'lots') { if (n < 2) return false; let gt = 0; for (let k = 1; k < n; k++) if (v[k] > v[0]) gt++; if (gt !== v[0]) return false; }
     else if (t === 'gap') { if (n < 3) return false; const d = Math.abs(v[1] - v[0]); if (!d) return false; for (let k = 1; k < n; k++) if (Math.abs(v[k] - v[k - 1]) !== d) return false; }
     else if (t === 'slow') { for (let k = 0; k + 1 < n; k++) if (v[k] > v[k + 1]) return false; }
     else if (t === 'nabner') { for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (Math.abs(v[a] - v[b]) < 2) return false; }
@@ -1316,7 +1331,7 @@ function compile(p) {
       continue;
     }
     for (const ty of lineTypes(ln)) {
-    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', nabner: 'Nabner line (no two digits on it are the same or consecutive)' }[ty] || (ty + ' line');
+    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', nabner: 'Nabner line (no two digits on it are the same or consecutive)', lots: 'Greater Lots line (the circled digit counts the digits on the line that are larger than it)' }[ty] || (ty + ' line');
     if (ty === 'thermo') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
       for (let k = 0; k < L; k++) {
@@ -1369,6 +1384,8 @@ function compile(p) {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => (a + b) % 2 === 1);
     } else if (ty === 'mountain') {
       if (L >= 3) { for (const k of [0, L - 1]) cand0[cs[k]] &= ~bit(6); addGroup(cs, g => chkMountain(g, cs)); }
+    } else if (ty === 'lots') {
+      if (L >= 2) { cand0[cs[0]] &= ~bit(6); let mk = 0; for (let d = 1; d <= 5; d++) if (d <= L - 1) mk |= bit(d); cand0[cs[0]] &= mk; addGroup(cs, g => chkLots(g, cs)); }
     } else if (ty === 'gap') {
       if (L >= 3) addGroup(cs, g => chkGap(g, cs));
     } else if (ty === 'slow') {
@@ -1931,6 +1948,7 @@ function verify(p, g, sh) {
     else if (ty === 'entropic') { if (L >= 3) for (let k = 0; k + 2 < L; k++) if (new Set([grpOf(v[k]), grpOf(v[k + 1]), grpOf(v[k + 2])]).size !== 3) errs.push('entropic'); }
     else if (ty === 'mountain') { if (L >= 3 && !lineOK(['mountain'], v, true, {})) errs.push('mountain'); }
     else if (ty === 'gap') { if (L >= 3 && !lineOK(['gap'], v, true, {})) errs.push('equal-gap'); }
+    else if (ty === 'lots') { if (L >= 2 && !lineOK(['lots'], v, true, {})) errs.push('Greater Lots'); }
     else if (ty === 'slow') { for (let k = 0; k + 1 < L; k++) if (v[k] > v[k + 1]) errs.push('slow thermo'); }
     else if (ty === 'nabner') { for (let a = 0; a < L; a++) for (let b = a + 1; b < L; b++) if (Math.abs(v[a] - v[b]) < 2) errs.push('Nabner'); }
     else if (ty === 'darrow') { if (L >= 3) { let sm = 0; for (let k = 1; k < L - 1; k++) sm += v[k]; if (sm !== v[0] + v[L - 1]) errs.push('double arrow'); } }
@@ -2130,7 +2148,7 @@ function conflicts(p, model, grid) {
 
 const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
 
-root.SX = { chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
+root.SX = { chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -2172,6 +2190,7 @@ const VARIANTS = [
   { k: 'slow', label: 'Slow thermo', group: 'Lines' },
   { k: 'mountain', label: 'Mountain lines', group: 'Lines' },
   { k: 'gap', label: 'Equal-gap lines', group: 'Lines' },
+  { k: 'lots', label: 'Greater Lots', group: 'Lines' },
   { k: 'nabner', label: 'Nabner lines', group: 'Lines' },
   { k: 'whisper', label: 'German whispers', group: 'Lines' },
   { k: 'renban', label: 'Renban', group: 'Lines' },
@@ -2211,12 +2230,12 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, locator: 3, prime: 2, darrow: 1, zipper: 1, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
-const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap']);
+const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots']);
 
 function randomRegions(rng) {
   for (let attempt = 0; attempt < 800; attempt++) {
@@ -3089,6 +3108,13 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       prefixOK: (v, c, Lt) => S.lineOK(['gap'], v, false, { wd: wdv, L: Lt }),
       finalOK: v => S.lineOK(['gap'], v, true, { wd: wdv }) })
       .forEach(cs => add('gap', p => p.lines.push({ type: 'gap', cells: cs.slice() }), lk('gap')));
+  }
+  if (V.has('lots')) {
+    // the circle is the first cell of the line; its digit counts the larger digits on the rest of the line
+    sampleLines(sol, rng, { minL: 5, maxL: 8, max: capOf('lots', 4), attempts: 9000, lenBias, usedEndpoints, cellCross, lineKey: 'lots',
+      prefixOK: (v, c, Lt) => S.lineOK(['lots'], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK(['lots'], v, true, { wd: wdv }) })
+      .forEach(cs => { add('lots', p => p.lines.push({ type: 'lots', cells: cs.slice() }), lk('lots')); items[items.length - 1].hopCell = cs[0]; });
   }
   if (V.has('nabner')) {
     sampleLines(sol, rng, { lens: [2, 3, 3], minL: 2, maxL: 3, max: capOf('nabner', 5), attempts: 6000, lenBias, usedEndpoints, cellCross, lineKey: 'nabner',
@@ -4079,9 +4105,9 @@ const app = {
   extras: [], olExtras: [], selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}, cipherK: 10,
   assist: { on: false, level: 2, cur: null, C: null, sig: '', auto: false, timer: null }
 };
-const RULE_LABEL = { zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
-const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap']; // line rules that stand alone (never layered with another rule)
-const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap'];
+const RULE_LABEL = { lots: 'Greater Lots', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic' };
+const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots']; // line rules that stand alone (never layered with another rule)
+const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'];
 const PAL = ['Clear', 'Shade', 'Land', 'Red', 'Amber', 'Green', 'Blue', 'Purple', 'Teal'];
 
 /* ---------- puzzle helpers ---------- */
@@ -4098,7 +4124,7 @@ function normalize(o) {
   p.ssol = Array.isArray(o && o.ssol) && o.ssol.length === NN ? o.ssol : null;
   p.cages = ((o && o.cages) || []).filter(c => Array.isArray(c.cells) && c.cells.length && c.cells.every(i => i >= 0 && i < NN));
   p.lines = ((o && o.lines) || []).filter(l => Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(i => i >= 0 && i < NN));
-  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)) && (l.type !== 'darrow' || l.cells.length >= 3) && (l.type !== 'nabner' || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || l.cells.length >= 3));
+  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)) && (l.type !== 'darrow' || l.cells.length >= 3) && (l.type !== 'nabner' || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || l.cells.length >= 3) && (l.type !== 'lots' || l.cells.length >= 3));
   p.lines.forEach(l => {
     l.also = SOLO_LINES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
     if (!l.also.length) delete l.also;
@@ -4212,7 +4238,7 @@ function variantLabels(p) {
   if (p.cipher) L.push('Cipher');
   if (p.cages.some(c => c.mystery)) L.push('Mystery Cages');
   if (p.cages.some(c => c.escape) || p.lines.some(l => l.escape)) L.push('Escape the Grid');
-  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines' };
+  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines', lots: 'Greater Lots' };
   if (p.quads.length) L.push('Quadruples');
   p.lines.forEach(l => X.lineTypes(l).forEach(t => has.add(nm[t])));
   has.forEach(x => x && L.push(x));
@@ -4270,6 +4296,7 @@ function rulesFor(p) {
   if (lt.has('palindrome')) R.push('Palindrome (blue): the line reads the same in both directions.');
   if (lt.has('parity')) R.push('Parity lines (taupe): neighboring digits on the line alternate between odd and even.');
   if (lt.has('mountain')) R.push('Mountain lines (burnt orange): digits strictly rise to a single peak and then strictly fall. The peak is never at an end of the line, and the peak cell is not marked.');
+  if (lt.has('lots')) R.push('Greater Lots (gold, with a circle at one end): the digit in the circle counts how many digits on its line are strictly larger than it. The circled digit itself is not counted, and larger digits that repeat on the line each count.');
   if (lt.has('gap')) R.push('Equal-gap lines (indigo): every pair of neighboring digits on the line differs by the same amount, which is not given. The line can step up or down at each cell, so 2, 4, 2, 4, 6 and 2, 5, 2, 5 both follow a gap rule.');
   if (lt.has('slow')) R.push('Slow thermometers (teal, with a bulb): digits never decrease from the bulb to the tip. Two neighbors on the line may hold the same digit, but only when their cells do not share a row, column or box.');
   if (lt.has('nabner')) R.push('Nabner lines (plum): no two digits on the line are the same or consecutive, whether or not the cells touch. Any two differ by at least 2.');
@@ -4467,7 +4494,7 @@ function loadPuzzle(o, tab) {
 }
 
 /* ---------- board drawing ---------- */
-const COL = { mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
+const COL = { lots: '#d4b53b', mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
 const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
 
 // Dashed outline around a cage's cells and, for escaping cages, its outside boxes: every tile (a grid
@@ -4631,7 +4658,7 @@ function renderBoard() {
   });
   // lines
   if (editing && app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine]) s += `<polyline class="lsel" points="${pts(p.lines[app.selLine].cells)}"/>`;
-  const LW = { mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, regsum: 9, whisper: 8 };
+  const LW = { lots: 13, mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, regsum: 9, whisper: 8 };
   /* perpendicular unit normal at vertex i of a polyline, bisecting the incoming/outgoing segments
      (falls back to a single segment's normal at a sharp near-reversal, e.g. a V-shaped line) */
   const normalAt = (P, i) => {
@@ -4674,7 +4701,8 @@ function renderBoard() {
       thick.forEach(type => {
         const col = preview ? 'var(--accent)' : COL[type];
         o += halo('ln', pts(cells), (LW[type] || 10) + 6);
-        o += `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:.92' : ''}" points="${pts(cells)}"/>`;
+        o += `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap', 'lots'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:' + (type === 'lots' ? '.55' : '.92') : ''}" points="${pts(cells)}"/>`;
+        if (type === 'lots') markerBuf += `<circle style="fill:${col};fill-opacity:.35;stroke:${preview ? 'var(--accent)' : '#e0a020'};stroke-width:4" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="26"/>`;
         if (type === 'thermo' || type === 'slow') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
       });
     }
@@ -5192,7 +5220,7 @@ function renderMeta() {
 const TOOLS = [
   { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['hop', 'Hop arrow'], ['loc', 'Six locator'], ['region', 'Region']] },
   { g: 'Sums', t: [['cage', 'Killer cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple'], ['cmax', 'Corner arrow'], ['bat', 'Battenburg']] },
-  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lrule', 'Edit line rules']] },
+  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
   { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)']] },
@@ -5220,6 +5248,7 @@ const HINTS = {
   zipper: 'Drag along the line (an odd number of cells, 3 or more). The middle cell gets a diamond. Each pair of cells the same distance from the middle adds up to the middle cell’s digit.',
   clone: 'Pick a group below, then drag across neighboring cells to mark a region. Add a second (or third) region of the same shape to the group: cells in the same position hold the same digit. Click a clone region to remove it.',
   mountain: 'Drag along the line, three or more cells. Digits strictly rise to a peak and then strictly fall. The peak is not at either end.',
+  lots: 'Drag along the line starting at the circle end, three or more cells (5 to 8 in generated puzzles). The digit in the circle counts how many digits on the line are strictly larger than it.',
   gap: 'Drag along the line, three or more cells. Every pair of neighbors differs by the same amount, up or down.',
   loc: 'Click a cell to add or remove a six locator. The digit in the circled cell is the column (1 to 6 from the left) that holds the 6 in that row.',
   slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
@@ -5466,7 +5495,7 @@ function setPaint(i, k, add) {
 }
 const adj8 = (a, b) => a !== b && Math.abs(rowOf(a) - rowOf(b)) <= 1 && Math.abs(colOf(a) - colOf(b)) <= 1;
 const adj4 = (a, b) => Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
-const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap'];
+const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'];
 const curRules = () => { const t = app.tool; if (SOLO_LINES.includes(t)) return [t]; return LINE_TOOLS.includes(t) ? [t].concat(app.extras.filter(x => x !== t)) : [t]; };
 const comboCache = {};
 function comboNote(types) {
@@ -5706,9 +5735,9 @@ function onUp() {
         host.branch = br; touch(true); flash('Second arrow added. Each arrow adds up to the circle.', 'ok'); return;
       }
     }
-    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') ? 3 : 2;
+    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') || rules.includes('lots') ? 3 : 2;
     if (rules[0] === 'nabner' && d.path.length > 3) { renderBoard(); flash('Nabner lines hold at most 3 cells, because 1 to 6 has no four digits that all differ by 2 or more.', 'warn'); return; }
-    if (['darrow', 'slow', 'nabner', 'mountain', 'gap'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
+    if (['darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
     if (rules[0] === 'zipper' && d.path.length >= 3) {
       if (d.path.length % 2 === 0) { renderBoard(); flash('Zipper lines need an odd number of cells (3, 5 or 7), so there is a middle cell.', 'warn'); return; }
       if (!X.lineFeasible(['zipper'], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a zipper on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
@@ -5732,7 +5761,7 @@ function onUp() {
       }
       p.lines.push(ln); touch(true);
     }
-    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : rules.includes('zipper') ? 'Zipper' : rules.includes('darrow') ? 'Double arrow' : rules.includes('mountain') ? 'Mountain' : rules.includes('gap') ? 'Equal-gap' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
+    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : rules.includes('zipper') ? 'Zipper' : rules.includes('darrow') ? 'Double arrow' : rules.includes('mountain') ? 'Mountain' : rules.includes('gap') ? 'Equal-gap' : rules.includes('lots') ? 'Greater Lots' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
   } else if (d.kind === 'oline') {
     if (d.cells.length >= 2) { { const ex = app.olExtras.filter(t => t !== app.olType), ol = { type: app.olType, kind: app.olKind, cells: d.cells.map(c => c.slice()) }; if (ex.length) ol.also = ex; if ([app.olType].concat(ex).includes('whisper')) ol.diff = app.olDiff; p.olines.push(ol); } touch(true); }
     else renderBoard();
