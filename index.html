@@ -496,6 +496,7 @@ details.about p{margin:8px 0 0}
         <label><input type="checkbox" id="optNkLand"> Every island has exactly one circle</label>
         <label><input type="checkbox" id="optNkWater"> Every shaded region has exactly one square</label>
         <label><input type="checkbox" id="optShadeWhisper"> Shaded cells that touch differ by at least the whisper minimum</label>
+        <label><input type="checkbox" id="optCaves"> Caves (walls reach the edge, one square per wall group, circles count visible cave cells; use with no other shading rule)</label>
       </div>
       <div class="inline" id="whisperRow">
         <label for="whisperDiff" style="font-weight:700">Whispers differ by at least</label>
@@ -602,7 +603,7 @@ function newPuzzle() {
     opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false, windows: false, balanced: false,
             nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
             waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false,
-            landConn: false, noPoolLand: false, sandwichShade: false },
+            landConn: false, noPoolLand: false, sandwichShade: false, caves: false },
     cages: [], lines: [], edges: [], ext: [], hop: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
     marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
     sol: null, ssol: null, meta: null
@@ -612,7 +613,7 @@ function usesShade(p) {
   const o = p.opts || {};
   return !!((p.marks && p.marks.some(x => x)) || (p.paint && p.paint.some(x => x & 6)) ||
     o.waterConn || o.noPool || o.nkLand || o.nkWater || o.shadeWhisper || o.boxRenban ||
-    o.landConn || o.noPoolLand || o.sandwichShade);
+    o.landConn || o.noPoolLand || o.sandwichShade || o.caves);
 }
 function clonePuzzle(p) { return JSON.parse(JSON.stringify(p)); }
 
@@ -752,11 +753,11 @@ function chkEvens(g, cells, E) {
 }
 const isPrime = n => n === 2 || n === 3 || n === 5 || n === 7 || n === 11;
 /* Mountain line: strictly rise to one peak (never at an end), then strictly fall. Exact search over the completions. */
-/* Greater Lots: cs[0] is the circle. Its digit equals how many of the other cells on the line hold a larger digit. */
-function chkLots(g, cs) {
-  const L = cs.length;
-  const ok = d => { let gt = 0, unk = 0; for (let k = 1; k < L; k++) { const x = g[cs[k]]; if (!x) unk++; else if (x > d) gt++; } return gt <= d && gt + unk >= d; };
-  const c0 = g[cs[0]];
+/* Greater Lots: cs[ci] is the circle (ci defaults to 0). Its digit equals how many of the other cells on the line hold a larger digit. */
+function chkLots(g, cs, ci) {
+  const L = cs.length; ci = ci || 0;
+  const ok = d => { let gt = 0, unk = 0; for (let k = 0; k < L; k++) { if (k === ci) continue; const x = g[cs[k]]; if (!x) unk++; else if (x > d) gt++; } return gt <= d && gt + unk >= d; };
+  const c0 = g[cs[ci]];
   if (c0) return ok(c0);
   for (let d = 1; d <= 5; d++) if (ok(d)) return true;
   return false;
@@ -1082,9 +1083,11 @@ function lineOK(types, v, complete, ctx) {
         if (Lt && j === Lt - 1 && v[j] > v[j - 1]) return false;
       }
       else if (t === 'lots') {
-        const d = v[0]; if (d === 6 || (Lt && d > Lt - 1)) return false;
-        let gt = 0; for (let a = 1; a <= j; a++) if (v[a] > d) gt++;
-        if (gt > d || (Lt && gt + (Lt - 1 - j) < d)) return false;
+        const ci = ctx.ci || 0; if (j >= ci) {
+          const d = v[ci]; if (d === 6 || (Lt && d > Lt - 1)) return false;
+          let gt = 0; for (let a = 0; a <= j; a++) if (a !== ci && v[a] > d) gt++;
+          if (gt > d || (Lt && gt + (Lt - 1 - j) < d)) return false;
+        }
       }
       else if (t === 'gap' && j > 0) { if (v[j] === v[j - 1]) return false; if (j > 1 && Math.abs(v[j] - v[j - 1]) !== Math.abs(v[1] - v[0])) return false; }
       else if (t === 'slow' && j > 0 && v[j] < v[j - 1]) return false;
@@ -1108,7 +1111,7 @@ function lineOK(types, v, complete, ctx) {
       for (let k = 1; k < n; k++) { if (v[k] === v[k - 1]) return false; if (v[k] > v[k - 1]) { if (st) return false; } else { if (k === 1) return false; st = 1; } }
       if (!st) return false;
     }
-    else if (t === 'lots') { if (n < 2) return false; let gt = 0; for (let k = 1; k < n; k++) if (v[k] > v[0]) gt++; if (gt !== v[0]) return false; }
+    else if (t === 'lots') { if (n < 2) return false; const ci = ctx.ci || 0; let gt = 0; for (let k = 0; k < n; k++) if (k !== ci && v[k] > v[ci]) gt++; if (gt !== v[ci]) return false; }
     else if (t === 'gap') { if (n < 3) return false; const d = Math.abs(v[1] - v[0]); if (!d) return false; for (let k = 1; k < n; k++) if (Math.abs(v[k] - v[k - 1]) !== d) return false; }
     else if (t === 'slow') { for (let k = 0; k + 1 < n; k++) if (v[k] > v[k + 1]) return false; }
     else if (t === 'nabner') { for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (Math.abs(v[a] - v[b]) < 2) return false; }
@@ -1134,8 +1137,8 @@ function lineOK(types, v, complete, ctx) {
 
 /* Does any digit sequence satisfy every rule on a line of L cells?  With `cells`/`regions`, uses the real
    cells (row, column and region peers must differ, region sum runs come from the regions). */
-function lineFeasible(types, L, wd, cells, regions, cap) {
-  const v = [], ctx = { wd, L, cells, regions }; let nodes = 0, found = false; cap = cap || 300000;
+function lineFeasible(types, L, wd, cells, regions, cap, ci) {
+  const v = [], ctx = { wd, L, cells, regions, ci: ci || 0 }; let nodes = 0, found = false; cap = cap || 300000;
   const peer = (a, b) => rowOf(a) === rowOf(b) || colOf(a) === colOf(b) || regions[a] === regions[b];
   (function rec() {
     if (found || nodes > cap) return;
@@ -1385,7 +1388,7 @@ function compile(p) {
     } else if (ty === 'mountain') {
       if (L >= 3) { for (const k of [0, L - 1]) cand0[cs[k]] &= ~bit(6); addGroup(cs, g => chkMountain(g, cs)); }
     } else if (ty === 'lots') {
-      if (L >= 2) { cand0[cs[0]] &= ~bit(6); let mk = 0; for (let d = 1; d <= 5; d++) if (d <= L - 1) mk |= bit(d); cand0[cs[0]] &= mk; addGroup(cs, g => chkLots(g, cs)); }
+      if (L >= 2) { const ci = ln.c > 0 && ln.c < L ? ln.c : 0; cand0[cs[ci]] &= ~bit(6); let mk = 0; for (let d = 1; d <= 5; d++) if (d <= L - 1) mk |= bit(d); cand0[cs[ci]] &= mk; addGroup(cs, g => chkLots(g, cs, ci)); }
     } else if (ty === 'gap') {
       if (L >= 3) addGroup(cs, g => chkGap(g, cs));
     } else if (ty === 'slow') {
@@ -1518,7 +1521,7 @@ function compile(p) {
     if (pt & 2) d &= 2;
     if (pt & 4) d &= 1;
     sdom0[i] = d;
-    if ((mkk === 1 || mkk === 2) && !boxCountMode) mk.push(i);
+    if (o.caves ? mkk === 2 : ((mkk === 1 || mkk === 2) && !boxCountMode)) mk.push(i);
   }
   const wdv = +o.whisperDiff || 4, allow = [0];
   for (let d = 1; d <= 6; d++) { let mm = 0; for (let e = 1; e <= 6; e++) if (Math.abs(d - e) >= wdv) mm |= bit(e); allow[d] = mm; }
@@ -1537,9 +1540,9 @@ function compile(p) {
   });
   return { cand0, peers: peerSet.map(s => Array.from(s)), bin, groups, cellGroups,
     useShade, sdom0, mk, marks: p.marks || new Array(NN).fill(0), mval: p.mval || new Array(NN).fill(0),
-    regList, boxClue, swRows, swCols,
+    regList, boxClue, swRows, swCols, cvc: o.caves ? (p.marks || []).map((x, i) => x === 1 ? i : -1).filter(i => i >= 0) : [],
     sopts: { waterConn: !!o.waterConn, noPool: !!o.noPool, nkLand: !!o.nkLand, nkWater: !!o.nkWater, shadeWhisper: !!o.shadeWhisper, boxRenban: !!o.boxRenban,
-      landConn: !!o.landConn, noPoolLand: !!o.noPoolLand, sandwichShade: !!o.sandwichShade },
+      landConn: !!o.landConn, noPoolLand: !!o.noPoolLand, sandwichShade: !!o.sandwichShade, caves: !!o.caves },
     wd: wdv, allow, swd, sallow };
 }
 
@@ -1656,7 +1659,7 @@ function shadeProp(m, grid, sg, sdom, cand) {
     }
     // landConn mirrors waterConn for the unshaded cells - the other half of "both colors are
     // each edge-connected" (classic Yin-Yang)
-    if (o.landConn) {
+    if (o.landConn || o.caves) {
       let start = -1, lc = 0;
       for (let i = 0; i < NN; i++) if (sg[i] === 1) { lc++; if (start < 0) start = i; }
       if (lc > 1) {
@@ -1691,9 +1694,58 @@ function shadeProp(m, grid, sg, sdom, cand) {
       return true;
     };
     if (o.nkLand && !nkCheck(1)) return false;
-    if (o.nkWater && !nkCheck(2)) return false;
+    if ((o.nkWater || o.caves) && !nkCheck(2)) return false;
+    if (o.caves) {
+      // every wall group reaches the grid edge and holds distinct digits
+      const seenW = new Uint8Array(NN);
+      for (let i = 0; i < NN; i++) if (sg[i] === 2 && !seenW[i]) {
+        const comp = flood(i, j => sg[j] === 2); let dm = 0;
+        for (const c of comp) seenW[c] = 1;
+        if (comp.length > 6) return false;
+        if (!comp.some(isEdge)) { const pot = flood(i, j => sg[j] !== 1); if (!pot.some(isEdge)) return false; }
+        for (const c of comp) { const d = grid[c]; if (d) { if (dm & bit(d)) return false; dm |= bit(d); } }
+        if (dm) for (const c of comp) if (!grid[c]) { const nc = cand[c] & ~dm; if (!nc) return false; if (nc !== cand[c]) { cand[c] = nc; changed = true; } }
+      }
+      // a circled cell's digit is the number of unshaded cells it sees in its row and column, itself included
+      for (const k of m.cvc) {
+        if (sg[k] !== 1 && !setS(k, 1)) return false;
+        const rays = raysOf(k, sg);
+        const dn = rays.dn, pn = rays.pn;
+        let n = grid[k] || 0;
+        if (!n) {
+          let V = 0; for (let d = Math.max(dn, 1); d <= pn && d <= 6; d++) V |= bit(d);
+          V &= cand[k]; if (!V) return false;
+          if (V !== cand[k]) { cand[k] = V; changed = true; }
+          if (pop(V) === 1) for (let d = 1; d <= 6; d++) if (V & bit(d)) n = d;
+        }
+        if (n) {
+          if (dn > n || pn < n) return false;
+          if (dn === n) for (const j of rays.close) if (!sg[j] && !setS(j, 2)) return false;
+          if (pn === n) for (const j of rays.unk) if (!sg[j] && !setS(j, 1)) return false;
+        }
+      }
+    }
   }
   return true;
+}
+const isEdge = i => rowOf(i) === 0 || rowOf(i) === N - 1 || colOf(i) === 0 || colOf(i) === N - 1;
+const DIRS4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+/* what an unshaded cell sees along its row and column: definite count (dn), potential count (pn), the first undecided cell
+   after each definite run (close) and every undecided cell inside the potential runs (unk) */
+function raysOf(k, sg) {
+  let dn = 1, pn = 1; const close = [], unk = [];
+  for (const [dr, dc] of DIRS4) {
+    let r = rowOf(k) + dr, c = colOf(k) + dc, inDef = true;
+    while (inGrid(r, c)) {
+      const j = ix(r, c);
+      if (sg[j] === 2) break;
+      if (sg[j] === 1 && inDef) dn++;
+      else if (inDef) { inDef = false; close.push(j); }
+      pn++; if (!sg[j]) unk.push(j);
+      r += dr; c += dc;
+    }
+  }
+  return { dn, pn, close, unk };
 }
 
 /* cells that definitely break a shading rule (for live feedback) */
@@ -1742,7 +1794,22 @@ function shadeConflicts(m, grid, sg) {
       water.forEach(c => { if (!comp.has(c)) { bad.add(c); bad.add(water[0]); } });
     }
   }
-  if (o.landConn) {
+  if (o.caves) {
+    const seenW = new Uint8Array(NN);
+    for (let i = 0; i < NN; i++) if (sg[i] === 2 && !seenW[i]) {
+      const comp = flood(i, j => sg[j] === 2), byD = {};
+      comp.forEach(c => { seenW[c] = 1; if (grid[c]) (byD[grid[c]] = byD[grid[c]] || []).push(c); });
+      Object.values(byD).forEach(a => { if (a.length > 1) a.forEach(c => bad.add(c)); });
+      if (comp.length > 6) comp.forEach(c => bad.add(c));
+      if (!comp.some(isEdge) && !flood(i, j => sg[j] !== 1).some(isEdge)) comp.forEach(c => bad.add(c));
+    }
+    for (const k of m.cvc) {
+      if (sg[k] === 2) { bad.add(k); continue; }
+      const rays = raysOf(k, sg.map ? sg : Array.from(sg)), n = grid[k];
+      if (n && (rays.dn > n || rays.pn < n)) bad.add(k);
+    }
+  }
+  if (o.landConn || o.caves) {
     const land = []; for (let i = 0; i < NN; i++) if (sg[i] === 1) land.push(i);
     if (land.length > 1) {
       const comp = new Set(flood(land[0], j => sg[j] !== 2));
@@ -1759,7 +1826,7 @@ function shadeConflicts(m, grid, sg) {
     }
   };
   if (o.nkLand) nk(1);
-  if (o.nkWater) nk(2);
+  if (o.nkWater || o.caves) nk(2);
   return bad;
 }
 
@@ -1948,7 +2015,7 @@ function verify(p, g, sh) {
     else if (ty === 'entropic') { if (L >= 3) for (let k = 0; k + 2 < L; k++) if (new Set([grpOf(v[k]), grpOf(v[k + 1]), grpOf(v[k + 2])]).size !== 3) errs.push('entropic'); }
     else if (ty === 'mountain') { if (L >= 3 && !lineOK(['mountain'], v, true, {})) errs.push('mountain'); }
     else if (ty === 'gap') { if (L >= 3 && !lineOK(['gap'], v, true, {})) errs.push('equal-gap'); }
-    else if (ty === 'lots') { if (L >= 2 && !lineOK(['lots'], v, true, {})) errs.push('Greater Lots'); }
+    else if (ty === 'lots') { if (L >= 2 && !lineOK(['lots'], v, true, { ci: ln.c > 0 && ln.c < L ? ln.c : 0 })) errs.push('Greater Lots'); }
     else if (ty === 'slow') { for (let k = 0; k + 1 < L; k++) if (v[k] > v[k + 1]) errs.push('slow thermo'); }
     else if (ty === 'nabner') { for (let a = 0; a < L; a++) for (let b = a + 1; b < L; b++) if (Math.abs(v[a] - v[b]) < 2) errs.push('Nabner'); }
     else if (ty === 'darrow') { if (L >= 3) { let sm = 0; for (let k = 1; k < L - 1; k++) sm += v[k]; if (sm !== v[0] + v[L - 1]) errs.push('double arrow'); } }
@@ -2064,7 +2131,10 @@ function verifyShade(p, g, sh, errs) {
     if (marks[i] === 2 && sh[i] !== 1) errs.push('square must be shaded');
     if ((paint[i] & 2) && sh[i] !== 1) errs.push('painted shade');
     if ((paint[i] & 4) && sh[i] !== 0) errs.push('painted land');
-    if (!boxCountMode && (marks[i] === 1 || marks[i] === 2)) {
+    if (o.caves) {
+      if (marks[i] === 2 && size(Wt, i) !== g[i]) errs.push('wall group size');
+      if (marks[i] === 1) { let n = 1; for (const [dr, dc] of DIRS4) { let r = rowOf(i) + dr, cc = colOf(i) + dc; while (inGrid(r, cc) && !sh[ix(r, cc)]) { n++; r += dr; cc += dc; } } if (n !== g[i]) errs.push('cave count'); }
+    } else if (!boxCountMode && (marks[i] === 1 || marks[i] === 2)) {
       const lab = marks[i] === 1 ? L : Wt, n = mval[i] || g[i];
       if (lab.id[i] >= 0 && size(lab, i) !== n) errs.push('region size');
     }
@@ -2072,7 +2142,12 @@ function verifyShade(p, g, sh, errs) {
   if (o.waterConn && Wt.n > 1) errs.push('water not connected');
   if (o.noPool) for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++)
     if (sh[ix(r, c)] && sh[ix(r, c + 1)] && sh[ix(r + 1, c)] && sh[ix(r + 1, c + 1)]) errs.push('pool');
-  if (o.landConn && L.n > 1) errs.push('land not connected');
+  if ((o.landConn || o.caves) && L.n > 1) errs.push('land not connected');
+  if (o.caves) for (let k = 0; k < Wt.n; k++) {
+    const cells = []; for (let i = 0; i < NN; i++) if (Wt.id[i] === k) cells.push(i);
+    if (!cells.some(isEdge)) errs.push('wall group not touching the edge');
+    if (new Set(cells.map(i => g[i])).size !== cells.length) errs.push('wall group repeats a digit');
+  }
   if (o.noPoolLand) for (let r = 0; r + 1 < N; r++) for (let c = 0; c + 1 < N; c++)
     if (!sh[ix(r, c)] && !sh[ix(r, c + 1)] && !sh[ix(r + 1, c)] && !sh[ix(r + 1, c + 1)]) errs.push('pool (land)');
   if (o.shadeWhisper) for (const [a, b] of orthPairs)
@@ -2110,7 +2185,7 @@ function verifyShade(p, g, sh, errs) {
     }
   };
   if (o.nkLand) perRegion(L, 0);
-  if (o.nkWater) perRegion(Wt, 1);
+  if (o.nkWater || o.caves) perRegion(Wt, 1);
   if (boxCountMode) {
     const regions = p.regions || stdRegions(), doneB = new Set();
     for (let i = 0; i < NN; i++) if ((marks[i] === 1 || marks[i] === 2) && !doneB.has(regions[i])) {
@@ -2148,7 +2223,7 @@ function conflicts(p, model, grid) {
 
 const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
 
-root.SX = { chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
+root.SX = { raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -2225,13 +2300,14 @@ const VARIANTS = [
   { k: 'nurikabe', label: 'Nurikabe', group: 'Shading' },
   { k: 'shadeline', label: 'Shaded whispers', group: 'Shading' },
   { k: 'shaderenban', label: 'Shaded renban', group: 'Shading' },
-  { k: 'yinyang', label: 'Yin-Yang', group: 'Shading' }
+  { k: 'yinyang', label: 'Yin-Yang', group: 'Shading' },
+  { k: 'caves', label: 'Caves', group: 'Shading' }
 ];
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
 const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, darrow: 1, zipper: 1, renban: 1,
-  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
+  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, caves: 0, cavecircle: 4, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
@@ -2499,6 +2575,43 @@ function mysteryCages(sol, rng) {
   return cages.filter(c => c.cells.length >= 2);
 }
 
+/* Caves: walls (shaded) are groups touching the grid edge, each holding one square whose digit is the group's size and
+   no repeated digit; the cave (unshaded) is one connected area. A circle in the cave holds the number of cave cells it sees
+   along its row and column (itself included). */
+function makeCaves(sol, rng) {
+  const edge = [...Array(NN).keys()].filter(i => rowOf(i) === 0 || rowOf(i) === N - 1 || colOf(i) === 0 || colOf(i) === N - 1);
+  for (let att = 0; att < 4000; att++) {
+    const wall = new Int8Array(NN), squares = [], target = 4 + Math.floor(rng() * 3);
+    let gid = 0;
+    for (let t = 0; t < 30 && squares.length < target; t++) {
+      const free = edge.filter(c => !wall[c] && nbr4[c].every(j => !wall[j]));
+      if (!free.length) break;
+      const size = 1 + Math.floor(rng() * 4), cells = [pick(free, rng)], used = new Set([sol[cells[0]]]);
+      const id = gid + 1;
+      while (cells.length < size) {
+        const opts = [];
+        for (const a of cells) for (const j of nbr4[a]) if (!wall[j] && !cells.includes(j) && !used.has(sol[j]) && nbr4[j].every(q => !wall[q] || cells.includes(q))) opts.push(j);
+        if (!opts.length) break;
+        const j = pick(opts, rng); cells.push(j); used.add(sol[j]);
+      }
+      if (cells.length < size) continue;
+      const sq = cells.filter(c => sol[c] === size); if (!sq.length) continue;
+      gid = id; cells.forEach(c => { wall[c] = id; }); squares.push(pick(sq, rng));
+    }
+    const nw = wall.reduce((a, b) => a + (b ? 1 : 0), 0);
+    if (squares.length < 4 || nw < 7 || nw > 20) continue;
+    const sh = Array.from(wall, v => v ? 1 : 0);
+    const land = [...Array(NN).keys()].filter(i => !sh[i]);
+    if (S.verifyShade) { /* connectivity is checked below */ }
+    const seen = new Set([land[0]]), st = [land[0]];
+    while (st.length) { const c = st.pop(); for (const j of nbr4[c]) if (!sh[j] && !seen.has(j)) { seen.add(j); st.push(j); } }
+    if (seen.size !== land.length) continue;
+    const circles = land.filter(i => { const rays = S.raysOf(i, sh.map(v => v ? 2 : 1)); return rays.dn === sol[i]; });
+    if (circles.length < 4) continue;
+    return { sh, squares, circles: shuffle(circles, rng).slice(0, 6) };
+  }
+  return null;
+}
 /* Nurikabe: islands (unshaded) sized by the digit in their circled cell, one connected water region, no 2x2 pools */
 function makeNurikabe(sol, rng) {
   for (let att = 0; att < 800; att++) {
@@ -3112,9 +3225,13 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   if (V.has('lots')) {
     // the circle is the first cell of the line; its digit counts the larger digits on the rest of the line
     sampleLines(sol, rng, { minL: 5, maxL: 8, max: capOf('lots', 4), attempts: 9000, lenBias, usedEndpoints, cellCross, lineKey: 'lots',
-      prefixOK: (v, c, Lt) => S.lineOK(['lots'], v, false, { wd: wdv, L: Lt }),
-      finalOK: v => S.lineOK(['lots'], v, true, { wd: wdv }) })
-      .forEach(cs => { add('lots', p => p.lines.push({ type: 'lots', cells: cs.slice() }), lk('lots')); items[items.length - 1].hopCell = cs[0]; });
+      prefixOK: () => true,
+      finalOK: v => v.some((d, i) => S.lineOK(['lots'], v, true, { ci: i })) })
+      .forEach(cs => {
+        const v = cs.map(k => sol[k]), okI = v.map((d, i) => i).filter(i => S.lineOK(['lots'], v, true, { ci: i }));
+        const ci = pick(okI, rng);
+        add('lots', p => { const ln = { type: 'lots', cells: cs.slice() }; if (ci > 0) ln.c = ci; p.lines.push(ln); }, lk('lots')); items[items.length - 1].hopCell = cs[ci];
+      });
   }
   if (V.has('nabner')) {
     sampleLines(sol, rng, { lens: [2, 3, 3], minL: 2, maxL: 3, max: capOf('nabner', 5), attempts: 6000, lenBias, usedEndpoints, cellCross, lineKey: 'nabner',
@@ -3532,12 +3649,17 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   base.opts.kropkiNeg = V.has('kropki') && neg.kropki;
   base.opts.xvNeg = V.has('xv') && neg.xv;
 
-  let ssol = null;
+  let ssol = null, cavesCircles = null;
   if (V.has('nurikabe')) {
     const nk = makeNurikabe(sol, rng); if (!nk) return null;
     base.opts.waterConn = true; base.opts.noPool = true; base.opts.nkLand = true;
     nk.circles.forEach(c => { base.marks[c] = 1; });
     ssol = nk.sh;
+  } else if (V.has('caves')) {
+    const cv = makeCaves(sol, rng); if (!cv) return null;
+    base.opts.caves = true;
+    cv.squares.forEach(c => { base.marks[c] = 2; });
+    cavesCircles = cv.circles.slice(0, 4 + Math.floor(rng() * 3)); ssol = cv.sh;
   } else if (V.has('shadeline')) {
     // the shaded-region pairwise difference is kept separate from the drawn German-whisper lines'
     // own whisperDiff: a connected blob of 8+ cells on digits 1-6 almost never satisfies a diff-of-4
@@ -3610,7 +3732,8 @@ function tryGenerate(V, diff, rng, deadline, spec) {
     }
   }
   if (ssol) {
-    const kind = V.has('nurikabe') ? 'nurikabe' : V.has('shaderenban') ? 'shaderenban' : V.has('yinyang') ? 'yinyang' : 'shadeline';
+    if (cavesCircles) cavesCircles.forEach(c => { items.push({ variant: 'cavecircle', locked: true, hopCell: c, apply: p => { p.marks[c] = 1; } }); });
+    const kind = V.has('caves') ? 'caves' : V.has('nurikabe') ? 'nurikabe' : V.has('shaderenban') ? 'shaderenban' : V.has('yinyang') ? 'yinyang' : 'shadeline';
     for (let i = 0; i < NN; i++) if (!base.marks[i]) add2(items, kind, i, ssol[i] ? 1 : 2);
   }
   const usedVariants = Array.from(V).filter(k => MIN_KEEP[k] !== undefined);
@@ -3629,7 +3752,8 @@ function tryGenerate(V, diff, rng, deadline, spec) {
 
   let inc = new Set(items);
   const noGive = new Set(base.cc || []); // counting circles always start empty
-  items.forEach(it => { if (it.hopCell != null) noGive.add(it.hopCell); }); // hop arrow cells keep their digit hidden
+  items.forEach(it => { if (it.hopCell != null) noGive.add(it.hopCell); });
+  if (base.opts.caves) base.marks.forEach((mk, i) => { if (mk === 2) noGive.add(i); }); // wall-size squares keep their digit hidden // hop arrow cells keep their digit hidden
   const givens = new Set(shuffle([...Array(NN).keys()].filter(i => !noGive.has(i)), rng).slice(0, g0));
   // Cipher: only K digits (default all ten) are written as letters; key[d] is d's letter, or the digit
   // itself when d is not disguised. Letters are named A, B, C... in a random order over the chosen digits.
@@ -4129,6 +4253,7 @@ function normalize(o) {
     l.also = SOLO_LINES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
     if (!l.also.length) delete l.also;
     if (!X.lineTypes(l).includes('regsum') || !Array.isArray(l.ring) || l.ring.length !== 2) delete l.ring;
+    if (l.type !== 'lots' || !(l.c > 0 && l.c < l.cells.length)) delete l.c; else l.c = Math.floor(l.c);
     if (l.branch && !(l.type === 'arrow' && !l.also && !l.escape && X.branchOK(l.cells, l.branch))) delete l.branch;
   });
   p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN && e.a !== e.b && ['cons', 'white', 'black', 'X', 'V', 'gt', 'prime'].includes(e.t)).map(e => {
@@ -4193,7 +4318,7 @@ function normalize(o) {
   p.meta = (o && o.meta) || null;
   return p;
 }
-const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; return q; };
+const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; if (!q.caves) delete q.caves; return q; };
 const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : []));
 const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
 const getModel = () => app.model || (app.model = X.compile(app.puzzle));
@@ -4250,12 +4375,13 @@ function variantLabels(p) {
   if (e.has('prime')) L.push('Prime dots'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
   if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
-  const nk = (p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater;
+  const nk = !o.caves && ((p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater);
+  if (o.caves) L.push('Caves');
   if (nk) L.push('Nurikabe');
   if (o.shadeWhisper) L.push('Shaded whispers');
   if (o.boxRenban) L.push('Shaded renban');
   if (o.landConn) L.push('Yin-Yang');
-  if (!nk && !o.shadeWhisper && !o.boxRenban && !o.landConn && X.usesShade(p)) L.push('Shading');
+  if (!nk && !o.caves && !o.shadeWhisper && !o.boxRenban && !o.landConn && X.usesShade(p)) L.push('Shading');
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
   if (p.olines.length || p.lines.some(l => l.type === 'regsum' && l.ring)) L.push('Outside lines');
   if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper'); if (ck.has('nr')) L.push('Numbered Rooms');
@@ -4296,7 +4422,7 @@ function rulesFor(p) {
   if (lt.has('palindrome')) R.push('Palindrome (blue): the line reads the same in both directions.');
   if (lt.has('parity')) R.push('Parity lines (taupe): neighboring digits on the line alternate between odd and even.');
   if (lt.has('mountain')) R.push('Mountain lines (burnt orange): digits strictly rise to a single peak and then strictly fall. The peak is never at an end of the line, and the peak cell is not marked.');
-  if (lt.has('lots')) R.push('Greater Lots (gold, with a circle at one end): the digit in the circle counts how many digits on its line are strictly larger than it. The circled digit itself is not counted, and larger digits that repeat on the line each count.');
+  if (lt.has('lots')) R.push('Greater Lots (gold, with a circle on one cell of the line): the digit in the circle counts how many digits on its line are strictly larger than it. The circled digit itself is not counted, and larger digits that repeat on the line each count.');
   if (lt.has('gap')) R.push('Equal-gap lines (indigo): every pair of neighboring digits on the line differs by the same amount, which is not given. The line can step up or down at each cell, so 2, 4, 2, 4, 6 and 2, 5, 2, 5 both follow a gap rule.');
   if (lt.has('slow')) R.push('Slow thermometers (teal, with a bulb): digits never decrease from the bulb to the tip. Two neighbors on the line may hold the same digit, but only when their cells do not share a row, column or box.');
   if (lt.has('nabner')) R.push('Nabner lines (plum): no two digits on the line are the same or consecutive, whether or not the cells touch. Any two differ by at least 2.');
@@ -4348,14 +4474,19 @@ function rulesFor(p) {
   if (X.usesShade(p)) {
     R.push('Shading: also color cells with the Shade color. Digits go in every cell, shaded or not. Shaded cells that share an edge form a region; unshaded cells that share an edge form an island.');
     const boxCountMode = !!(o.shadeWhisper || o.boxRenban);
-    if (boxCountMode) {
+    if (o.caves) {
+      R.push('Caves: shade some cells (walls). Every wall cell connects to the edge of the grid through other wall cells, and the unshaded cells (cave) form one edge-connected area.');
+      R.push('Circles are unshaded and squares are shaded. The digit in a circle is the number of cave cells it sees along its row and column, itself included. Wall cells block the view.');
+      R.push('Each group of connected wall cells contains exactly one square. The digit in that square is the number of cells in the group. A digit never repeats inside a wall group.');
+    } else if (boxCountMode) {
       if (p.marks.some(x => x === 1)) R.push('Circled cells are unshaded. The corner number gives the total number of shaded cells elsewhere in that cell’s box.');
       if (p.marks.some(x => x === 2)) R.push('Squared cells are shaded. The corner number gives the total number of shaded cells (including this one) in that cell’s box.');
     } else {
       if (p.marks.some(x => x === 1)) R.push('Circled cells are unshaded. The number of cells in a circled cell’s island equals the fixed number in its corner if one is shown, otherwise the digit written in that cell.');
       if (p.marks.some(x => x === 2)) R.push('Squared cells are shaded. The number of cells in a squared cell’s shaded region equals the fixed number in its corner if one is shown, otherwise the digit written in that cell.');
     }
-    if (o.waterConn) R.push('All shaded cells form one edge-connected region.');
+    if (o.caves) { /* rules listed above */ }
+    else if (o.waterConn) R.push('All shaded cells form one edge-connected region.');
     if (o.noPool) R.push('No 2×2 block is entirely shaded.');
     if (o.nkLand) R.push('Every island contains exactly one circle.');
     if (o.nkWater) R.push('Every shaded region contains exactly one square.');
@@ -4680,7 +4811,7 @@ function renderBoard() {
   // one visually breaks the earlier line's color where they overlap (bridge-gap / overpass look),
   // instead of the two colors blending into each other at the crossing cell.
   const halo = (cls, ptsStr, w) => `<polyline class="ln halo" style="stroke:var(--cell);stroke-width:${w}" points="${ptsStr}"/>`;
-  const drawLine = (typesIn, cells, preview) => {
+  const drawLine = (typesIn, cells, preview, circ) => {
     const types = Array.isArray(typesIn) ? typesIn : [typesIn], L = cells.length, multi = types.length > 1;
     const thick = types.filter(t => t !== 'arrow' && t !== 'between' && t !== 'darrow').sort((x, y) => LW[y] - LW[x]);
     const thin = types.filter(t => t === 'arrow' || t === 'between' || t === 'darrow');
@@ -4702,7 +4833,7 @@ function renderBoard() {
         const col = preview ? 'var(--accent)' : COL[type];
         o += halo('ln', pts(cells), (LW[type] || 10) + 6);
         o += `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap', 'lots'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:' + (type === 'lots' ? '.55' : '.92') : ''}" points="${pts(cells)}"/>`;
-        if (type === 'lots') markerBuf += `<circle style="fill:${col};fill-opacity:.35;stroke:${preview ? 'var(--accent)' : '#e0a020'};stroke-width:4" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="26"/>`;
+        if (type === 'lots') markerBuf += `<circle style="fill:${col};fill-opacity:.35;stroke:${preview ? 'var(--accent)' : '#e0a020'};stroke-width:4" cx="${cx(cells[circ > 0 && circ < cells.length ? circ : 0])}" cy="${cy(cells[circ > 0 && circ < cells.length ? circ : 0])}" r="26"/>`;
         if (type === 'thermo' || type === 'slow') markerBuf += `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
       });
     }
@@ -4767,7 +4898,7 @@ function renderBoard() {
     }
     escInfo.set(l, { chain, boxes, vidx, types, last: chain.length - 1 });
   });
-  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells); if (l.branch) s += drawLine(['arrow'], [l.cells[0]].concat(l.branch)); });
+  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells, false, l.c); if (l.branch) s += drawLine(['arrow'], [l.cells[0]].concat(l.branch)); });
   s += thinBuf; thinBuf = '';
   s += markerBuf; markerBuf = '';
   // one outside box: its frame, rule tag, and the player's value / pencil marks (or the live-decoded value)
@@ -5227,7 +5358,7 @@ const TOOLS = [
   { g: 'Clean up', t: [['erase', 'Eraser']] }
 ];
 const OPTS = [['optDiag', 'diag'], ['optKnight', 'antiKnight'], ['optKing', 'antiKing'], ['optDisjoint', 'disjoint'], ['optWindows', 'windows'], ['optBalanced', 'balanced'], ['optNonconsec', 'nonconsec'], ['optKropki', 'kropkiNeg'], ['optXV', 'xvNeg'],
-  ['optWater', 'waterConn'], ['optPool', 'noPool'], ['optNkLand', 'nkLand'], ['optNkWater', 'nkWater'], ['optShadeWhisper', 'shadeWhisper']];
+  ['optWater', 'waterConn'], ['optPool', 'noPool'], ['optNkLand', 'nkLand'], ['optNkWater', 'nkWater'], ['optShadeWhisper', 'shadeWhisper'], ['optCaves', 'caves']];
 const HINTS = {
   given: 'Select cells, then type 1–6. Backspace clears.',
   even: 'Click or drag to mark cells even.', odd: 'Click or drag to mark cells odd.',
@@ -5248,7 +5379,7 @@ const HINTS = {
   zipper: 'Drag along the line (an odd number of cells, 3 or more). The middle cell gets a diamond. Each pair of cells the same distance from the middle adds up to the middle cell’s digit.',
   clone: 'Pick a group below, then drag across neighboring cells to mark a region. Add a second (or third) region of the same shape to the group: cells in the same position hold the same digit. Click a clone region to remove it.',
   mountain: 'Drag along the line, three or more cells. Digits strictly rise to a peak and then strictly fall. The peak is not at either end.',
-  lots: 'Drag along the line starting at the circle end, three or more cells (5 to 8 in generated puzzles). The digit in the circle counts how many digits on the line are strictly larger than it.',
+  lots: 'Drag along the line, three or more cells (5 to 8 in generated puzzles). The circle starts on the first cell you drag from. Click another cell of the line to move the circle there. The digit in the circle counts how many digits on the line are strictly larger than it.',
   gap: 'Drag along the line, three or more cells. Every pair of neighbors differs by the same amount, up or down.',
   loc: 'Click a cell to add or remove a six locator. The digit in the circled cell is the column (1 to 6 from the left) that holds the 6 in that row.',
   slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
@@ -5268,8 +5399,8 @@ const HINTS = {
   quad: 'Click a grid intersection (where four cells meet). Type the digits (1–6) that must appear among those four cells. Repeat a digit if it must appear twice.',
   oline: 'Drag along the squares outside the grid on one side. Choose the line type and clue type below. The clue values under the line stay hidden and must follow its rule.',
   paint: 'Pick a color, then click or drag across cells.',
-  mkc: 'Click a cell to circle it. A circled digit equals the size of its island of unshaded cells. Enter a number below to fix the size instead.',
-  mks: 'Click a cell to square it. A squared digit equals the size of its shaded region. Enter a number below to fix the size instead.',
+  mkc: 'Click a cell to circle it. A circled digit equals the size of its island of unshaded cells. Enter a number below to fix the size instead. With Caves on, the circled digit counts the cave cells it sees along its row and column, itself included.',
+  mks: 'Click a cell to square it. A squared digit equals the size of its shaded region. Enter a number below to fix the size instead. With Caves on, each wall group holds exactly one square.',
   erase: 'Click a cell to remove the line, cage or mark on it. Click a border or an outside clue to remove it.'
 };
 
@@ -5735,6 +5866,15 @@ function onUp() {
         host.branch = br; touch(true); flash('Second arrow added. Each arrow adds up to the circle.', 'ok'); return;
       }
     }
+    if (d.path.length === 1 && curRules()[0] === 'lots') {
+      let k = -1; for (let n = p.lines.length - 1; n >= 0; n--) if (p.lines[n].type === 'lots' && p.lines[n].cells.includes(d.path[0])) { k = n; break; }
+      if (k >= 0) {
+        const ln = p.lines[k], ci = ln.cells.indexOf(d.path[0]);
+        if (!X.lineFeasible(['lots'], ln.cells.length, p.opts.whisperDiff || 4, ln.cells, p.regions, undefined, ci)) { renderBoard(); flash('No digits fit a Greater Lots line with the circle on that cell. Try another cell.', 'warn'); return; }
+        if (ci > 0) ln.c = ci; else delete ln.c;
+        touch(true); flash('Circle moved.', 'ok'); return;
+      }
+    }
     const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') || rules.includes('lots') ? 3 : 2;
     if (rules[0] === 'nabner' && d.path.length > 3) { renderBoard(); flash('Nabner lines hold at most 3 cells, because 1 to 6 has no four digits that all differ by 2 or more.', 'warn'); return; }
     if (['darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
@@ -5872,7 +6012,7 @@ function buildGenerator() {
 }
 const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint'], ['antiknight', 'antiking'],
   ['nonconsecutive', 'diag'], ['nonconsecutive', 'antiknight'], ['nonconsecutive', 'antiking'], ['nonconsecutive', 'disjoint']];
-const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang'];
+const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang', 'caves'];
 const CAGE_EXCL = ['killer', 'looksay', 'product', 'range', 'evens', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
 // a big share of the grid on its own, so no two of these ever share a puzzle
 const CIPHER_NEEDS = ['killer', 'product', 'range', 'evens', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'];
