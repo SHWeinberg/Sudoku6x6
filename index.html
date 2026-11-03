@@ -457,13 +457,18 @@ details.about p{margin:8px 0 0}
         <input id="dotNum" type="number" min="1" max="6" inputmode="numeric" value="2" style="width:70px">
         <span class="small" style="margin:0">White dot: the difference. Black dot: the ratio (2 or more).</span>
       </div>
+      <div id="wsBox" class="inline" hidden>
+        <label for="wsNum" style="font-weight:700">Arrow sum</label>
+        <input id="wsNum" type="number" min="1" max="21" inputmode="numeric" value="10" style="width:70px">
+        <span class="small" style="margin:0">Sum of the first N digits the arrow points at; N is the digit behind it.</span>
+      </div>
       <div id="olBox" class="inline" hidden>
         <select id="olType" aria-label="Line type">
           <option value="thermo">Thermo</option><option value="arrow">Arrow</option><option value="whisper">Whisper</option>
           <option value="renban">Renban</option><option value="palindrome">Palindrome</option><option value="parity">Parity</option>
         </select>
         <select id="olKind" aria-label="Clue type">
-          <option value="xs">X-sums</option><option value="sw">Sandwich</option><option value="sk">Skyscraper</option><option value="nr">Numbered Rooms</option>
+          <option value="xs">X-sums</option><option value="ws">W-sums</option><option value="sw">Sandwich</option><option value="sk">Skyscraper</option><option value="nr">Numbered Rooms</option>
         </select>
         <label id="olDiffWrap" hidden>differ by at least <input id="olDiff" type="number" min="1" max="20" value="5"></label>
       </div>
@@ -505,6 +510,8 @@ details.about p{margin:8px 0 0}
         <label><input type="checkbox" id="optDisjoint"> Disjoint groups</label>
         <label><input type="checkbox" id="optWindows"> Extra windows (four shaded 2×2 squares hold different digits)</label>
         <label><input type="checkbox" id="optBalanced"> Balanced 2×2 (every 2×2 block holds two odd and two even digits)</label>
+        <label><input type="checkbox" id="optPole"> Pole Position (the first digit in each row and column is the position of the 1)</label>
+        <label><input type="checkbox" id="optTwoFive"> Two-Five (in each row, the digit in column 2 is the column of the 2, and the digit in column 5 is the column of the 5)</label>
         <label><input type="checkbox" id="optNonconsec"> Unmarked neighbors are never consecutive</label>
         <label><input type="checkbox" id="optKropki"> Every Kropki pair is marked (dots)</label>
         <label><input type="checkbox" id="optXV"> Every XV pair is marked</label>
@@ -622,11 +629,11 @@ function stdRegions() {
 function newPuzzle() {
   return {
     v: 4, title: '', regions: stdRegions(), givens: new Array(NN).fill(0),
-    opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false, windows: false, balanced: false,
+    opts: { diag: false, antiKnight: false, antiKing: false, disjoint: false, windows: false, balanced: false, pole: false, twofive: false,
             nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
             waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false,
             landConn: false, noPoolLand: false, sandwichShade: false, caves: false, snake: false },
-    sn: null, cages: [], lines: [], edges: [], ext: [], hop: [], pk: [], echo: [], crowd: [], spin: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
+    sn: null, cages: [], lines: [], edges: [], ext: [], hop: [], pk: [], wsum: [], sling: [], axia: [], echo: [], crowd: [], spin: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
     marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
     sol: null, ssol: null, meta: null
   };
@@ -869,6 +876,54 @@ function chkCount(g, cells) {
   for (let d = 1; d <= 6; d++) { if (cnt[d] > d) return false; if (cnt[d] > 0 && cnt[d] < d && cnt[d] + u < d) return false; }
   return true;
 }
+/* W-Sums. Outside clue: N is the Numbered Rooms value of the line (the digit in cell v[0]); the clue is the sum of the first N digits.
+   Inner arrow: N is the digit in the cell behind the arrow; the clue is the sum of the first N cells ahead of it. 0 = unknown. */
+function wsRange(g, seq) {
+  let lo = 99, hi = -1; const a0 = g[seq[0]];
+  for (const n0 of (a0 ? [a0] : [1, 2, 3, 4, 5, 6])) {
+    const vN = g[seq[n0 - 1]];
+    for (const n of (vN ? [vN] : [1, 2, 3, 4, 5, 6])) {
+      let s = 0, unk = 0;
+      for (let k = 0; k < n; k++) { const v = g[seq[k]]; if (v) s += v; else unk++; }
+      if (s + unk < lo) lo = s + unk; if (s + 6 * unk > hi) hi = s + 6 * unk;
+    }
+  }
+  return [lo, hi];
+}
+function chkWsOut(g, seq, T) { const r = wsRange(g, seq); return r[0] <= T && T <= r[1]; }
+function chkWsIn(g, a, ray, T) {
+  for (const n of (g[a] ? [g[a]] : [1, 2, 3, 4, 5, 6])) {
+    if (n > ray.length) continue;
+    let s = 0, unk = 0;
+    for (let k = 0; k < n; k++) { const v = g[ray[k]]; if (v) s += v; else unk++; }
+    if (s + unk <= T && T <= s + 6 * unk) return true;
+  }
+  return false;
+}
+/* Pole Position: the first digit of a line is the position of the 1 in that line (0 = unknown) */
+function chkPole(g, seq) {
+  const a0 = g[seq[0]];
+  for (let k = 0; k < seq.length; k++) if (g[seq[k]] === 1 && a0 && a0 !== k + 1) return false;
+  if (a0 && g[seq[a0 - 1]] && g[seq[a0 - 1]] !== 1) return false;
+  return true;
+}
+/* Two-Five: the digit in cell idx of a row is the position of digit d in that row (0 = unknown) */
+function chkPos(g, seq, idx, d) {
+  const a = g[seq[idx]];
+  for (let k = 0; k < seq.length; k++) if (g[seq[k]] === d && a && a !== k + 1) return false;
+  if (a && g[seq[a - 1]] && g[seq[a - 1]] !== d) return false;
+  return true;
+}
+/* Slingshot: counting from the head cell h along the ray, as many cells as the digit in h; that cell holds the digit of the tail cell t (0 = unknown) */
+function chkSling(g, t, h, ray) {
+  const dt = g[t];
+  for (const n of (g[h] ? [g[h]] : [1, 2, 3, 4, 5, 6])) {
+    if (n > ray.length) continue;
+    const v = g[ray[n - 1]];
+    if (!dt || !v || v === dt) return true;
+  }
+  return false;
+}
 function chkRooms(g, seq, T) {
   const a0 = g[seq[0]];
   const tryN = a0 ? [a0] : [1, 2, 3, 4, 5, 6];
@@ -1059,6 +1114,7 @@ function regSumBounds(g, runs) {
 
 /* ---- outside clue value ranges (partial grids) and outside-line rules ---- */
 function clueRange(kind, seq, g) {
+  if (kind === 'ws') return wsRange(g, seq);
   if (kind === 'lk') {
     let s = 0, unk = 0;
     for (const i of seq) { const v = g[i]; if (v) s += v; else unk++; }
@@ -1590,6 +1646,20 @@ function compile(p) {
     const R = cg.regs || [];
     for (let j = 1; j < R.length; j++) for (let k = 0; k < R[0].length; k++) addBin(R[0][k], R[j][k], (a, b) => a === b);
   });
+  if (o.pole) {
+    why = 'Pole Position (the first digit in a row or column is the position of the 1 in it)';
+    for (let k = 0; k < N; k++) {
+      const row = [], col = []; for (let j = 0; j < N; j++) { row.push(ix(k, j)); col.push(ix(j, k)); }
+      addGroup(row, g => chkPole(g, row)); addGroup(col, g => chkPole(g, col));
+    }
+  }
+  if (o.twofive) {
+    why = 'Two-Five (the digit in column 2 is the column of the 2 in its row, and the digit in column 5 is the column of the 5)';
+    for (let r = 0; r < N; r++) {
+      const row = []; for (let j = 0; j < N; j++) row.push(ix(r, j));
+      addGroup(row, g => chkPos(g, row, 1, 2)); addGroup(row, g => chkPos(g, row, 4, 5));
+    }
+  }
   if (o.balanced) { why = 'balanced 2x2 blocks (every 2x2 block holds two odd and two even digits)'; ALLQ.forEach(q => addGroup(q, g => { let od = 0, ev = 0; for (const i of q) { if (g[i]) { if (g[i] % 2) od++; else ev++; } } return od <= 2 && ev <= 2; })); }
   for (const x of (p.loc || [])) { why = 'six locator (the digit is the column of the 6 in its row)'; const row = []; for (let c = 0; c < N; c++) row.push(ix(rowOf(x), c)); addGroup(row.includes(x) ? row : row.concat(x), g => chkLoc(g, x)); }
   for (const x of (p.cmax || [])) {
@@ -1623,6 +1693,20 @@ function compile(p) {
     const ring = spinRing(h); if (!ring) continue;
     why = 'spinner (the four digits around the corner rise from the smallest in the arrow direction)';
     addGroup(ring, g => chkSpin(g, ring));
+  }
+  for (const h of (p.wsum || [])) {
+    why = 'W-Sum arrow (the digit behind the arrow is N; the first N digits the arrow points at sum to the clue)';
+    const ray = hopRay(h.b, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a));
+    addGroup([h.a].concat(ray), g => chkWsIn(g, h.a, ray, h.s));
+  }
+  for (const h of (p.sling || [])) {
+    why = 'Slingshot arrow (count from the head cell as many cells as its digit, in the arrow direction: the tail digit sits there)';
+    const ray = hopRay(h.h, h.dr, h.dc);
+    addGroup([h.t, h.h].concat(ray), g => chkSling(g, h.t, h.h, ray));
+  }
+  for (const i of (p.axia || [])) {
+    why = 'Axia cell (its digit does not repeat anywhere along its four diagonals)';
+    for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) for (const j of hopRay(i, dr, dc)) addBin(i, j, (a, b) => a !== b);
   }
   for (const h of (p.pk || [])) {
     why = 'projected Kropki dot (a cell holding d looks d steps along the arrow; that cell is ' + (h.t === 'b' ? 'double or half of d' : 'consecutive to d') + ')';
@@ -1668,6 +1752,7 @@ function compile(p) {
       else if (cl.kind === 'sw') addGroup(seq, g => chkSandwich(g, seq, T));
       else if (cl.kind === 'sk') addGroup(seq, g => chkSky(g, seq, T));
       else if (cl.kind === 'nr') addGroup(seq, g => chkRooms(g, seq, T));
+      else if (cl.kind === 'ws') addGroup(seq, g => chkWsOut(g, seq, T));
     }
   }
   const useShade = usesShade(p);
@@ -2276,6 +2361,14 @@ function verify(p, g, sh) {
   }
   if (p.cc && p.cc.length) { const cnt = [0, 0, 0, 0, 0, 0, 0]; p.cc.forEach(i => { cnt[g[i]]++; }); for (let d = 1; d <= 6; d++) if (cnt[d] && cnt[d] !== d) errs.push('counting circles'); }
   for (const cg of (p.clones || [])) { const R = cg.regs || []; for (let j = 1; j < R.length; j++) for (let k = 0; k < R[0].length; k++) if (g[R[0][k]] !== g[R[j][k]]) errs.push('clone'); }
+  if (o.pole) for (let k = 0; k < N; k++) {
+    const row = [], col = []; for (let j = 0; j < N; j++) { row.push(g[ix(k, j)]); col.push(g[ix(j, k)]); }
+    if (row.indexOf(1) + 1 !== row[0]) errs.push('pole position row'); if (col.indexOf(1) + 1 !== col[0]) errs.push('pole position column');
+  }
+  if (o.twofive) for (let r = 0; r < N; r++) {
+    const row = []; for (let j = 0; j < N; j++) row.push(g[ix(r, j)]);
+    if (row.indexOf(2) + 1 !== row[1]) errs.push('two-five (2)'); if (row.indexOf(5) + 1 !== row[4]) errs.push('two-five (5)');
+  }
   if (o.balanced) for (let r = 1; r < N; r++) for (let c = 1; c < N; c++) { const q = quadCells(r, c); if (q.filter(i => g[i] % 2).length !== 2) errs.push('balanced block'); }
   for (const x of (p.loc || [])) if (g[ix(rowOf(x), g[x] - 1)] !== 6) errs.push('six locator');
   for (const x of (p.cmax || [])) { const c4 = quadCells(x.r, x.c); if (c4) c4.forEach((c, k) => { if (k !== x.k && !(g[c4[x.k]] > g[c])) errs.push('corner arrow'); }); }
@@ -2283,6 +2376,9 @@ function verify(p, g, sh) {
   for (const h of (p.echo || [])) { const ray = hopRay(h.cell, h.dr, h.dc); if (!ray.some(i => g[i] === g[h.cell])) errs.push('echo arrow'); }
   for (const h of (p.crowd || [])) { if (nbr8[h.cell].filter(i => g[i] > g[h.cell]).length !== h.n) errs.push('crowd cell'); }
   for (const h of (p.spin || [])) { const ring = spinRing(h); if (ring && !chkSpin(g, ring)) errs.push('spinner'); }
+  for (const h of (p.wsum || [])) { const ray = hopRay(h.b, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a)), n = g[h.a]; let s = 0; for (let k = 0; k < n && k < ray.length; k++) s += g[ray[k]]; if (n > ray.length || s !== h.s) errs.push('W-Sum arrow'); }
+  for (const h of (p.sling || [])) { const ray = hopRay(h.h, h.dr, h.dc), n = g[h.h]; if (n > ray.length || g[ray[n - 1]] !== g[h.t]) errs.push('Slingshot arrow'); }
+  for (const i of (p.axia || [])) for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) if (hopRay(i, dr, dc).some(j => g[j] === g[i])) errs.push('Axia cell');
   for (const h of (p.pk || [])) { const ray = hopRay(h.cell, h.dr, h.dc), d = g[h.cell]; if (d > ray.length || !pkRel(h.t, d, g[ray[d - 1]])) errs.push('projected Kropki'); }
   for (const h of (p.hop || [])) { const ray = hopRay(h.cell, h.dr, h.dc), d = g[h.cell]; if (d > ray.length || g[ray[d - 1]] !== 7 - d) errs.push('hop'); }
   for (const x of (p.ext || [])) for (const nb of nbr4[x.cell]) if (x.t === 'max' ? !(g[x.cell] > g[nb]) : !(g[x.cell] < g[nb])) errs.push('extreme');
@@ -2312,6 +2408,9 @@ function verify(p, g, sh) {
       } else if (cl.kind === 'nr') {
         const n = v[0];
         if (v[n - 1] !== T) errs.push('nr');
+      } else if (cl.kind === 'ws') {
+        const n = v[v[0] - 1]; let s = 0; for (let k = 0; k < n; k++) s += v[k];
+        if (s !== T) errs.push('ws');
       }
     }
   }
@@ -2335,6 +2434,7 @@ function outVal(kind, seq, g) {
     let s = 0; for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k]; return s;
   }
   if (kind === 'nr') { const n = v[0]; return v[n - 1]; }
+  if (kind === 'ws') { const n = v[v[0] - 1]; let s = 0; for (let k = 0; k < n; k++) s += v[k]; return s; }
   let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; } return c;
 }
 
@@ -2471,9 +2571,9 @@ function conflicts(p, model, grid) {
   return bad;
 }
 
-const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms' };
+const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum' };
 
-root.SX = { nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
+root.SX = { chkSling, chkPos, chkPole, chkWsIn, chkWsOut, wsRange, nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -2510,6 +2610,7 @@ const VARIANTS = [
   { k: 'darrow', label: 'Double arrow', group: 'Sums' },
   { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
+  { k: 'wsum', label: 'W-Sums', group: 'Sums' },
   { k: 'sandwich', label: 'Sandwich', group: 'Sums' },
   { k: 'skyscraper', label: 'Skyscraper', group: 'Sums' },
   { k: 'roomnumbers', label: 'Numbered Rooms', group: 'Sums' },
@@ -2537,6 +2638,8 @@ const VARIANTS = [
   { k: 'inequality', label: 'Greater-than signs', group: 'Pair clues' },
   { k: 'prime', label: 'Prime dots', group: 'Pair clues' },
   { k: 'far', label: 'Far bars', group: 'Pair clues' },
+  { k: 'axia', label: 'Axia cells', group: 'Grid rules' },
+  { k: 'sling', label: 'Slingshot arrows', group: 'Pair clues' },
   { k: 'extremes', label: 'Extremes', group: 'Pair clues' },
   { k: 'hop', label: 'Hop arrows', group: 'Grid rules' },
   { k: 'echo', label: 'Echo arrows', group: 'Grid rules' },
@@ -2547,12 +2650,15 @@ const VARIANTS = [
   { k: 'bat', label: 'Battenburg', group: 'Grid rules' },
   { k: 'windows', label: 'Extra windows', group: 'Grid rules' },
   { k: 'balanced', label: 'Balanced 2x2', group: 'Grid rules' },
+  { k: 'pole', label: 'Pole Position', group: 'Grid rules' },
+  { k: 'twofive', label: 'Two-Five', group: 'Grid rules' },
   { k: 'locator', label: 'Six locators', group: 'Grid rules' },
   { k: 'clone', label: 'Clone regions', group: 'Grid rules' },
   { k: 'countcircles', label: 'Counting circles', group: 'Grid rules' },
   { k: 'zipper', label: 'Zipper lines', group: 'Lines' },
   { k: 'evenodd', label: 'Even / Odd', group: 'Pair clues' },
   { k: 'outxsum', label: 'X-sums on lines', group: 'Outside lines' },
+  { k: 'outwsum', label: 'W-sums on lines', group: 'Outside lines' },
   { k: 'outsandwich', label: 'Sandwich on lines', group: 'Outside lines' },
   { k: 'outsky', label: 'Skyscraper on lines', group: 'Outside lines' },
   { k: 'outrooms', label: 'Numbered Rooms on lines', group: 'Outside lines' },
@@ -2566,9 +2672,9 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, far: 3, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
-  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
-  outxsum: 1, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
+  whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, wsum: 4, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
+  outxsum: 1, outwsum: 1, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
 const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots']);
@@ -2627,6 +2733,7 @@ function clueValue(cl, sol) {
     return s;
   }
   if (cl.kind === 'nr') { const n = v[0]; return v[n - 1]; }
+  if (cl.kind === 'ws') { const n = v[v[0] - 1]; let s = 0; for (let k = 0; k < n; k++) s += v[k]; return s; }
   let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
   return c;
 }
@@ -3297,10 +3404,10 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
      plain Killer/Look-and-say in the UI (feasibleMix), since those pools already claim almost the
      whole grid and would leave no room for an escaping cage to grow into. */
   if (V.has('escape')) {
-    const TARGET_VARIANT = { xs: 'xsum', sw: 'sandwich', sk: 'skyscraper', nr: 'roomnumbers', lk: 'littlekiller' };
+    const TARGET_VARIANT = { ws: 'wsum', xs: 'xsum', sw: 'sandwich', sk: 'skyscraper', nr: 'roomnumbers', lk: 'littlekiller' };
     const sumTargets = ['xs', 'sw', 'sk', 'nr'].filter(k => V.has(TARGET_VARIANT[k]));
     const codeTargets = ['sk', 'nr'].filter(k => V.has(TARGET_VARIANT[k]));
-    const lineTargets = ['xs', 'sw', 'sk', 'nr', 'lk'].filter(k => V.has(TARGET_VARIANT[k]));
+    const lineTargets = ['xs', 'ws', 'sw', 'sk', 'nr', 'lk'].filter(k => V.has(TARGET_VARIANT[k]));
     const escLineTypes = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic', 'modular', 'zigzag'].filter(t => V.has(t));
     const cageEligible = sumTargets.length || codeTargets.length;
     const lineEligible = lineTargets.length && escLineTypes.length;
@@ -3668,15 +3775,15 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
         }, lk('regsum'));
       });
   }
-  const nOutV = ['outxsum', 'outsandwich', 'outsky', 'outrooms'].filter(k => V.has(k)).length;
-  [['outxsum', 'xs'], ['outsandwich', 'sw'], ['outsky', 'sk'], ['outrooms', 'nr']].forEach(([variant, kind]) => {
+  const nOutV = ['outxsum', 'outwsum', 'outsandwich', 'outsky', 'outrooms'].filter(k => V.has(k)).length;
+  [['outxsum', 'xs'], ['outwsum', 'ws'], ['outsandwich', 'sw'], ['outsky', 'sk'], ['outrooms', 'nr']].forEach(([variant, kind]) => {
     if (!V.has(variant)) return;
-    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1, 1][nOutV], V.has('duality'), lenBias, olTypePool(V, spec, kind));
+    const lines = sampleOutLines(kind, sol, rng, usedRing, [0, 4, 2, 1, 1, 1][nOutV], V.has('duality'), lenBias, olTypePool(V, spec, kind));
     lines.forEach(ln => add(variant, p => p.olines.push({ type: ln.type, also: ln.also, kind: ln.kind, cells: ln.cells.map(c => c.slice()), diff: ln.diff })));
     lines.forEach(ln => ln.cells.forEach(([r, c], k) => add(variant + '-c', p => p.clues.push({ kind, r, c, val: ln.vals[k] }))));
     let n = 0;
     for (const cl of shuffle(ringSlots(kind), rng)) {
-      if (n >= [0, 8, 4, 2, 2][nOutV]) break;
+      if (n >= [0, 8, 4, 2, 2, 2][nOutV]) break;
       const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
       usedRing.add(rk); n++;
       const val = clueValue(cl, sol);
@@ -3695,10 +3802,24 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
     }
   };
-  const nRing = ['littlekiller', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers'].filter(k => V.has(k)).length || 1;
+  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers'].filter(k => V.has(k)).length || 1;
   const share = Math.max(3, Math.floor((28 - usedRing.size) / nRing));
   if (V.has('littlekiller')) ringPool('littlekiller', 'lk', Math.min(16, share), ringSlots('lk'));
   if (V.has('xsum')) ringPool('xsum', 'xs', Math.min(10, share), ringSlots('xs'));
+  if (V.has('wsum')) {
+    ringPool('wsum', 'ws', Math.min(6, share), ringSlots('ws'));
+    // inner arrows: on the edge between a and b, pointing from a toward b; a holds N, the clue sums the first N cells ahead
+    const cands = [];
+    for (const [x, y] of orthPairs) for (const [a, b] of [[x, y], [y, x]]) {
+      const dr = Math.sign(Math.floor(b / N) - Math.floor(a / N)), dc = Math.sign(b % N - a % N);
+      const ray = S.hopRay(b, dr, dc), n = sol[a];
+      if (n > ray.length) continue;
+      let s = 0; for (let k = 0; k < n; k++) s += sol[ray[k]];
+      cands.push({ a, b, s });
+    }
+    const seenA = new Set();
+    shuffle(cands, rng).filter(h => !seenA.has(h.a) && seenA.add(h.a)).slice(0, 5 + Math.floor(rng() * 4)).forEach(h => { add('wsum', p => p.wsum.push({ a: h.a, b: h.b, s: h.s })); items[items.length - 1].hopCell = h.a; });
+  }
   if (V.has('sandwich')) {
     if (sandwichTied) {
       // Yin-Yang combo: these specific lines are the only Sandwich clues this puzzle gets, and
@@ -3743,6 +3864,23 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     }
   if (V.has('prime'))
     for (const [a, b] of orthPairs) if (S.isPrime(sol[a] + sol[b])) add('prime', p => p.edges.push({ a, b, t: 'prime' }));
+  if (V.has('sling')) {
+    const cands = [];
+    for (const [x, y] of orthPairs) for (const [t, h] of [[x, y], [y, x]]) {
+      const ax = h % N - t % N, ay = Math.floor(h / N) - Math.floor(t / N);
+      for (const [dr, dc] of (ay === 0 ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]])) {
+        const ray = S.hopRay(h, dr, dc), n = sol[h];
+        if (n <= ray.length && sol[ray[n - 1]] === sol[t]) cands.push({ t, h, dr, dc });
+      }
+    }
+    const seenT = new Set();
+    shuffle(cands, rng).filter(c => !seenT.has(c.t + ',' + c.h) && seenT.add(c.t + ',' + c.h)).slice(0, 5 + Math.floor(rng() * 4)).forEach(c => add('sling', p => p.sling.push({ t: c.t, h: c.h, dr: c.dr, dc: c.dc })));
+  }
+  if (V.has('axia')) {
+    const cands = [];
+    for (let i = 0; i < NN; i++) if (![[-1, -1], [-1, 1], [1, -1], [1, 1]].some(([dr, dc]) => S.hopRay(i, dr, dc).some(j => sol[j] === sol[i]))) cands.push(i);
+    shuffle(cands, rng).slice(0, 6 + Math.floor(rng() * 5)).forEach(i => add('axia', p => p.axia.push(i)));
+  }
   if (V.has('far'))
     for (const [a, b] of orthPairs) if (Math.abs(sol[a] - sol[b]) >= 3) add('far', p => p.edges.push({ a, b, t: 'far' }));
   if (V.has('inequality'))
@@ -4020,6 +4158,8 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   base.opts.disjoint = V.has('disjoint') && !V.has('irregular');
   base.opts.windows = V.has('windows');
   base.opts.balanced = V.has('balanced');
+  base.opts.pole = V.has('pole');
+  base.opts.twofive = V.has('twofive');
   const whisperDiff = spec.whisperDiff || 4;
   base.opts.whisperDiff = whisperDiff;
   const negChoice = k => spec.negative && spec.negative[k] !== undefined ? !!spec.negative[k] : rng() < 0.5;
@@ -4686,18 +4826,21 @@ function normalize(o) {
   p.ext = ((o && o.ext) || []).filter(x => x && Number.isInteger(x.cell) && x.cell >= 0 && x.cell < NN && (x.t === 'max' || x.t === 'min')).map(x => ({ cell: x.cell, t: x.t }));
   { const seen = new Set();
     p.hop = ((o && o.hop) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && [-1, 0, 1].includes(h.dr) && [-1, 0, 1].includes(h.dc) && (h.dr || h.dc) && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !seen.has(h.cell) && seen.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc })); }
+    { const sl = new Set(); p.sling = ((o && o.sling) || []).filter(h => h && Number.isInteger(h.t) && Number.isInteger(h.h) && h.t >= 0 && h.t < NN && h.h >= 0 && h.h < NN && Math.abs(rowOf(h.t) - rowOf(h.h)) + Math.abs(colOf(h.t) - colOf(h.h)) === 1 && Math.abs(h.dr || 0) + Math.abs(h.dc || 0) === 1 && (h.dr || 0) * (rowOf(h.h) - rowOf(h.t)) + (h.dc || 0) * (colOf(h.h) - colOf(h.t)) === 0 && X.hopRay(h.h, h.dr || 0, h.dc || 0).length >= 1 && !sl.has(h.t + ',' + h.h) && sl.add(h.t + ',' + h.h)).map(h => ({ t: h.t, h: h.h, dr: h.dr || 0, dc: h.dc || 0 })); }
+    { const sw = new Set(); p.wsum = ((o && o.wsum) || []).filter(h => h && Number.isInteger(h.a) && Number.isInteger(h.b) && h.a >= 0 && h.a < NN && h.b >= 0 && h.b < NN && Math.abs(rowOf(h.a) - rowOf(h.b)) + Math.abs(colOf(h.a) - colOf(h.b)) === 1 && Number.isInteger(+h.s) && +h.s >= 1 && +h.s <= 21 && !sw.has(h.a + ',' + h.b) && sw.add(h.a + ',' + h.b)).map(h => ({ a: h.a, b: h.b, s: +h.s })); }
     { const se = new Set(); p.echo = ((o && o.echo) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && Math.abs(h.dr) === 1 && Math.abs(h.dc) === 1 && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !se.has(h.cell) && se.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc })); }
     { const sc = new Set(); p.crowd = ((o && o.crowd) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && Number.isInteger(h.n) && h.n >= 0 && h.n <= X.nbr8[h.cell].length && !sc.has(h.cell) && sc.add(h.cell)).map(h => ({ cell: h.cell, n: h.n })); }
     { const ss = new Set(); p.spin = ((o && o.spin) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && !ss.has(x.r + ',' + x.c) && ss.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c, cw: !!x.cw })); }
     { const sp = new Set(); p.pk = ((o && o.pk) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && Math.abs(h.dr || 0) + Math.abs(h.dc || 0) === 1 && (h.t === 'w' || h.t === 'b') && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !sp.has(h.cell) && sp.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc, t: h.t })); }
   { const sv = new Set(); p.cmax = ((o && o.cmax) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && [0, 1, 2, 3].includes(x.k) && !sv.has(x.r + ',' + x.c) && sv.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c, k: x.k }));
     const sb = new Set(); p.bat = ((o && o.bat) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && !sb.has(x.r + ',' + x.c) && sb.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c })); }
+  p.axia = Array.from(new Set(((o && o.axia) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
   p.loc = Array.from(new Set(((o && o.loc) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
-  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'sw', 'sk', 'nr'].includes(c.kind));
+  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'ws', 'sw', 'sk', 'nr'].includes(c.kind));
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
-  p.olines = ((o && o.olines) || []).filter(l => l && X.olAllowed(l.type, l.kind) && ['xs', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
+  p.olines = ((o && o.olines) || []).filter(l => l && X.olAllowed(l.type, l.kind) && ['xs', 'ws', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
   p.olines.forEach(l => { l.also = X.OWN_LINE_RULES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.olAllowed(t, l.kind) && !X.OWN_LINE_RULES.includes(t) && t !== l.type))); if (!l.also.length) delete l.also; });
-  const okKind = k => ['xs', 'sw', 'sk', 'nr'].includes(k);
+  const okKind = k => ['xs', 'ws', 'sw', 'sk', 'nr'].includes(k);
   p.cages.forEach(cg => {
     if (Array.isArray(cg.escs)) {
       const seen = new Set();
@@ -4711,7 +4854,7 @@ function normalize(o) {
   const okLkRing = (r, c, dr, dc) => Number.isInteger(r) && Number.isInteger(c) && r >= -1 && r <= N && c >= -1 && c <= N && !inCell(r, c) && (dr === 1 || dr === -1) && (dc === 1 || dc === -1) && inCell(r + dr, c + dc);
   p.lines.forEach(ln => {
     if (!ln.escape) return;
-    const e = ln.escape, okPos = e.kind === 'lk' ? okLkRing(e.r, e.c, e.dr, e.dc) : (['xs', 'sw', 'sk', 'nr'].includes(e.kind) && okRing([e.r, e.c]));
+    const e = ln.escape, okPos = e.kind === 'lk' ? okLkRing(e.r, e.c, e.dr, e.dc) : (['xs', 'ws', 'sw', 'sk', 'nr'].includes(e.kind) && okRing([e.r, e.c]));
     if (!okPos) { delete ln.escape; delete ln.escs; return; }
     e.idx = e.idx === ln.cells.length - 1 ? ln.cells.length - 1 : 0;
     if (e.kind !== 'lk') { delete e.dr; delete e.dc; }
@@ -4736,8 +4879,8 @@ function normalize(o) {
   p.meta = (o && o.meta) || null;
   return p;
 }
-const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; if (!q.caves) delete q.caves; if (!q.snake) delete q.snake; return q; };
-const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.pk && p.pk.length ? [['pk', p.pk]] : [], p.echo && p.echo.length ? [['echo', p.echo]] : [], p.crowd && p.crowd.length ? [['crowd', p.crowd]] : [], p.spin && p.spin.length ? [['spin', p.spin]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : [], p.sn ? [['sn', p.sn]] : []));
+const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; if (!q.pole) delete q.pole; if (!q.twofive) delete q.twofive; if (!q.caves) delete q.caves; if (!q.snake) delete q.snake; return q; };
+const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.pk && p.pk.length ? [['pk', p.pk]] : [], p.echo && p.echo.length ? [['echo', p.echo]] : [], p.wsum && p.wsum.length ? [['wsum', p.wsum]] : [], p.sling && p.sling.length ? [['sling', p.sling]] : [], p.axia && p.axia.length ? [['axia', p.axia]] : [], p.crowd && p.crowd.length ? [['crowd', p.crowd]] : [], p.spin && p.spin.length ? [['spin', p.spin]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : [], p.sn ? [['sn', p.sn]] : []));
 const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
 const getModel = () => app.model || (app.model = X.compile(app.puzzle));
 function getSol() {
@@ -4773,6 +4916,8 @@ function variantLabels(p) {
   if (o.disjoint) L.push('Disjoint groups');
   if (o.windows) L.push('Extra windows');
   if (o.balanced) L.push('Balanced 2x2');
+  if (o.pole) L.push('Pole Position');
+  if (o.twofive) L.push('Two-Five');
   if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && c.type !== 'range' && c.type !== 'evens' && c.type !== 'lssum' && c.type !== 'sumprod' && !c.mystery && !c.escape)) L.push('Killer');
   if (p.cages.some(c => c.type === 'looksay' && !c.escape)) L.push('Look-and-say');
   if (p.cages.some(c => c.type === 'product')) L.push('Product');
@@ -4792,7 +4937,7 @@ function variantLabels(p) {
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && !x.n)) L.push('Kropki');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && x.n)) L.push('Numbered Kropki');
-  if (e.has('prime')) L.push('Prime dots'); if (e.has('far')) L.push('Far bars'); if (p.echo && p.echo.length) L.push('Echo arrows'); if (p.crowd && p.crowd.length) L.push('Crowd cells'); if (p.spin && p.spin.length) L.push('Spinners'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.pk && p.pk.length) L.push('Projected Kropki'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
+  if (e.has('prime')) L.push('Prime dots'); if (e.has('far')) L.push('Far bars'); if (p.echo && p.echo.length) L.push('Echo arrows'); if (p.sling && p.sling.length) L.push('Slingshot arrows'); if (p.axia && p.axia.length) L.push('Axia cells'); if ((p.wsum && p.wsum.length) || p.clues.some(c => c.kind === 'ws')) L.push('W-Sums'); if (p.crowd && p.crowd.length) L.push('Crowd cells'); if (p.spin && p.spin.length) L.push('Spinners'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.pk && p.pk.length) L.push('Projected Kropki'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
   if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
   const nk = !o.caves && !o.snake && ((p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater);
@@ -4815,6 +4960,8 @@ function rulesFor(p) {
   if (o.antiKnight) R.push('Cells a chess knight’s move apart never hold the same digit.');
   if (o.antiKing) R.push('Cells touching at a side or corner never hold the same digit.');
   if (o.disjoint) R.push('Cells in the same position within their boxes never hold the same digit.');
+  if (o.twofive) R.push('Two-Five (tinted columns 2 and 5, tagged 2 and 5): in each row, the digit in column 2 is the column where that row\'s 2 sits, and the digit in column 5 is the column where that row\'s 5 sits. If the column 2 digit of a row is 6, that row\'s 2 is in column 6.');
+  if (o.pole) R.push('Pole Position (tinted first row and column): the first digit in each row is the column of the 1 in that row, counting from the left. The first digit in each column is the row of the 1 in that column, counting from the top. If the first digit of a row is 3, the 1 is in its third cell.');
   if (o.balanced) R.push('Balanced blocks: every 2×2 block of four cells in the grid, overlapping ones included, holds exactly two odd digits and two even digits.');
   if (o.windows) R.push('Extra windows (shaded 2×2 squares): each shaded square also holds four different digits.');
   if (p.cages.some(c => c.type !== 'looksay' && c.type !== 'mysterydigit' && c.type !== 'product' && c.type !== 'range' && c.type !== 'evens' && c.type !== 'lssum' && c.type !== 'sumprod' && !c.mystery && !c.escape)) R.push('Dashed cages: digits sum to the small number in the cage and never repeat inside it.');
@@ -4879,6 +5026,8 @@ function rulesFor(p) {
   if (p.cmax && p.cmax.length) R.push('Corner arrows (orange arrow on a corner where four cells meet): the arrow points at one of the four cells, and that cell holds a digit larger than each of the other three.');
   if (p.bat && p.bat.length) R.push('Battenburg corners (small checkerboard where four cells meet): the four cells alternate between odd and even like a checkerboard, so cells that touch at a side differ in parity and diagonal cells match. The colors do not say which cells are odd.');
   if (p.pk && p.pk.length) R.push('Projected Kropki dots (a circle with an arrow in a cell): look from the dotted cell in the arrow\'s direction, as many cells as the digit in the dotted cell. The cell reached holds a digit consecutive to it if the dot is white, or double or half of it if the dot is black (1 and 2, 2 and 4, 3 and 6). A digit whose reach would leave the grid cannot go in that cell. Not every dot is shown, and a missing dot says nothing. The dotted cell\'s own digit is not given.');
+  if (p.axia && p.axia.length) R.push('Axia cells (gray squares with four corner arrows): the digit in a marked cell appears nowhere else along its four diagonals, in all directions out to the edge of the grid.');
+  if (p.sling && p.sling.length) R.push('Slingshot arrows (purple bent arrows): each arrow starts in one cell, its tail, and bends into a neighboring cell, its head. Starting at the head cell, count as many cells as the digit in the head cell, in the direction the arrowhead points. The cell you reach holds the same digit as the tail cell.');
   if (p.echo && p.echo.length) R.push('Echo arrows (violet double arrows): the digit in an arrow cell appears again somewhere further along the diagonal the arrow points down.');
   if (p.crowd && p.crowd.length) R.push('Crowd cells (small number in the corner of a cell): the number is how many of the cell\'s neighbors, diagonals included, hold a larger digit than the cell.');
   if (p.spin && p.spin.length) R.push('Spinners (circular arrow on a corner): the four digits around the corner are all different. Start at the smallest and move around the corner in the arrow\'s direction: the digits rise each step.');
@@ -4889,11 +5038,12 @@ function rulesFor(p) {
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
   if (ck.has('lk')) R.push('Little Killer (arrows): digits along the diagonal in the arrow’s direction sum to the clue. Digits may repeat.');
   if (ck.has('xs')) R.push('X-Sums (X): if the digit nearest the clue is n, the first n digits in that line sum to the clue.');
+  if ((p.wsum && p.wsum.length) || ck.has('ws')) R.push('W-Sums (arrows): the number on an arrow is the sum of the first N digits the arrow points at, where N is the digit right behind the arrow.' + (ck.has('ws') ? ' For an arrow outside the grid, N is the Numbered Rooms value of that row or column: the digit found in cell number v, where v is the digit nearest the clue. That number is never given: work it out and enter it in the box behind the arrow.' : ''));
   if (ck.has('sw')) R.push('Sandwich (S): digits between the 1 and the 6 in that row or column sum to the clue.');
   if (ck.has('sk')) R.push('Skyscraper (▲): the clue counts the digits visible from that side; a larger digit hides smaller ones behind it.');
   if (ck.has('nr')) R.push('Numbered Rooms (N): let n be the digit nearest the clue; the clue’s value must appear in the nth cell counting in from the clue.');
   if (p.olines.length) {
-    R.push('Outside lines: squares outside the grid joined by a line hold clues (marked X, S or ▲) whose values are not all shown. Work the values out from the grid. Hidden values obey the line’s rule:');
+    R.push('Outside lines: squares outside the grid joined by a line hold clues (marked X, W, S or ▲) whose values are not all shown. Work the values out from the grid. Hidden values obey the line’s rule:');
     const ot = new Set(); p.olines.forEach(l => X.lineTypes(l).forEach(t => ot.add(t)));
     if (ot.has('parity')) R.push('Parity: neighboring clue values alternate between odd and even.');
     if (ot.has('thermo')) R.push('Thermo: the clue values strictly increase from the bulb to the tip.');
@@ -4984,7 +5134,9 @@ function afterPlayChange() {
   const g = effGrid(), us = X.usesShade(p);
   if (g.every(v => v)) {
     const errs = X.verify(p, Array.from(g), us ? shadeFinal() : undefined);
-    if (!errs.length) {
+    const badN = !errs.length ? outsideCells().filter(([r, c, kind]) => { const e = P.ring[r + ',' + c]; return kind === 'wn' && e && e.v && e.v !== solValue('wn', r, c, Array.from(g)); }) : [];
+    if (badN.length) { badN.forEach(([r, c]) => P.wrong.add(r + ',' + c)); flash('The grid is complete, but ' + (badN.length === 1 ? 'a W-Sum room number is' : 'some W-Sum room numbers are') + ' wrong. Fix ' + (badN.length === 1 ? 'it' : 'them') + ' to finish.', 'warn'); }
+    else if (!errs.length) {
       P.solved = true;
       const rec = !P.recorded && !P.usedReveal ? recordSolve() : null;
       P.recorded = true;
@@ -5111,7 +5263,7 @@ function arrowHeadXY(ax, ay, bx, by) { // triangle at b pointing away from a
 const arrowHead = (a, b) => arrowHeadXY(cx(a), cy(a), cx(b), cy(b));
 
 const ARROW = { '1,1': '↘', '1,-1': '↙', '-1,1': '↗', '-1,-1': '↖' };
-const TAG = { xs: 'X', sw: 'S', sk: '▲', nr: 'N' };
+const TAG = { wn: 'N', ws: 'W', xs: 'X', sw: 'S', sk: '▲', nr: 'N' };
 
 function regRingAnchor(cells, r, c) {
   const check = cell => {
@@ -5200,6 +5352,19 @@ function renderBoard() {
   (p.loc || []).forEach(i => {
     cloneTxt += `<circle cx="${cx(i)}" cy="${cy(i)}" r="23" style="fill:none;stroke:#d64550;stroke-width:3;stroke-dasharray:5 3.5;opacity:.9"/><circle cx="${gx(colOf(i)) + CELL - 11}" cy="${gy(rowOf(i)) + 11}" r="8" style="fill:#d64550"/><text x="${gx(colOf(i)) + CELL - 11}" y="${gy(rowOf(i)) + 11.5}" style="font-size:11px;font-weight:800;fill:#fff;text-anchor:middle;dominant-baseline:central">6</text>`;
   });
+  // Slingshot arrows: a purple bent arrow from the tail cell across the border into the head cell, then along the head direction
+  (p.sling || []).forEach(h => {
+    const ax = colOf(h.h) - colOf(h.t), ay = rowOf(h.h) - rowOf(h.t), mx = (cx(h.t) + cx(h.h)) / 2, my = (cy(h.t) + cy(h.h)) / 2;
+    const S0 = [mx - ax * 15, my - ay * 15], K = [mx + ax * 7, my + ay * 7], E = [K[0] + h.dc * 24, K[1] + h.dr * 24];
+    const f = q => q[0].toFixed(1) + ',' + q[1].toFixed(1), px = -h.dr, py = h.dc, B = [E[0] - h.dc * 7, E[1] - h.dr * 7];
+    cloneTxt += `<g style="stroke:#9b4fd0;fill:#9b4fd0"><polyline points="${f(S0)} ${f(K)} ${f(B)}" style="fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round"/><polygon points="${f(E)} ${f([B[0] + px * 5.5, B[1] + py * 5.5])} ${f([B[0] - px * 5.5, B[1] - py * 5.5])}" style="stroke:none"/></g>`;
+  });
+  // W-sum arrows: a white arrow on the edge between two cells; the number sits in the tail, the head points into the cells to add
+  (p.wsum || []).forEach(h => {
+    const ux = colOf(h.b) - colOf(h.a), uy = rowOf(h.b) - rowOf(h.a), px = -uy, py = ux, mx = (cx(h.a) + cx(h.b)) / 2, my = (cy(h.a) + cy(h.b)) / 2;
+    const P = (t, w) => (mx + ux * t + px * w).toFixed(1) + ',' + (my + uy * t + py * w).toFixed(1);
+    cloneTxt += `<polygon points="${P(-17, -10)} ${P(2, -10)} ${P(2, -17)} ${P(21, 0)} ${P(2, 17)} ${P(2, 10)} ${P(-17, 10)}" style="fill:#fff;stroke:#222;stroke-width:1.6;stroke-linejoin:round"/><text x="${(mx - ux * 8).toFixed(1)}" y="${(my - uy * 8 + 1).toFixed(1)}" style="font-size:14px;font-weight:700;fill:#111;text-anchor:middle;dominant-baseline:central">${h.s}</text>`;
+  });
   // echo arrows: a violet arrow with a second chevron, diagonal only
   (p.echo || []).forEach(h => {
     const l = Math.SQRT2, ux = h.dc / l, uy = h.dr / l, x0 = cx(h.cell), y0 = cy(h.cell), px = -uy, py = ux, f = (x, y) => x.toFixed(1) + ',' + y.toFixed(1);
@@ -5235,6 +5400,15 @@ function renderBoard() {
     reg.forEach(i => { s += `<rect x="${gx(colOf(i)) + 2}" y="${gy(rowOf(i)) + 2}" width="${CELL - 4}" height="${CELL - 4}" rx="4" style="fill:${CLC[gi % 6]};opacity:.24"/>`; });
     if (cg.regs.length > 1 || editing) { const i0 = reg[0]; cloneTxt += `<text x="${gx(colOf(i0)) + CELL - 6}" y="${gy(rowOf(i0)) + 5}" style="font-size:12px;font-weight:800;fill:${CLC[gi % 6]};text-anchor:end;dominant-baseline:hanging;filter:brightness(.85)">${'ABCDEF'[gi]}</text>`; }
   }));
+  // Two-Five: tint columns 2 and 5, with a small tag above each
+  if (p.opts.twofive) [[1, '2'], [4, '5']].forEach(([c, t]) => { for (let r = 0; r < N; r++) s += `<rect x="${gx(c) + 2}" y="${gy(r) + 2}" width="${CELL - 4}" height="${CELL - 4}" rx="4" style="fill:#3a8fd8;opacity:.17"/>`; s += `<text x="${gx(c) + 7}" y="${gy(0) + 14}" style="font-size:11px;font-weight:800;fill:#2b78bf;opacity:.85">${t}</text>`; });
+  // Axia cells: a gray square with four diagonal arrowheads, behind the digit
+  (p.axia || []).forEach(i => {
+    const x = cx(i), y = cy(i);
+    s += `<g style="fill:none;stroke:#b4b9c2;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><rect x="${x - 15}" y="${y - 15}" width="30" height="30" rx="2"/>` + [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => `<polyline points="${x + a * 12},${y + b * 12} ${x + a * 24},${y + b * 24}"/><polyline points="${x + a * 24},${y + b * 17} ${x + a * 24},${y + b * 24} ${x + a * 17},${y + b * 24}"/>`).join('') + '</g>';
+  });
+  // Pole Position: the first row and column carry the locating digits
+  if (p.opts.pole) for (let k = 0; k < N; k++) [ix(0, k), ix(k, 0)].filter((i, j) => !(j === 1 && k === 0)).forEach(i => { s += `<rect x="${gx(colOf(i)) + 2}" y="${gy(rowOf(i)) + 2}" width="${CELL - 4}" height="${CELL - 4}" rx="4" style="fill:#e0a020;opacity:.2"/>`; });
   // extra windows: four tinted 2x2 squares
   if (p.opts.windows) X.WINDOWS.forEach(w => { const r0 = rowOf(w[0]), c0 = colOf(w[0]); s += `<rect x="${gx(c0) + 2}" y="${gy(r0) + 2}" width="${2 * CELL - 4}" height="${2 * CELL - 4}" rx="6" style="fill:#5aa0d8;opacity:.17"/>`; });
   // corner max arrows: an orange arrow on the 2x2 corner pointing at one of its four cells
@@ -5602,6 +5776,25 @@ function renderBoard() {
   p.clues.forEach(cl => {
     if (p.olines.some(ol => ol.cells.some(([r, c]) => r === cl.r && c === cl.c))) return;
     const rc = ringRect(cl.r, cl.c), mx = rc.x + rc.w / 2, my = rc.y + rc.h / 2;
+    if (cl.kind === 'ws') {
+      // W-Sum arrow straddling the border (head into the first cell, sum in the tail); the room number N goes in the box behind it
+      const ur = cl.r === -1 ? 1 : cl.r === N ? -1 : 0, uc = cl.c === -1 ? 1 : cl.c === N ? -1 : 0, pr = -ur, pc = uc;
+      const bx = mx + uc * RING / 2, by = my + ur * RING / 2, P2 = (t, w) => (bx + uc * t + pr * w).toFixed(1) + ',' + (by + ur * t + pc * w).toFixed(1);
+      const key = cl.r + ',' + cl.c, ent = !editing && P && P.ring[key] ? P.ring[key] : null, sd = uc !== 0, along = sd ? 36 : 34, bw = sd ? along : 40, bh = sd ? 34 : along, dx = sd ? 11 : 13, nx = bx - uc * (17 + along / 2), ny = by - ur * (17 + along / 2);
+      let exact = null;
+      if (!editing) { const rg = X.clueRange('nr', X.clueSeq({ kind: 'nr', r: cl.r, c: cl.c }), g); if (rg && rg[0] === rg[1]) exact = rg[0]; }
+      const wrongE = ent && ent.v && ((exact != null && ent.v !== exact) || P.wrong.has(key));
+      if (!editing) {
+        s += `<rect class="obox${wrongE ? ' bad' : ''}" style="stroke:#7d8794" x="${(nx - bw / 2).toFixed(1)}" y="${(ny - bh / 2).toFixed(1)}" width="${bw}" height="${bh}" rx="5"/>`;
+        if (app.ringSel && app.ringSel.r === cl.r && app.ringSel.c === cl.c) s += `<rect class="ringsel" x="${(nx - bw / 2 - 4).toFixed(1)}" y="${(ny - bh / 2 - 4).toFixed(1)}" width="${bw + 8}" height="${bh + 8}" rx="8"/>`;
+        if (ent && ent.v) s += `<text class="rval ent" x="${nx.toFixed(1)}" y="${(ny + 6).toFixed(1)}">${ent.v}</text>`;
+        else if (exact != null) s += `<text class="rval live" x="${nx.toFixed(1)}" y="${(ny + 6).toFixed(1)}">${exact}</text>`;
+        else if (ent && ent.c.length) ent.c.slice(0, 6).forEach((n, j) => { s += `<text class="rcd" x="${(nx - dx + (j % 3) * dx).toFixed(1)}" y="${(ny - (ent.c.length > 3 ? 5 : 0) + 3.6 + Math.floor(j / 3) * 10.5).toFixed(1)}">${n}</text>`; });
+      }
+      s += `<polygon points="${P2(-17, -10)} ${P2(2, -10)} ${P2(2, -17)} ${P2(21, 0)} ${P2(2, 17)} ${P2(2, 10)} ${P2(-17, 10)}" style="fill:#fff;stroke:#222;stroke-width:1.6;stroke-linejoin:round"/>`;
+      s += `<text x="${(bx + uc * -8).toFixed(1)}" y="${(by + ur * -8 + 1).toFixed(1)}" style="font-size:14px;font-weight:700;fill:#111;text-anchor:middle;dominant-baseline:central">${cz(cl.val)}</text>`;
+      return;
+    }
     if (cl.kind === 'lk') {
       s += `<text class="rval" x="${mx - cl.dc * 6}" y="${my - cl.dr * 6 + 6}">${cz(cl.val)}</text>`;
       s += `<text class="rtag lk" x="${mx + cl.dc * 12}" y="${my + cl.dr * 12 + 6}">${ARROW[cl.dr + ',' + cl.dc]}</text>`;
@@ -5854,15 +6047,15 @@ function renderMeta() {
 }
 
 const TOOLS = [
-  { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['hop', 'Hop arrow'], ['echo', 'Echo arrow'], ['crowd', 'Crowd cell'], ['spin', 'Spinner'], ['pk', 'Projected dot'], ['loc', 'Six locator'], ['region', 'Region']] },
+  { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['hop', 'Hop arrow'], ['axia', 'Axia cell'], ['echo', 'Echo arrow'], ['crowd', 'Crowd cell'], ['spin', 'Spinner'], ['pk', 'Projected dot'], ['loc', 'Six locator'], ['region', 'Region']] },
   { g: 'Sums', t: [['cage', 'Killer cage'], ['spcage', 'Sum+product cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple'], ['cmax', 'Corner arrow'], ['bat', 'Battenburg']] },
   { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['modular', 'Modular'], ['zigzag', 'Zigzag'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
-  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot'], ['far', 'Far bar']] },
+  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot'], ['far', 'Far bar'], ['wsum', 'W-Sum arrow'], ['sling', 'Slingshot arrow']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)'], ['sncnt', 'Snake count']] },
   { g: 'Clean up', t: [['erase', 'Eraser']] }
 ];
-const OPTS = [['optDiag', 'diag'], ['optKnight', 'antiKnight'], ['optKing', 'antiKing'], ['optDisjoint', 'disjoint'], ['optWindows', 'windows'], ['optBalanced', 'balanced'], ['optNonconsec', 'nonconsec'], ['optKropki', 'kropkiNeg'], ['optXV', 'xvNeg'],
+const OPTS = [['optDiag', 'diag'], ['optKnight', 'antiKnight'], ['optKing', 'antiKing'], ['optDisjoint', 'disjoint'], ['optWindows', 'windows'], ['optBalanced', 'balanced'], ['optPole', 'pole'], ['optTwoFive', 'twofive'], ['optNonconsec', 'nonconsec'], ['optKropki', 'kropkiNeg'], ['optXV', 'xvNeg'],
   ['optWater', 'waterConn'], ['optPool', 'noPool'], ['optNkLand', 'nkLand'], ['optNkWater', 'nkWater'], ['optShadeWhisper', 'shadeWhisper'], ['optCaves', 'caves'], ['optSnake', 'snake']];
 const HINTS = {
   given: 'Select cells, then type 1–6. Backspace clears.',
@@ -5889,9 +6082,12 @@ const HINTS = {
   mountain: 'Drag along the line, three or more cells. Digits strictly rise to a peak and then strictly fall. The peak is not at either end.',
   lots: 'Drag along the line, three or more cells (5 to 8 in generated puzzles). The circle starts on the first cell you drag from. Click another cell of the line to move the circle there. The digit in the circle counts how many digits on the line are strictly larger than it.',
   gap: 'Drag along the line, three or more cells. Every pair of neighbors differs by the same amount, up or down.',
+  axia: 'Click a cell to add or remove an Axia mark. The digit in a marked cell appears nowhere else along its four diagonals, out to the edge of the grid.',
   loc: 'Click a cell to add or remove a six locator. The digit in the circled cell is the column (1 to 6 from the left) that holds the 6 in that row.',
   slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
   nabner: 'Drag along a line of 2 or 3 cells. No two digits on it are the same or consecutive.',
+  sling: 'Click the border between two cells to add a Slingshot arrow. Keep clicking to cycle which cell is the tail and which way the arrow points, then once more to remove it. Counting from the head cell, as many cells as the head digit in the arrow direction, you reach a cell holding the tail digit.',
+  wsum: 'Set the sum below, then click the border between two cells to add a W-Sum arrow. Click again to turn it around, and once more to remove it. The arrow points away from the cell holding N and adds the first N digits ahead.',
   far: 'Click the edge between two cells to add or remove a far bar. The two digits differ by at least 3.',
   prime: 'Click the edge between two cells to add or remove a prime dot. The two digits add up to 3, 5, 7 or 11.',
   darrow: 'Drag along the line, three or more cells. Both ends get a circle. The digits in the two circles add up to the sum of the cells between them.',
@@ -5963,6 +6159,7 @@ function renderEditAux() {
     sel.value = cur && Array.from(sel.options).some(o => o.value === cur) ? cur : (n ? String(n - 1) : 'new');
   }
   $('#dotBox').hidden = !(app.tool === 'nwhite' || app.tool === 'nblack');
+  $('#wsBox').hidden = app.tool !== 'wsum';
   $('#lineExtraBox').hidden = !isLT;
   if (isLT) {
     const ex = app.extras.filter(r => r !== app.tool);
@@ -5988,7 +6185,7 @@ function ringOptions(r, c) {
   const side = r === -1 ? 'T' : r === N ? 'B' : c === -1 ? 'L' : 'R';
   const corner = (r < 0 || r >= N) && (c < 0 || c >= N);
   if (!corner) {
-    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' });
+    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'ws', label: 'W-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' });
   }
   for (const dr of [-1, 1]) for (const dc of [-1, 1]) {
     if (!inCell(r + dr, c + dc)) continue;
@@ -6018,11 +6215,12 @@ function applyRing() {
 function renderAll() { renderBoard(); renderMeta(); renderEditAux(); renderAssist(); saveProgress(); }
 
 /* ---------- outside clue notes ---------- */
-const KIND_RANGE = { xs: [1, 21], sw: [0, 14], sk: [1, 6], nr: [1, 6], lk: [1, 36] };
-const KIND_NAME = { xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', lk: 'Little Killer' };
+const KIND_RANGE = { wn: [1, 6], xs: [1, 21], sw: [0, 14], sk: [1, 6], nr: [1, 6], lk: [1, 36] };
+const KIND_NAME = { wn: 'W-Sum room number', xs: 'X-sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', lk: 'Little Killer' };
 function noteCell(r, c) {
   const p = app.puzzle;
-  if (p.clues.some(q => q.r === r && q.c === c)) return null;
+  const wcl = p.clues.find(q => q.r === r && q.c === c);
+  if (wcl) return wcl.kind === 'ws' && !p.olines.some(ol => ol.cells.some(([a, b]) => a === r && b === c)) ? { kind: 'wn' } : null;
   for (const ol of p.olines) if (ol.cells.some(([a, b]) => a === r && b === c)) return { kind: ol.kind };
   for (const cg of p.cages) for (const b of X.escBoxes(cg)) if (b.r === r && b.c === c) return { kind: b.kind };
   for (const ln of p.lines) for (const b of X.escBoxes(ln)) if (b.r === r && b.c === c) return { kind: b.kind };
@@ -6031,11 +6229,12 @@ function noteCell(r, c) {
 function outsideCells() {
   const p = app.puzzle, out = [];
   p.olines.forEach(ol => ol.cells.forEach(([r, c]) => { if (noteCell(r, c) && !out.some(o => o[0] === r && o[1] === c)) out.push([r, c, ol.kind]); }));
+  p.clues.forEach(q => { if (q.kind === 'ws' && noteCell(q.r, q.c) && !out.some(o => o[0] === q.r && o[1] === q.c)) out.push([q.r, q.c, 'wn']); });
   p.cages.forEach(cg => X.escBoxes(cg).forEach(({ r, c, kind }) => { if (!out.some(o => o[0] === r && o[1] === c)) out.push([r, c, kind]); }));
   p.lines.forEach(ln => X.escBoxes(ln).forEach(({ r, c, kind, dr, dc }) => { if (!out.some(o => o[0] === r && o[1] === c)) out.push([r, c, kind, dr, dc]); }));
   return out;
 }
-const solValue = (kind, r, c, sol, dr, dc) => sol ? X.outVal(kind, X.clueSeq({ kind, r, c, dr, dc }), sol) : null;
+const solValue = (kind, r, c, sol, dr, dc) => sol ? kind === 'wn' ? X.outVal('nr', X.clueSeq({ kind: 'nr', r, c }), sol) : X.outVal(kind, X.clueSeq({ kind, r, c, dr, dc }), sol) : null;
 function ringLabel(r, c, kind) {
   const side = r === -1 ? 'top of column ' + (c + 1) : r === N ? 'bottom of column ' + (c + 1) : c === -1 ? 'left of row ' + (r + 1) : 'right of row ' + (r + 1);
   return `${KIND_NAME[kind]} clue, ${side}`;
@@ -6085,7 +6284,8 @@ function ringApply(mode) {
   if (mode === 'pencil') { const j = e.c.indexOf(v); if (j >= 0) e.c.splice(j, 1); else { e.c.push(v); e.c.sort((a, b) => a - b); } }
   else e.v = e.v === v ? 0 : v;
   if (!e.v && !e.c.length) delete P.ring[key];
-  inp.value = ''; P.wrong.clear(); flash(''); renderAll();
+  inp.value = ''; P.wrong.clear(); flash('');
+  if (!P.solved && effGrid().every(x => x)) afterPlayChange(); else renderAll();
 }
 function ringClear() {
   if (app.cipherSel) { const P = app.play; if (P.cnotes && P.cnotes[app.cipherSel]) { pushUndo(); delete P.cnotes[app.cipherSel]; renderAll(); } return; }
@@ -6247,6 +6447,8 @@ function onDown(e) {
     else if (k >= 0) { p.hop[k].dr = DIRS[n][0]; p.hop[k].dc = DIRS[n][1]; }
     else p.hop.push({ cell: i, dr: DIRS[n][0], dc: DIRS[n][1] });
     touch(true);
+  } else if (t === 'axia') {
+    if (!inG) return; const k = p.axia.indexOf(i); if (k >= 0) p.axia.splice(k, 1); else p.axia.push(i); p.axia.sort((a, b) => a - b); touch(true);
   } else if (t === 'loc') {
     if (!inG) return; const k = p.loc.indexOf(i); if (k >= 0) p.loc.splice(k, 1); else p.loc.push(i); p.loc.sort((a, b) => a - b); touch(true);
   } else if (t === 'emax' || t === 'emin') {
@@ -6295,6 +6497,28 @@ function onDown(e) {
     if (k < 0) p.edges.push({ a: ed.a, b: ed.b, t: 'gt' });
     else if (p.edges[k].a === ed.a) { p.edges[k] = { a: ed.b, b: ed.a, t: 'gt' }; }
     else p.edges.splice(k, 1);
+    touch(true);
+  } else if (t === 'sling') {
+    const ed = edgeAt(h.fx, h.fy); if (!ed) return;
+    const states = [];
+    for (const [tt, hh] of [[ed.a, ed.b], [ed.b, ed.a]]) {
+      const ay = rowOf(hh) - rowOf(tt);
+      for (const [dr, dc] of (ay === 0 ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]])) if (X.hopRay(hh, dr, dc).length >= 1) states.push({ t: tt, h: hh, dr, dc });
+    }
+    const k = p.sling.findIndex(m => Math.min(m.t, m.h) === ed.a && Math.max(m.t, m.h) === ed.b);
+    let n = 0;
+    if (k >= 0) n = states.findIndex(s => s.t === p.sling[k].t && s.dr === p.sling[k].dr && s.dc === p.sling[k].dc) + 1;
+    if (k >= 0) p.sling.splice(k, 1);
+    if (n < states.length) p.sling.push(states[n]);
+    touch(true);
+  } else if (t === 'wsum') {
+    const ed = edgeAt(h.fx, h.fy); if (!ed) return;
+    let n = Math.max(1, Math.min(21, Math.round(+$('#wsNum').value) || 10)); $('#wsNum').value = n;
+    const k = p.wsum.findIndex(m => Math.min(m.a, m.b) === ed.a && Math.max(m.a, m.b) === ed.b);
+    if (k < 0) p.wsum.push({ a: ed.a, b: ed.b, s: n });
+    else if (p.wsum[k].s !== n) p.wsum[k].s = n;
+    else if (p.wsum[k].a === ed.a) p.wsum[k] = { a: ed.b, b: ed.a, s: n };
+    else p.wsum.splice(k, 1);
     touch(true);
   } else if (t === 'nwhite' || t === 'nblack') {
     const ed = edgeAt(h.fx, h.fy); if (!ed) return;
@@ -6364,6 +6588,7 @@ function onDown(e) {
       if (k >= 0) { p.cages.splice(k, 1); app.selCage = -1; touch(); return; }
       { const kc = p.cc.indexOf(i); if (kc >= 0) { p.cc.splice(kc, 1); touch(true); return; } }
       { const ke = p.ext.findIndex(x => x.cell === i); if (ke >= 0) { p.ext.splice(ke, 1); touch(true); return; } }
+      { const ka = p.axia.indexOf(i); if (ka >= 0) { p.axia.splice(ka, 1); touch(true); return; } }
       { const kl = p.loc.indexOf(i); if (kl >= 0) { p.loc.splice(kl, 1); touch(true); return; } }
       { const kp = p.pk.findIndex(x => x.cell === i); if (kp >= 0) { p.pk.splice(kp, 1); touch(true); return; } }
       { const ke = p.echo.findIndex(x => x.cell === i); if (ke >= 0) { p.echo.splice(ke, 1); touch(true); return; } }
@@ -6598,6 +6823,10 @@ function clash(a, b, set) {
   if (CAGE_EXCL.includes(a) && CAGE_EXCL.includes(b) && a !== b && !sameCagePair(a, b)) return true;
   if ((a === 'escape' && b === 'mysterycage') || (b === 'escape' && a === 'mysterycage')) return true;
   if ((a === 'disjoint' && b === 'irregular') || (a === 'irregular' && b === 'disjoint')) return true;
+  // Pole Position leaves no valid standard grid with diagonals, anti-king or non-consecutive
+  if ((a === 'pole' && ['diag', 'antiking', 'nonconsecutive'].includes(b)) || (b === 'pole' && ['diag', 'antiking', 'nonconsecutive'].includes(a))) return true;
+  // Two-Five has no valid grid with non-consecutive or Pole Position
+  if ((a === 'twofive' && ['pole', 'nonconsecutive'].includes(b)) || (b === 'twofive' && ['pole', 'nonconsecutive'].includes(a))) return true;
   if ((a === 'windows' && b === 'nonconsecutive') || (b === 'windows' && a === 'nonconsecutive')) return true;
   if ((a === 'balanced' && (b === 'nonconsecutive' || b === 'diag')) || (b === 'balanced' && (a === 'nonconsecutive' || a === 'diag'))) return true;
   if (set.has('irregular')) return false;
@@ -6624,7 +6853,7 @@ function syncGen() {
 }
 const OL_GEN_DEFAULT = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'parity'];
 function renderGenOl() {
-  const show = ['outxsum', 'outsandwich', 'outsky', 'outrooms'].some(k => app.genSel.has(k));
+  const show = ['outxsum', 'outwsum', 'outsandwich', 'outsky', 'outrooms'].some(k => app.genSel.has(k));
   $('#genOutLines').hidden = !show; if (!show) return;
   const auto = X.OL_RULES.filter(t => app.genSel.has(t)), eff = app.olGen ? Array.from(app.olGen) : (auto.length ? auto : OL_GEN_DEFAULT);
   ruleChips($('#olGenChips'), X.OL_RULES, eff, 'data-og');
@@ -6682,6 +6911,8 @@ function feasibleMix(sel) {
   if (s.has('countcircles') && SHADING_EXCL.some(k => s.has(k))) return false;
   { const cg = CAGE_EXCL.filter(k => s.has(k)); if (cg.length > 1 && !cg.every(k => OVERLAP_CAGES.includes(k))) return false; }
   if (s.has('windows') && s.has('nonconsecutive')) return false;
+  if (s.has('twofive') && (s.has('pole') || (!s.has('irregular') && s.has('nonconsecutive')))) return false;
+  if (s.has('pole') && !s.has('irregular') && (s.has('diag') || s.has('antiking') || s.has('nonconsecutive'))) return false;
   if (s.has('balanced') && (s.has('nonconsecutive') || s.has('diag'))) return false;
   if (s.has('escape') && s.has('mysterycage')) return false;
   if (s.has('cipher') && s.has('mysterycage')) return false;
