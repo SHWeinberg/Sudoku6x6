@@ -633,7 +633,7 @@ function newPuzzle() {
             nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
             waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false,
             landConn: false, noPoolLand: false, sandwichShade: false, caves: false, snake: false },
-    sn: null, cages: [], lines: [], edges: [], ext: [], hop: [], pk: [], wsum: [], sling: [], axia: [], echo: [], crowd: [], spin: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
+    sn: null, cages: [], lines: [], edges: [], ext: [], hop: [], pk: [], wsum: [], throw: [], sling: [], axia: [], echo: [], crowd: [], spin: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
     marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
     sol: null, ssol: null, meta: null
   };
@@ -921,6 +921,19 @@ function chkSling(g, t, h, ray) {
     if (n > ray.length) continue;
     const v = g[ray[n - 1]];
     if (!dt || !v || v === dt) return true;
+  }
+  return false;
+}
+/* Thrown Sum: N = digit behind the arrow (cell a). The sum starts N cells from a along the ray (ray[N-1]) and runs for a hidden length L >= 1 to some cell on the ray. 0 = unknown */
+function chkThrow(g, a, ray, T) {
+  for (const n of (g[a] ? [g[a]] : [1, 2, 3, 4, 5, 6])) {
+    if (n > ray.length) continue;
+    let s = 0, unk = 0;
+    for (let k = n - 1; k < ray.length; k++) {
+      const v = g[ray[k]]; if (v) s += v; else unk++;
+      if (s + unk > T) break;
+      if (s + 6 * unk >= T) return true;
+    }
   }
   return false;
 }
@@ -1708,6 +1721,11 @@ function compile(p) {
     why = 'Axia cell (its digit does not repeat anywhere along its four diagonals)';
     for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) for (const j of hopRay(i, dr, dc)) addBin(i, j, (a, b) => a !== b);
   }
+  for (const h of (p.throw || [])) {
+    why = 'Thrown Sum arrow (the sum starts N cells from the digit behind the arrow, N being that digit, and runs for a length that is not shown)';
+    const ray = hopRay(h.a, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a));
+    addGroup([h.a].concat(ray), g => chkThrow(g, h.a, ray, h.s));
+  }
   for (const h of (p.pk || [])) {
     why = 'projected Kropki dot (a cell holding d looks d steps along the arrow; that cell is ' + (h.t === 'b' ? 'double or half of d' : 'consecutive to d') + ')';
     const ray = hopRay(h.cell, h.dr, h.dc), cells = [h.cell].concat(ray);
@@ -2379,6 +2397,7 @@ function verify(p, g, sh) {
   for (const h of (p.wsum || [])) { const ray = hopRay(h.a, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a)), n = g[h.a]; let s = 0; for (let k = 0; k < n && k < ray.length; k++) s += g[ray[k]]; if (n > ray.length || s !== h.s) errs.push('W-Sum arrow'); }
   for (const h of (p.sling || [])) { const ray = hopRay(h.h, h.dr, h.dc), n = g[h.h]; if (n > ray.length || g[ray[n - 1]] !== g[h.t]) errs.push('Slingshot arrow'); }
   for (const i of (p.axia || [])) for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) if (hopRay(i, dr, dc).some(j => g[j] === g[i])) errs.push('Axia cell');
+  for (const h of (p.throw || [])) { const ray = hopRay(h.a, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a)), n = g[h.a]; let ok = false; if (n <= ray.length) { let s = 0; for (let k = n - 1; k < ray.length; k++) { s += g[ray[k]]; if (s === h.s) { ok = true; break; } } } if (!ok) errs.push('Thrown Sum arrow'); }
   for (const h of (p.pk || [])) { const ray = hopRay(h.cell, h.dr, h.dc), d = g[h.cell]; if (d > ray.length || !pkRel(h.t, d, g[ray[d - 1]])) errs.push('projected Kropki'); }
   for (const h of (p.hop || [])) { const ray = hopRay(h.cell, h.dr, h.dc), d = g[h.cell]; if (d > ray.length || g[ray[d - 1]] !== 7 - d) errs.push('hop'); }
   for (const x of (p.ext || [])) for (const nb of nbr4[x.cell]) if (x.t === 'max' ? !(g[x.cell] > g[nb]) : !(g[x.cell] < g[nb])) errs.push('extreme');
@@ -2573,7 +2592,7 @@ function conflicts(p, model, grid) {
 
 const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum' };
 
-root.SX = { chkSling, chkPos, chkPole, chkWsIn, chkWsOut, wsRange, nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
+root.SX = { chkThrow, chkSling, chkPos, chkPole, chkWsIn, chkWsOut, wsRange, nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -2611,6 +2630,7 @@ const VARIANTS = [
   { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
   { k: 'wsum', label: 'W-Sums', group: 'Sums' },
+  { k: 'thrown', label: 'Thrown Sums', group: 'Sums' },
   { k: 'sandwich', label: 'Sandwich', group: 'Sums' },
   { k: 'skyscraper', label: 'Skyscraper', group: 'Sums' },
   { k: 'roomnumbers', label: 'Numbered Rooms', group: 'Sums' },
@@ -2672,7 +2692,7 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, wsum: 4, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outwsum: 1, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
@@ -3864,6 +3884,21 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     }
   if (V.has('prime'))
     for (const [a, b] of orthPairs) if (S.isPrime(sol[a] + sol[b])) add('prime', p => p.edges.push({ a, b, t: 'prime' }));
+  if (V.has('thrown')) {
+    const cands = [];
+    for (const [x, y] of orthPairs) for (const [a, b] of [[x, y], [y, x]]) {
+      const dr = Math.sign(Math.floor(b / N) - Math.floor(a / N)), dc = Math.sign(b % N - a % N);
+      const ray = S.hopRay(a, dr, dc), n = sol[a];
+      if (n > ray.length) continue;
+      const room = ray.length - (n - 1), W = [0, 1, 4, 4, 3, 2].slice(0, room + 1);
+      let tot = 0; for (let L = 1; L <= room; L++) tot += W[L]; let u = rng() * tot, L = 1;
+      for (; L < room; L++) { u -= W[L]; if (u < 0) break; }
+      let s = 0; for (let k = n - 1; k < n - 1 + L; k++) s += sol[ray[k]];
+      cands.push({ a, b, s });
+    }
+    const seenA = new Set();
+    shuffle(cands, rng).filter(h => !seenA.has(h.a) && seenA.add(h.a)).slice(0, 7 + Math.floor(rng() * 4)).forEach(h => { add('thrown', p => p.throw.push({ a: h.a, b: h.b, s: h.s })); items[items.length - 1].hopCell = h.a; });
+  }
   if (V.has('sling')) {
     const cands = [];
     for (const [x, y] of orthPairs) for (const [t, h] of [[x, y], [y, x]]) {
@@ -4827,6 +4862,7 @@ function normalize(o) {
   { const seen = new Set();
     p.hop = ((o && o.hop) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && [-1, 0, 1].includes(h.dr) && [-1, 0, 1].includes(h.dc) && (h.dr || h.dc) && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !seen.has(h.cell) && seen.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc })); }
     { const sl = new Set(); p.sling = ((o && o.sling) || []).filter(h => h && Number.isInteger(h.t) && Number.isInteger(h.h) && h.t >= 0 && h.t < NN && h.h >= 0 && h.h < NN && Math.abs(rowOf(h.t) - rowOf(h.h)) + Math.abs(colOf(h.t) - colOf(h.h)) === 1 && Math.abs(h.dr || 0) + Math.abs(h.dc || 0) === 1 && (h.dr || 0) * (rowOf(h.h) - rowOf(h.t)) + (h.dc || 0) * (colOf(h.h) - colOf(h.t)) === 0 && X.hopRay(h.h, h.dr || 0, h.dc || 0).length >= 1 && !sl.has(h.t + ',' + h.h) && sl.add(h.t + ',' + h.h)).map(h => ({ t: h.t, h: h.h, dr: h.dr || 0, dc: h.dc || 0 })); }
+    { const st = new Set(); p.throw = ((o && o.throw) || []).filter(h => h && Number.isInteger(h.a) && Number.isInteger(h.b) && h.a >= 0 && h.a < NN && h.b >= 0 && h.b < NN && Math.abs(rowOf(h.a) - rowOf(h.b)) + Math.abs(colOf(h.a) - colOf(h.b)) === 1 && Number.isInteger(+h.s) && +h.s >= 1 && +h.s <= 21 && !st.has(h.a + ',' + h.b) && st.add(h.a + ',' + h.b)).map(h => ({ a: h.a, b: h.b, s: +h.s })); }
     { const sw = new Set(); p.wsum = ((o && o.wsum) || []).filter(h => h && Number.isInteger(h.a) && Number.isInteger(h.b) && h.a >= 0 && h.a < NN && h.b >= 0 && h.b < NN && Math.abs(rowOf(h.a) - rowOf(h.b)) + Math.abs(colOf(h.a) - colOf(h.b)) === 1 && Number.isInteger(+h.s) && +h.s >= 1 && +h.s <= 21 && !sw.has(h.a + ',' + h.b) && sw.add(h.a + ',' + h.b)).map(h => ({ a: h.a, b: h.b, s: +h.s })); }
     { const se = new Set(); p.echo = ((o && o.echo) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && Math.abs(h.dr) === 1 && Math.abs(h.dc) === 1 && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !se.has(h.cell) && se.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc })); }
     { const sc = new Set(); p.crowd = ((o && o.crowd) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && Number.isInteger(h.n) && h.n >= 0 && h.n <= X.nbr8[h.cell].length && !sc.has(h.cell) && sc.add(h.cell)).map(h => ({ cell: h.cell, n: h.n })); }
@@ -4880,7 +4916,7 @@ function normalize(o) {
   return p;
 }
 const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; if (!q.pole) delete q.pole; if (!q.twofive) delete q.twofive; if (!q.caves) delete q.caves; if (!q.snake) delete q.snake; return q; };
-const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.pk && p.pk.length ? [['pk', p.pk]] : [], p.echo && p.echo.length ? [['echo', p.echo]] : [], p.wsum && p.wsum.length ? [['wsum', p.wsum]] : [], p.sling && p.sling.length ? [['sling', p.sling]] : [], p.axia && p.axia.length ? [['axia', p.axia]] : [], p.crowd && p.crowd.length ? [['crowd', p.crowd]] : [], p.spin && p.spin.length ? [['spin', p.spin]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : [], p.sn ? [['sn', p.sn]] : []));
+const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.pk && p.pk.length ? [['pk', p.pk]] : [], p.echo && p.echo.length ? [['echo', p.echo]] : [], p.wsum && p.wsum.length ? [['wsum', p.wsum]] : [], p.sling && p.sling.length ? [['sling', p.sling]] : [], p.throw && p.throw.length ? [['throw', p.throw]] : [], p.axia && p.axia.length ? [['axia', p.axia]] : [], p.crowd && p.crowd.length ? [['crowd', p.crowd]] : [], p.spin && p.spin.length ? [['spin', p.spin]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : [], p.sn ? [['sn', p.sn]] : []));
 const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
 const getModel = () => app.model || (app.model = X.compile(app.puzzle));
 function getSol() {
@@ -4937,7 +4973,7 @@ function variantLabels(p) {
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && !x.n)) L.push('Kropki');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && x.n)) L.push('Numbered Kropki');
-  if (e.has('prime')) L.push('Prime dots'); if (e.has('far')) L.push('Far bars'); if (p.echo && p.echo.length) L.push('Echo arrows'); if (p.sling && p.sling.length) L.push('Slingshot arrows'); if (p.axia && p.axia.length) L.push('Axia cells'); if ((p.wsum && p.wsum.length) || p.clues.some(c => c.kind === 'ws')) L.push('W-Sums'); if (p.crowd && p.crowd.length) L.push('Crowd cells'); if (p.spin && p.spin.length) L.push('Spinners'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.pk && p.pk.length) L.push('Projected Kropki'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
+  if (e.has('prime')) L.push('Prime dots'); if (e.has('far')) L.push('Far bars'); if (p.echo && p.echo.length) L.push('Echo arrows'); if (p.sling && p.sling.length) L.push('Slingshot arrows'); if (p.axia && p.axia.length) L.push('Axia cells'); if (p.throw && p.throw.length) L.push('Thrown Sums'); if ((p.wsum && p.wsum.length) || p.clues.some(c => c.kind === 'ws')) L.push('W-Sums'); if (p.crowd && p.crowd.length) L.push('Crowd cells'); if (p.spin && p.spin.length) L.push('Spinners'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.pk && p.pk.length) L.push('Projected Kropki'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
   if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
   const nk = !o.caves && !o.snake && ((p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater);
@@ -5026,6 +5062,7 @@ function rulesFor(p) {
   if (p.cmax && p.cmax.length) R.push('Corner arrows (orange arrow on a corner where four cells meet): the arrow points at one of the four cells, and that cell holds a digit larger than each of the other three.');
   if (p.bat && p.bat.length) R.push('Battenburg corners (small checkerboard where four cells meet): the four cells alternate between odd and even like a checkerboard, so cells that touch at a side differ in parity and diagonal cells match. The colors do not say which cells are odd.');
   if (p.pk && p.pk.length) R.push('Projected Kropki dots (a circle with an arrow in a cell): look from the dotted cell in the arrow\'s direction, as many cells as the digit in the dotted cell. The cell reached holds a digit consecutive to it if the dot is white, or double or half of it if the dot is black (1 and 2, 2 and 4, 3 and 6). A digit whose reach would leave the grid cannot go in that cell. Not every dot is shown, and a missing dot says nothing. The dotted cell\'s own digit is not given.');
+  if (p.throw && p.throw.length) R.push('Thrown Sums (amber arrows with a dotted tail): N is the digit right behind the arrow. Counting from the cell behind the arrow, the arrow throws N cells in the direction it points. The number on the arrow is the sum of a run of cells that starts on that landing cell and continues along the arrow. The length of the run is not shown and differs from arrow to arrow.');
   if (p.axia && p.axia.length) R.push('Axia cells (gray squares with four corner arrows): the digit in a marked cell appears nowhere else along its four diagonals, in all directions out to the edge of the grid.');
   if (p.sling && p.sling.length) R.push('Slingshot arrows (purple bent arrows): each arrow starts in one cell, its tail, and bends into a neighboring cell, its head. Starting at the head cell, count as many cells as the digit in the head cell, in the direction the arrowhead points. The cell you reach holds the same digit as the tail cell.');
   if (p.echo && p.echo.length) R.push('Echo arrows (violet double arrows): the digit in an arrow cell appears again somewhere further along the diagonal the arrow points down.');
@@ -5358,6 +5395,12 @@ function renderBoard() {
     const S0 = [mx - ax * 15, my - ay * 15], K = [mx + ax * 7, my + ay * 7], E = [K[0] + h.dc * 24, K[1] + h.dr * 24];
     const f = q => q[0].toFixed(1) + ',' + q[1].toFixed(1), px = -h.dr, py = h.dc, B = [E[0] - h.dc * 7, E[1] - h.dr * 7];
     cloneTxt += `<g style="stroke:#9b4fd0;fill:#9b4fd0"><polyline points="${f(S0)} ${f(K)} ${f(B)}" style="fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round"/><polygon points="${f(E)} ${f([B[0] + px * 5.5, B[1] + py * 5.5])} ${f([B[0] - px * 5.5, B[1] - py * 5.5])}" style="stroke:none"/></g>`;
+  });
+  // Thrown Sum arrows: an amber arrow whose dotted tail runs on past the head, showing the throw
+  (p.throw || []).forEach(h => {
+    const ux = colOf(h.b) - colOf(h.a), uy = rowOf(h.b) - rowOf(h.a), px = -uy, py = ux, mx = (cx(h.a) + cx(h.b)) / 2, my = (cy(h.a) + cy(h.b)) / 2;
+    const P = (t, w) => (mx + ux * t + px * w).toFixed(1) + ',' + (my + uy * t + py * w).toFixed(1);
+    cloneTxt += `<polyline points="${P(21, 0)} ${P(36, 0)}" style="fill:none;stroke:#8a5200;stroke-width:2.2;stroke-dasharray:2 4;stroke-linecap:round"/><polygon points="${P(-17, -10)} ${P(2, -10)} ${P(2, -17)} ${P(21, 0)} ${P(2, 17)} ${P(2, 10)} ${P(-17, 10)}" style="fill:#ffe9b8;stroke:#8a5200;stroke-width:1.6;stroke-linejoin:round"/><text x="${(mx - ux * 8).toFixed(1)}" y="${(my - uy * 8 + 1).toFixed(1)}" style="font-size:14px;font-weight:700;fill:#111;text-anchor:middle;dominant-baseline:central">${h.s}</text>`;
   });
   // W-sum arrows: a white arrow on the edge between two cells; the number sits in the tail, the head points into the cells to add
   (p.wsum || []).forEach(h => {
@@ -6051,7 +6094,7 @@ const TOOLS = [
   { g: 'Sums', t: [['cage', 'Killer cage'], ['spcage', 'Sum+product cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple'], ['cmax', 'Corner arrow'], ['bat', 'Battenburg']] },
   { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['modular', 'Modular'], ['zigzag', 'Zigzag'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
-  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot'], ['far', 'Far bar'], ['wsum', 'W-Sum arrow'], ['sling', 'Slingshot arrow']] },
+  { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot'], ['far', 'Far bar'], ['wsum', 'W-Sum arrow'], ['throw', 'Thrown Sum arrow'], ['sling', 'Slingshot arrow']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)'], ['sncnt', 'Snake count']] },
   { g: 'Clean up', t: [['erase', 'Eraser']] }
 ];
@@ -6087,6 +6130,7 @@ const HINTS = {
   slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
   nabner: 'Drag along a line of 2 or 3 cells. No two digits on it are the same or consecutive.',
   sling: 'Click the border between two cells to add a Slingshot arrow. Keep clicking to cycle which cell is the tail and which way the arrow points, then once more to remove it. Counting from the head cell, as many cells as the head digit in the arrow direction, you reach a cell holding the tail digit.',
+  throw: 'Set the sum below, then click the border between two cells to add a Thrown Sum arrow. Click again to turn it around, and once more to remove it. N is the digit behind the arrow. The sum starts N cells from the cell behind the arrow and runs for a hidden length.',
   wsum: 'Set the sum below, then click the border between two cells to add a W-Sum arrow. Click again to turn it around, and once more to remove it. The arrow points away from the cell holding N and adds the first N digits ahead.',
   far: 'Click the edge between two cells to add or remove a far bar. The two digits differ by at least 3.',
   prime: 'Click the edge between two cells to add or remove a prime dot. The two digits add up to 3, 5, 7 or 11.',
@@ -6159,7 +6203,7 @@ function renderEditAux() {
     sel.value = cur && Array.from(sel.options).some(o => o.value === cur) ? cur : (n ? String(n - 1) : 'new');
   }
   $('#dotBox').hidden = !(app.tool === 'nwhite' || app.tool === 'nblack');
-  $('#wsBox').hidden = app.tool !== 'wsum';
+  $('#wsBox').hidden = !(app.tool === 'wsum' || app.tool === 'throw');
   $('#lineExtraBox').hidden = !isLT;
   if (isLT) {
     const ex = app.extras.filter(r => r !== app.tool);
@@ -6510,6 +6554,15 @@ function onDown(e) {
     if (k >= 0) n = states.findIndex(s => s.t === p.sling[k].t && s.dr === p.sling[k].dr && s.dc === p.sling[k].dc) + 1;
     if (k >= 0) p.sling.splice(k, 1);
     if (n < states.length) p.sling.push(states[n]);
+    touch(true);
+  } else if (t === 'throw') {
+    const ed = edgeAt(h.fx, h.fy); if (!ed) return;
+    let n = Math.max(1, Math.min(21, Math.round(+$('#wsNum').value) || 10)); $('#wsNum').value = n;
+    const k = p.throw.findIndex(m => Math.min(m.a, m.b) === ed.a && Math.max(m.a, m.b) === ed.b);
+    if (k < 0) p.throw.push({ a: ed.a, b: ed.b, s: n });
+    else if (p.throw[k].s !== n) p.throw[k].s = n;
+    else if (p.throw[k].a === ed.a) p.throw[k] = { a: ed.b, b: ed.a, s: n };
+    else p.throw.splice(k, 1);
     touch(true);
   } else if (t === 'wsum') {
     const ed = edgeAt(h.fx, h.fy); if (!ed) return;
