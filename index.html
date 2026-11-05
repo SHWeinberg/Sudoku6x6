@@ -1696,7 +1696,7 @@ function compile(p) {
   }
   for (const h of (p.wsum || [])) {
     why = 'W-Sum arrow (the digit behind the arrow is N; the first N digits the arrow points at sum to the clue)';
-    const ray = hopRay(h.b, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a));
+    const ray = hopRay(h.a, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a));
     addGroup([h.a].concat(ray), g => chkWsIn(g, h.a, ray, h.s));
   }
   for (const h of (p.sling || [])) {
@@ -2376,7 +2376,7 @@ function verify(p, g, sh) {
   for (const h of (p.echo || [])) { const ray = hopRay(h.cell, h.dr, h.dc); if (!ray.some(i => g[i] === g[h.cell])) errs.push('echo arrow'); }
   for (const h of (p.crowd || [])) { if (nbr8[h.cell].filter(i => g[i] > g[h.cell]).length !== h.n) errs.push('crowd cell'); }
   for (const h of (p.spin || [])) { const ring = spinRing(h); if (ring && !chkSpin(g, ring)) errs.push('spinner'); }
-  for (const h of (p.wsum || [])) { const ray = hopRay(h.b, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a)), n = g[h.a]; let s = 0; for (let k = 0; k < n && k < ray.length; k++) s += g[ray[k]]; if (n > ray.length || s !== h.s) errs.push('W-Sum arrow'); }
+  for (const h of (p.wsum || [])) { const ray = hopRay(h.a, rowOf(h.b) - rowOf(h.a), colOf(h.b) - colOf(h.a)), n = g[h.a]; let s = 0; for (let k = 0; k < n && k < ray.length; k++) s += g[ray[k]]; if (n > ray.length || s !== h.s) errs.push('W-Sum arrow'); }
   for (const h of (p.sling || [])) { const ray = hopRay(h.h, h.dr, h.dc), n = g[h.h]; if (n > ray.length || g[ray[n - 1]] !== g[h.t]) errs.push('Slingshot arrow'); }
   for (const i of (p.axia || [])) for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) if (hopRay(i, dr, dc).some(j => g[j] === g[i])) errs.push('Axia cell');
   for (const h of (p.pk || [])) { const ray = hopRay(h.cell, h.dr, h.dc), d = g[h.cell]; if (d > ray.length || !pkRel(h.t, d, g[ray[d - 1]])) errs.push('projected Kropki'); }
@@ -3812,7 +3812,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     const cands = [];
     for (const [x, y] of orthPairs) for (const [a, b] of [[x, y], [y, x]]) {
       const dr = Math.sign(Math.floor(b / N) - Math.floor(a / N)), dc = Math.sign(b % N - a % N);
-      const ray = S.hopRay(b, dr, dc), n = sol[a];
+      const ray = S.hopRay(a, dr, dc), n = sol[a];
       if (n > ray.length) continue;
       let s = 0; for (let k = 0; k < n; k++) s += sol[ray[k]];
       cands.push({ a, b, s });
