@@ -1186,7 +1186,48 @@ function branchOK(cells, br) {
   for (let k = 0; k + 1 < full.length; k++) if (!nbr8[full[k]].includes(full[k + 1])) return false;
   return !diagCross(cells, full);
 }
-const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'];
+const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'];
+/* Equal Split lines: ln.d lists the cut positions k (1..L-1); a dot sits on the border between cells[k-1] and cells[k].
+   Every segment between dots has the same digit sum. */
+function esDots(ln) {
+  const L = ln.cells.length, a = Array.isArray(ln.d) ? ln.d : [];
+  return Array.from(new Set(a.filter(k => Number.isInteger(k) && k >= 1 && k < L))).sort((x, y) => x - y);
+}
+function esSegs(L, d) { const out = []; let s = 0; for (const k of d.concat([L])) { out.push([s, k]); s = k; } return out; }
+function esRange(g, cs, seg) {
+  let s = 0, unk = 0;
+  for (let k = seg[0]; k < seg[1]; k++) { const v = g[cs[k]]; if (v) s += v; else unk++; }
+  return [s + unk, s + 6 * unk];
+}
+function chkEsplit(g, cs, segs) {
+  let lo = 0, hi = 99;
+  for (const sg of segs) { const r = esRange(g, cs, sg); if (r[0] > lo) lo = r[0]; if (r[1] < hi) hi = r[1]; if (lo > hi) return false; }
+  return true;
+}
+/* every dot set (2-4 dots, segments of 1-3 cells) that splits digit sequence v into equal-sum segments */
+function esDotSets(v, minDots, maxDots, maxSeg, cutOK) {
+  const n = v.length, out = []; minDots = minDots || 2; maxDots = maxDots || 4; maxSeg = maxSeg || 3;
+  for (let m = 0; m < (1 << (n - 1)); m++) {
+    const d = []; for (let k = 1; k < n; k++) if (m & (1 << (k - 1))) d.push(k);
+    if (d.length < minDots || d.length > maxDots) continue;
+    if (cutOK && !d.every(cutOK)) continue;
+    const sg = esSegs(n, d); if (sg.some(x => x[1] - x[0] > maxSeg)) continue;
+    const sums = sg.map(x => { let t = 0; for (let k = x[0]; k < x[1]; k++) t += v[k]; return t; });
+    if (sums.every(t => t === sums[0])) out.push(d);
+  }
+  return out;
+}
+/* is there any dot set (at least one dot) that splits v into equal-sum segments? */
+function esAny(v) {
+  const n = v.length;
+  for (let f = 1; f < n; f++) {
+    let s0 = 0; for (let i = 0; i < f; i++) s0 += v[i];
+    let acc = 0, ok = true;
+    for (let i = f; i < n && ok; i++) { acc += v[i]; if (acc === s0) acc = 0; else if (acc > s0) ok = false; }
+    if (ok && acc === 0) return true;
+  }
+  return false;
+}
 const LINE_ALL = LINE_RULES.concat(OWN_LINE_RULES);
 // rules a line strung between outside clues can follow. Region sum needs regions, Greater Lots needs a circled cell;
 // entropic groups only make sense for clue values 1-6 (Skyscraper and Numbered Rooms)
@@ -1264,6 +1305,16 @@ function lineOK(types, v, complete, ctx) {
           if (gt > d || (Lt && gt + (Lt - 1 - j) < d)) return false;
         }
       }
+      else if (t === 'esplit' && ctx.d && ctx.d.length) {
+        const sg = esSegs(Lt || 99, ctx.d); let s0 = -1;
+        for (const x of sg) {
+          if (x[0] > j) break;
+          let t2 = 0; for (let k = x[0]; k <= Math.min(x[1] - 1, j); k++) t2 += v[k];
+          const done = x[1] - 1 <= j;
+          if (s0 < 0) { if (done) s0 = t2; }
+          else if (done ? t2 !== s0 : t2 > s0) return false;
+        }
+      }
       else if (t === 'gap' && j > 0) { if (v[j] === v[j - 1]) return false; if (j > 1 && Math.abs(v[j] - v[j - 1]) !== Math.abs(v[1] - v[0])) return false; }
       else if (t === 'slow' && j > 0 && v[j] < v[j - 1]) return false;
       else if (t === 'nabner') { for (let a = 0; a < j; a++) if (Math.abs(v[a] - v[j]) < 2) return false; }
@@ -1288,6 +1339,10 @@ function lineOK(types, v, complete, ctx) {
       if (!st) return false;
     }
     else if (t === 'lots') { if (n < 2) return false; const ci = ctx.ci || 0; let gt = 0; for (let k = 0; k < n; k++) if (k !== ci && v[k] > v[ci]) gt++; if (gt !== v[ci]) return false; }
+    else if (t === 'esplit') {
+      if (ctx.d && ctx.d.length) { const sg = esSegs(n, ctx.d), sm = sg.map(x => { let t2 = 0; for (let k = x[0]; k < x[1]; k++) t2 += v[k]; return t2; }); if (!sm.every(t2 => t2 === sm[0])) return false; }
+      else if (!esAny(v)) return false;
+    }
     else if (t === 'gap') { if (n < 3) return false; const d = Math.abs(v[1] - v[0]); if (!d) return false; for (let k = 1; k < n; k++) if (Math.abs(v[k] - v[k - 1]) !== d) return false; }
     else if (t === 'slow') { for (let k = 0; k + 1 < n; k++) if (v[k] > v[k + 1]) return false; }
     else if (t === 'nabner') { for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (Math.abs(v[a] - v[b]) < 2) return false; }
@@ -1548,7 +1603,7 @@ function compile(p) {
       continue;
     }
     for (const ty of lineTypes(ln)) {
-    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zigzag: 'zigzag line (digits alternately rise and fall)', modular: 'modular line (every three consecutive cells hold one digit from each of 3/6, 1/4 and 2/5)', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', nabner: 'Nabner line (no two digits on it are the same or consecutive)', lots: 'Greater Lots line (the circled digit counts the digits on the line that are larger than it)' }[ty] || (ty + ' line');
+    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zigzag: 'zigzag line (digits alternately rise and fall)', modular: 'modular line (every three consecutive cells hold one digit from each of 3/6, 1/4 and 2/5)', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', nabner: 'Nabner line (no two digits on it are the same or consecutive)', lots: 'Greater Lots line (the circled digit counts the digits on the line that are larger than it)', esplit: 'Equal Split line (every segment between dots has the same sum)' }[ty] || (ty + ' line');
     if (ty === 'thermo') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
       for (let k = 0; k < L; k++) {
@@ -1603,6 +1658,8 @@ function compile(p) {
       if (L >= 3) { for (const k of [0, L - 1]) cand0[cs[k]] &= ~bit(6); addGroup(cs, g => chkMountain(g, cs)); }
     } else if (ty === 'lots') {
       if (L >= 2) { const ci = ln.c > 0 && ln.c < L ? ln.c : 0; cand0[cs[ci]] &= ~bit(6); let mk = 0; for (let d = 1; d <= 5; d++) if (d <= L - 1) mk |= bit(d); cand0[cs[ci]] &= mk; addGroup(cs, g => chkLots(g, cs, ci)); }
+    } else if (ty === 'esplit') {
+      const ed = esDots(ln); if (L >= 3 && ed.length) { const segs = esSegs(L, ed); addGroup(cs, g => chkEsplit(g, cs, segs)); }
     } else if (ty === 'gap') {
       if (L >= 3) addGroup(cs, g => chkGap(g, cs));
     } else if (ty === 'slow') {
@@ -2356,6 +2413,7 @@ function verify(p, g, sh) {
     else if (ty === 'entropic' || ty === 'modular') { const gf = gfOf(ty); if (L >= 3) for (let k = 0; k + 2 < L; k++) if (new Set([gf(v[k]), gf(v[k + 1]), gf(v[k + 2])]).size !== 3) errs.push(ty); }
     else if (ty === 'mountain') { if (L >= 3 && !lineOK(['mountain'], v, true, {})) errs.push('mountain'); }
     else if (ty === 'gap') { if (L >= 3 && !lineOK(['gap'], v, true, {})) errs.push('equal-gap'); }
+    else if (ty === 'esplit') { const ed = esDots(ln); if (ed.length && !lineOK(['esplit'], v, true, { d: ed })) errs.push('Equal Split'); }
     else if (ty === 'lots') { if (L >= 2 && !lineOK(['lots'], v, true, { ci: ln.c > 0 && ln.c < L ? ln.c : 0 })) errs.push('Greater Lots'); }
     else if (ty === 'slow') { for (let k = 0; k + 1 < L; k++) if (v[k] > v[k + 1]) errs.push('slow thermo'); }
     else if (ty === 'nabner') { for (let a = 0; a < L; a++) for (let b = a + 1; b < L; b++) if (Math.abs(v[a] - v[b]) < 2) errs.push('Nabner'); }
@@ -2593,7 +2651,7 @@ function conflicts(p, model, grid) {
 const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum' };
 
 root.SX = { chkThrow, chkSling, chkPos, chkPole, chkWsIn, chkWsOut, wsRange, nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
-  stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
+  stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, esDots, esSegs, esDotSets, esAny, chkEsplit, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -2639,6 +2697,8 @@ const VARIANTS = [
   { k: 'mountain', label: 'Mountain lines', group: 'Lines' },
   { k: 'gap', label: 'Equal-gap lines', group: 'Lines' },
   { k: 'lots', label: 'Greater Lots', group: 'Lines' },
+  { k: 'esplit', label: 'Equal split lines', group: 'Lines' },
+  { k: 'ksplit', label: 'Kropki split lines', group: 'Lines' },
   { k: 'nabner', label: 'Nabner lines', group: 'Lines' },
   { k: 'whisper', label: 'German whispers', group: 'Lines' },
   { k: 'renban', label: 'Renban', group: 'Lines' },
@@ -2692,12 +2752,12 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, esplit: 1, ksplit: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, wsum: 4, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   outxsum: 1, outwsum: 1, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
-const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots']);
+const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'ksplit']);
 
 function randomRegions(rng) {
   for (let attempt = 0; attempt < 800; attempt++) {
@@ -3714,6 +3774,29 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
         const v = cs.map(k => sol[k]), okI = v.map((d, i) => i).filter(i => S.lineOK(['lots'], v, true, { ci: i }));
         const ci = pick(okI, rng);
         add('lots', p => { const ln = { type: 'lots', cells: cs.slice() }; if (ci > 0) ln.c = ci; p.lines.push(ln); }, lk('lots')); items[items.length - 1].hopCell = cs[ci];
+      });
+  }
+  if (V.has('esplit')) {
+    // dots sit on the borders between cells; 2-4 dots, segments of 1-3 cells, every segment with the same sum
+    sampleLines(sol, rng, { minL: 3, maxL: 6, max: capOf('esplit', 5), attempts: 12000, lenBias, usedEndpoints, cellCross, lineKey: 'esplit',
+      prefixOK: () => true,
+      finalOK: v => S.esDotSets(v).length > 0 })
+      .forEach(cs => {
+        const d = pick(S.esDotSets(cs.map(k => sol[k])), rng);
+        add('esplit', p => p.lines.push({ type: 'esplit', cells: cs.slice(), d: d.slice() }), lk('esplit'));
+      });
+  }
+  if (V.has('ksplit')) {
+    // every dot is a Kropki dot on an orthogonal step: white = consecutive, black = one digit double the other
+    const kt = (x, y) => (x === 2 * y || y === 2 * x) ? 'black' : Math.abs(x - y) === 1 ? 'white' : null;
+    const cutOKf = (v, cs) => k => Math.abs(Math.floor(cs[k] / 6) - Math.floor(cs[k - 1] / 6)) + Math.abs(cs[k] % 6 - cs[k - 1] % 6) === 1 && !!kt(v[k - 1], v[k]);
+    sampleLines(sol, rng, { minL: 3, maxL: 6, max: capOf('ksplit', 4), attempts: 20000, lenBias, usedEndpoints, cellCross, lineKey: 'ksplit',
+      prefixOK: () => true,
+      finalOK: (v, cs) => S.esDotSets(v, 2, 4, 3, cutOKf(v, cs)).length > 0 })
+      .forEach(cs => {
+        const v = cs.map(k => sol[k]);
+        const d = pick(S.esDotSets(v, 2, 4, 3, cutOKf(v, cs)), rng);
+        add('ksplit', p => { p.lines.push({ type: 'esplit', cells: cs.slice(), d: d.slice() }); d.forEach(k => p.edges.push({ a: cs[k - 1], b: cs[k], t: kt(v[k - 1], v[k]) })); }, lk('ksplit'));
       });
   }
   if (V.has('nabner')) {
@@ -4815,9 +4898,9 @@ const app = {
   extras: [], olExtras: [], olGen: null, selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}, cipherK: 10,
   assist: { on: false, level: 2, cur: null, C: null, sig: '', auto: false, timer: null }
 };
-const RULE_LABEL = { lots: 'Greater Lots', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag' };
-const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots']; // line rules that stand alone (never layered with another rule)
-const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'];
+const RULE_LABEL = { esplit: 'Equal Split', lots: 'Greater Lots', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag' };
+const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit']; // line rules that stand alone (never layered with another rule)
+const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'];
 const PAL = ['Clear', 'Shade', 'Land', 'Red', 'Amber', 'Green', 'Blue', 'Purple', 'Teal'];
 
 /* ---------- puzzle helpers ---------- */
@@ -4835,12 +4918,13 @@ function normalize(o) {
   p.cages = ((o && o.cages) || []).filter(c => Array.isArray(c.cells) && c.cells.length && c.cells.every(i => i >= 0 && i < NN));
   p.cages.forEach(c => { if (c.type === 'sumprod') c.dots = (Array.isArray(c.dots) ? c.dots : []).filter(i => c.cells.includes(i)); });
   p.lines = ((o && o.lines) || []).filter(l => Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(i => i >= 0 && i < NN));
-  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)) && (l.type !== 'darrow' || l.cells.length >= 3) && (l.type !== 'nabner' || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || l.cells.length >= 3) && (l.type !== 'lots' || l.cells.length >= 3));
+  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)) && (l.type !== 'darrow' || l.cells.length >= 3) && (l.type !== 'nabner' || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || l.cells.length >= 3) && (l.type !== 'lots' || l.cells.length >= 3) && (l.type !== 'esplit' || (l.cells.length >= 3 && X.esDots(l).length >= 1)));
   p.lines.forEach(l => {
     l.also = SOLO_LINES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
     if (!l.also.length) delete l.also;
     if (!X.lineTypes(l).includes('regsum') || !Array.isArray(l.ring) || l.ring.length !== 2) delete l.ring;
     if (l.type !== 'lots' || !(l.c > 0 && l.c < l.cells.length)) delete l.c; else l.c = Math.floor(l.c);
+    if (l.type === 'esplit') l.d = X.esDots(l); else delete l.d;
     if (l.branch && !(l.type === 'arrow' && !l.also && !l.escape && X.branchOK(l.cells, l.branch))) delete l.branch;
   });
   p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN && e.a !== e.b && ['cons', 'white', 'black', 'X', 'V', 'gt', 'prime', 'far'].includes(e.t)).map(e => {
@@ -4964,7 +5048,7 @@ function variantLabels(p) {
   if (p.cipher) L.push('Cipher');
   if (p.cages.some(c => c.mystery)) L.push('Mystery Cages');
   if (p.cages.some(c => c.escape) || p.lines.some(l => l.escape)) L.push('Escape the Grid');
-  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines', lots: 'Greater Lots' };
+  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines', lots: 'Greater Lots', esplit: 'Equal split lines' };
   if (p.quads.length) L.push('Quadruples');
   p.lines.forEach(l => X.lineTypes(l).forEach(t => has.add(nm[t])));
   has.forEach(x => x && L.push(x));
@@ -5029,6 +5113,7 @@ function rulesFor(p) {
   if (lt.has('palindrome')) R.push('Palindrome (blue): the line reads the same in both directions.');
   if (lt.has('parity')) R.push('Parity lines (taupe): neighboring digits on the line alternate between odd and even.');
   if (lt.has('mountain')) R.push('Mountain lines (burnt orange): digits strictly rise to a single peak and then strictly fall. The peak is never at an end of the line, and the peak cell is not marked.');
+  if (lt.has('esplit')) R.push('Equal Split lines (light blue, with dots on the borders between cells): the dots cut the line into segments. Within one line, the digits in every segment add up to the same sum. Segments on different lines may have different sums. Digits may repeat along a line.' + (p.lines.some(l => l.type === 'esplit' && X.esDots(l).some(k => p.edges.some(e => (e.t === 'white' || e.t === 'black') && ((e.a === l.cells[k - 1] && e.b === l.cells[k]) || (e.b === l.cells[k - 1] && e.a === l.cells[k]))))) ? ' Where a Kropki dot sits on one of these lines, it is both a cut and a Kropki dot: its two digits are consecutive (white) or one is double the other (black), and the line is split there.' : ''));
   if (lt.has('lots')) R.push('Greater Lots (gold, with a circle on one cell of the line): the digit in the circle counts how many digits on its line are strictly larger than it. The circled digit itself is not counted, and larger digits that repeat on the line each count.');
   if (lt.has('gap')) R.push('Equal-gap lines (indigo): every pair of neighboring digits on the line differs by the same amount, which is not given. The line can step up or down at each cell, so 2, 4, 2, 4, 6 and 2, 5, 2, 5 both follow a gap rule.');
   if (lt.has('slow')) R.push('Slow thermometers (teal, with a bulb): digits never decrease from the bulb to the tip. Two neighbors on the line may hold the same digit, but only when their cells do not share a row, column or box.');
@@ -5208,6 +5293,39 @@ function applyColor(k) {
   afterPlayChange();
 }
 
+/* Easter egg: a short fireworks burst when a 3 is typed into a corner cell */
+let fwBusy = false;
+function fireworks(cell) {
+  try {
+    if (fwBusy || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const svg = document.getElementById('board'); if (!svg) return;
+    const rc = svg.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    cv.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:9999';
+    document.body.appendChild(cv); fwBusy = true;
+    const ctx = cv.getContext('2d'), parts = [], cols = ['#ff5252', '#ffd740', '#69f0ae', '#40c4ff', '#e040fb', '#ffffff', '#ff9100'];
+    const gx = rc.left + rc.width * ((cell % 6) + .5) / 6, gy = rc.top + rc.height * (Math.floor(cell / 6) + .5) / 6;
+    const burst = (x, y, n) => { const c1 = cols[Math.floor(Math.random() * cols.length)], c2 = cols[Math.floor(Math.random() * cols.length)];
+      for (let k = 0; k < n; k++) { const a = Math.random() * 6.283, v = 1.5 + Math.random() * 4.5; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, dec: .011 + Math.random() * .012, col: k % 2 ? c1 : c2, r: 1.5 + Math.random() * 2 }); } };
+    const T0 = performance.now(), plan = [[0, gx, gy], [350, rc.left + rc.width * (.3 + Math.random() * .4), rc.top + rc.height * (.2 + Math.random() * .3)], [700, rc.left + rc.width * (.2 + Math.random() * .6), rc.top + rc.height * (.3 + Math.random() * .4)], [1000, rc.left + rc.width / 2, rc.top + rc.height * .35]];
+    let done = false; const stop = () => { if (done) return; done = true; cv.remove(); fwBusy = false; };
+    (function frame(t) {
+      if (done) return;
+      const el = t - T0;
+      while (plan.length && plan[0][0] <= el) { const q = plan.shift(); burst(q[1], q[2], 70); }
+      ctx.clearRect(0, 0, W, H);
+      for (let k = parts.length - 1; k >= 0; k--) {
+        const q = parts[k]; q.x += q.vx; q.y += q.vy; q.vy += .06; q.vx *= .985; q.vy *= .985; q.life -= q.dec;
+        if (q.life <= 0) { parts.splice(k, 1); continue; }
+        ctx.globalAlpha = Math.max(0, q.life); ctx.fillStyle = q.col; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, 6.283); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if (!plan.length && !parts.length) return stop();
+      if (el > 4000) return stop();
+      requestAnimationFrame(frame);
+    })(T0);
+  } catch (e) { fwBusy = false; }
+}
 function enterDigit(d) {
   if (app.tab === 'edit') return editDigit(d);
   if (app.ringSel || app.cipherSel) return ringPad(d);
@@ -5222,6 +5340,7 @@ function enterDigit(d) {
     t.forEach(i => { P.cands[i] = all ? P.cands[i] & ~bit(d) : P.cands[i] | bit(d); });
   } else if (d) {
     const same = cells.every(i => P.vals[i] === d);
+    if (d === 3 && !same) { const cn = cells.find(i => [0, 5, 30, 35].includes(i)); if (cn != null) setTimeout(() => fireworks(cn), 0); }
     cells.forEach(i => {
       if (same) P.vals[i] = 0;
       else {
@@ -5259,7 +5378,7 @@ function loadPuzzle(o, tab) {
 }
 
 /* ---------- board drawing ---------- */
-const COL = { lots: '#d4b53b', mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', modular: '#45c4a0', zigzag: '#f08a24', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
+const COL = { esplit: '#5bb8dc', lots: '#d4b53b', mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', modular: '#45c4a0', zigzag: '#f08a24', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
 const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
 
 // Dashed outline around a cage's cells and, for escaping cages, its outside boxes: every tile (a grid
@@ -5474,7 +5593,7 @@ function renderBoard() {
   });
   // lines
   if (editing && app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine]) s += `<polyline class="lsel" points="${pts(p.lines[app.selLine].cells)}"/>`;
-  const LW = { lots: 13, mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, modular: 12, zigzag: 12, regsum: 9, whisper: 8 };
+  const LW = { esplit: 11, lots: 13, mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, modular: 12, zigzag: 12, regsum: 9, whisper: 8 };
   /* perpendicular unit normal at vertex i of a polyline, bisecting the incoming/outgoing segments
      (falls back to a single segment's normal at a sharp near-reversal, e.g. a V-shaped line) */
   const normalAt = (P, i) => {
@@ -5517,7 +5636,8 @@ function renderBoard() {
     } else {
       thick.forEach(type => {
         const col = preview ? 'var(--accent)' : COL[type];
-        out(LW[type] || 10, halo('ln', pts(cells), (LW[type] || 10) + 6) + `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap', 'lots', 'modular', 'zigzag'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:' + (type === 'lots' ? '.55' : '.92') : ''}" points="${pts(cells)}"/>`);
+        out(LW[type] || 10, halo('ln', pts(cells), (LW[type] || 10) + 6) + `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap', 'lots', 'modular', 'zigzag', 'esplit'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:' + (type === 'lots' ? '.55' : '.92') : ''}" points="${pts(cells)}"/>`);
+        if (type === 'esplit' && Array.isArray(circ)) circ.forEach(k => { if (k >= 1 && k < L && !p.edges.some(e => (e.t === 'white' || e.t === 'black') && ((e.a === cells[k - 1] && e.b === cells[k]) || (e.b === cells[k - 1] && e.a === cells[k])))) markerBuf += `<circle style="fill:var(--cell);stroke:${preview ? 'var(--accent)' : '#4aa6cc'};stroke-width:4" cx="${((cx(cells[k - 1]) + cx(cells[k])) / 2).toFixed(1)}" cy="${((cy(cells[k - 1]) + cy(cells[k])) / 2).toFixed(1)}" r="9"/>`; });
         if (type === 'lots') out(LW.lots, `<circle style="fill:${col};fill-opacity:.35;stroke:${preview ? 'var(--accent)' : '#e0a020'};stroke-width:4" cx="${cx(cells[circ > 0 && circ < cells.length ? circ : 0])}" cy="${cy(cells[circ > 0 && circ < cells.length ? circ : 0])}" r="26"/>`);
         if (type === 'thermo' || type === 'slow') out(LW[type], `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`);
       });
@@ -5579,7 +5699,7 @@ function renderBoard() {
     escInfo.set(l, { chain, boxes, vidx, types, last: chain.length - 1 });
   });
   lineSink = [];
-  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells, false, l.c); if (l.branch) s += drawLine(['arrow'], [l.cells[0]].concat(l.branch)); });
+  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells, false, l.type === 'esplit' ? l.d : l.c); if (l.branch) s += drawLine(['arrow'], [l.cells[0]].concat(l.branch)); });
   s += lineSink.map((x, k) => [x.w, k, x.html]).sort((x, y) => y[0] - x[0] || x[1] - y[1]).map(x => x[2]).join(''); lineSink = null;
   s += bulbBuf; bulbBuf = '';
   s += thinBuf; thinBuf = '';
@@ -6092,7 +6212,7 @@ function renderMeta() {
 const TOOLS = [
   { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['hop', 'Hop arrow'], ['axia', 'Axia cell'], ['echo', 'Echo arrow'], ['crowd', 'Crowd cell'], ['spin', 'Spinner'], ['pk', 'Projected dot'], ['loc', 'Six locator'], ['region', 'Region']] },
   { g: 'Sums', t: [['cage', 'Killer cage'], ['spcage', 'Sum+product cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple'], ['cmax', 'Corner arrow'], ['bat', 'Battenburg']] },
-  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['modular', 'Modular'], ['zigzag', 'Zigzag'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['lrule', 'Edit line rules']] },
+  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['modular', 'Modular'], ['zigzag', 'Zigzag'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['esplit', 'Equal split'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
   { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot'], ['far', 'Far bar'], ['wsum', 'W-Sum arrow'], ['throw', 'Thrown Sum arrow'], ['sling', 'Slingshot arrow']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)'], ['sncnt', 'Snake count']] },
@@ -6123,6 +6243,7 @@ const HINTS = {
   zipper: 'Drag along the line (an odd number of cells, 3 or more). The middle cell gets a diamond. Each pair of cells the same distance from the middle adds up to the middle cell’s digit.',
   clone: 'Pick a group below, then drag across neighboring cells to mark a region. Add a second (or third) region of the same shape to the group: cells in the same position hold the same digit. Click a clone region to remove it.',
   mountain: 'Drag along the line, three or more cells. Digits strictly rise to a peak and then strictly fall. The peak is not at either end.',
+  esplit: 'Drag along the line, three or more cells (3 to 6 in generated puzzles). One dot is placed near the middle. Click a cell of an existing line to add or remove the dot between that cell and the next one (the last cell uses the dot before it). The digits in each segment between dots add up to the same sum.',
   lots: 'Drag along the line, three or more cells (5 to 8 in generated puzzles). The circle starts on the first cell you drag from. Click another cell of the line to move the circle there. The digit in the circle counts how many digits on the line are strictly larger than it.',
   gap: 'Drag along the line, three or more cells. Every pair of neighbors differs by the same amount, up or down.',
   axia: 'Click a cell to add or remove an Axia mark. The digit in a marked cell appears nowhere else along its four diagonals, out to the edge of the grid.',
@@ -6386,7 +6507,7 @@ function setPaint(i, k, add) {
 }
 const adj8 = (a, b) => a !== b && Math.abs(rowOf(a) - rowOf(b)) <= 1 && Math.abs(colOf(a) - colOf(b)) <= 1;
 const adj4 = (a, b) => Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
-const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'];
+const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'];
 const curRules = () => { const t = app.tool; if (SOLO_LINES.includes(t)) return [t]; return LINE_TOOLS.includes(t) ? [t].concat(app.extras.filter(x => x !== t)) : [t]; };
 const comboCache = {};
 function comboNote(types) {
@@ -6718,6 +6839,14 @@ function onUp() {
         host.branch = br; touch(true); flash('Second arrow added. Each arrow adds up to the circle.', 'ok'); return;
       }
     }
+    if (d.path.length === 1 && curRules()[0] === 'esplit') {
+      let k = -1; for (let n = p.lines.length - 1; n >= 0; n--) if (p.lines[n].type === 'esplit' && p.lines[n].cells.includes(d.path[0])) { k = n; break; }
+      if (k >= 0) {
+        const ln = p.lines[k], L = ln.cells.length, ci = ln.cells.indexOf(d.path[0]), pos = ci < L - 1 ? ci + 1 : L - 1, dd = X.esDots(ln), at = dd.indexOf(pos);
+        if (at >= 0) { if (dd.length === 1) { renderBoard(); flash('An Equal Split line needs at least one dot.', 'warn'); return; } dd.splice(at, 1); } else { dd.push(pos); dd.sort((a, b) => a - b); }
+        ln.d = dd; touch(true); flash(at >= 0 ? 'Dot removed.' : 'Dot added.', 'ok'); return;
+      }
+    }
     if (d.path.length === 1 && curRules()[0] === 'lots') {
       let k = -1; for (let n = p.lines.length - 1; n >= 0; n--) if (p.lines[n].type === 'lots' && p.lines[n].cells.includes(d.path[0])) { k = n; break; }
       if (k >= 0) {
@@ -6727,15 +6856,16 @@ function onUp() {
         touch(true); flash('Circle moved.', 'ok'); return;
       }
     }
-    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('modular') || rules.includes('zigzag') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') || rules.includes('lots') ? 3 : 2;
+    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('modular') || rules.includes('zigzag') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') || rules.includes('lots') || rules.includes('esplit') ? 3 : 2;
     if (rules[0] === 'nabner' && d.path.length > 3) { renderBoard(); flash('Nabner lines hold at most 3 cells, because 1 to 6 has no four digits that all differ by 2 or more.', 'warn'); return; }
-    if (['darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
+    if (['darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
     if (rules[0] === 'zipper' && d.path.length >= 3) {
       if (d.path.length % 2 === 0) { renderBoard(); flash('Zipper lines need an odd number of cells (3, 5 or 7), so there is a middle cell.', 'warn'); return; }
       if (!X.lineFeasible(['zipper'], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a zipper on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
     }
     if (d.path.length >= need) {
       const ln = { type: rules[0], cells: d.path.slice() };
+      if (rules[0] === 'esplit') ln.d = [Math.ceil(d.path.length / 2)];
       if (rules.length > 1) {
         ln.also = rules.slice(1);
         if (!X.lineFeasible(rules, d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) {
@@ -6753,7 +6883,7 @@ function onUp() {
       }
       p.lines.push(ln); touch(true);
     }
-    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : rules.includes('zipper') ? 'Zipper' : rules.includes('darrow') ? 'Double arrow' : rules.includes('mountain') ? 'Mountain' : rules.includes('gap') ? 'Equal-gap' : rules.includes('lots') ? 'Greater Lots' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
+    else { renderBoard(); if (d.path.length && need === 3) flash((rules.includes('between') ? 'Between' : rules.includes('zipper') ? 'Zipper' : rules.includes('darrow') ? 'Double arrow' : rules.includes('mountain') ? 'Mountain' : rules.includes('gap') ? 'Equal-gap' : rules.includes('lots') ? 'Greater Lots' : rules.includes('esplit') ? 'Equal Split' : 'Entropic') + ' lines need at least three cells.', 'warn'); }
   } else if (d.kind === 'oline') {
     if (d.cells.length >= 2) { { const ex = X.OWN_LINE_RULES.includes(app.olType) ? [] : app.olExtras.filter(t => t !== app.olType && X.olAllowed(t, app.olKind) && !X.OWN_LINE_RULES.includes(t)), ol = { type: app.olType, kind: app.olKind, cells: d.cells.map(c => c.slice()) }; if (ex.length) ol.also = ex; if ([app.olType].concat(ex).includes('whisper')) ol.diff = app.olDiff; p.olines.push(ol); } touch(true); }
     else renderBoard();
