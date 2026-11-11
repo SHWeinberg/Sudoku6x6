@@ -72,6 +72,9 @@ body{overscroll-behavior-y:none}
 #board{display:block;width:100%;height:auto;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;border-radius:6px}
 .selsum{min-height:1.4em;margin:6px 0 0;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);font-size:15px}
 .msg{min-height:1.6em;margin:10px 0 6px;font-weight:700}
+.msg:empty{display:none}
+.toolrow{flex-wrap:nowrap}
+.toolrow .btn{flex:1 1 0;min-width:0;padding:0 6px;font-size:13px;white-space:nowrap}
 .msg.ok{color:var(--ok)} .msg.warn{color:var(--warn)} .msg.err{color:var(--err)}
 
 .pad{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;max-width:600px}
@@ -272,6 +275,8 @@ details.about p{margin:8px 0 0}
 .gv{font-weight:700;fill:var(--given)} .ev{font-weight:400;fill:var(--entry)} .sv{font-weight:400;fill:var(--ok)}
 .cd{font-size:12px;fill:var(--muted);text-anchor:middle;dominant-baseline:central}
 .cd.bad{fill:var(--err)}
+.cd.elim{opacity:.4;text-decoration:line-through}
+.gm{font-size:11px;font-weight:700;fill:#2b6fd6;text-anchor:middle;dominant-baseline:central}
 .bar{fill:var(--ink)} .dotw{fill:var(--cell);stroke:var(--ink);stroke-width:2} .dotb{fill:var(--ink)}
 .dn{font-size:12px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none} .dn.w{fill:var(--ink)} .dn.b{fill:var(--cell)}
 .gts{fill:none;stroke:var(--ink);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round} .extm{fill:none;stroke:var(--ink);stroke-width:2.6;stroke-linejoin:round;opacity:.5} .zmid{fill:var(--cell);stroke:var(--ink);stroke-width:2}
@@ -338,8 +343,9 @@ details.about p{margin:8px 0 0}
       <button class="btn digit" data-d="4">4</button><button class="btn digit" data-d="5">5</button><button class="btn digit" data-d="6">6</button>
       <button class="btn digit" data-d="0" aria-label="Erase">⌫</button>
     </div>
-    <div class="row playonly" style="max-width:600px">
-      <button id="pencilBtn" class="btn" aria-pressed="false">Pencil marks</button>
+    <div class="row playonly toolrow" style="max-width:600px">
+      <button id="pencilBtn" class="btn" aria-pressed="false">Pencil</button>
+      <button id="groupBtn" class="btn" aria-pressed="false" title="Mark a digit across several selected cells (G)">Group</button>
       <button id="undoBtn" class="btn">Undo</button>
       <button id="redoBtn" class="btn">Redo</button>
     </div>
@@ -5759,20 +5765,20 @@ function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return 
 function resetPlay() {
   app.ringSel = null; app.cipherSel = null;
   if (app.assist) { app.assist.cur = null; app.assist.C = null; app.assist.sig = ''; app.assist.auto = false; clearTimeout(app.assist.timer); }
-  app.play = { vals: new Array(NN).fill(0), cands: new Array(NN).fill(0), col: new Array(NN).fill(0), ring: {}, cnotes: {}, undo: [], redo: [], pencil: false,
+  app.play = { vals: new Array(NN).fill(0), cands: new Array(NN).fill(0), col: new Array(NN).fill(0), ring: {}, cnotes: {}, undo: [], redo: [], pencil: false, gmode: false, groups: [],
     elapsed: 0, started: false, solved: false, revealed: false, usedReveal: false, hints: 0, recorded: false, wrong: new Set(), hash: hashOf(app.puzzle) };
 }
-function snapshot() { const P = app.play; return { vals: P.vals.slice(), cands: P.cands.slice(), col: P.col.slice(), ring: JSON.parse(JSON.stringify(P.ring)), cnotes: JSON.parse(JSON.stringify(P.cnotes || {})) }; }
+function snapshot() { const P = app.play; return { vals: P.vals.slice(), cands: P.cands.slice(), col: P.col.slice(), ring: JSON.parse(JSON.stringify(P.ring)), cnotes: JSON.parse(JSON.stringify(P.cnotes || {})), groups: JSON.parse(JSON.stringify(P.groups || [])) }; }
 function pushUndo() { const P = app.play; P.started = true; P.undo.push(snapshot()); if (P.undo.length > 300) P.undo.shift(); P.redo = []; }
 function undo() {
   const P = app.play; if (!P.undo.length) return;
   app.assist.C = null; app.assist.cur = null;
-  P.redo.push(snapshot()); const s = P.undo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.cnotes = s.cnotes || {}; P.solved = false; P.wrong.clear(); renderAll();
+  P.redo.push(snapshot()); const s = P.undo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.cnotes = s.cnotes || {}; P.groups = s.groups || []; P.solved = false; P.wrong.clear(); renderAll();
 }
 function redo() {
   const P = app.play; if (!P.redo.length) return;
   app.assist.C = null; app.assist.cur = null;
-  P.undo.push(snapshot()); const s = P.redo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.cnotes = s.cnotes || {}; renderAll();
+  P.undo.push(snapshot()); const s = P.redo.pop(); P.vals = s.vals; P.cands = s.cands; P.col = s.col; P.ring = s.ring; P.cnotes = s.cnotes || {}; P.groups = s.groups || []; renderAll();
 }
 function fmtTime(s) {
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
@@ -5858,11 +5864,38 @@ function fireworks(cell) {
     })(T0);
   } catch (e) { fwBusy = false; }
 }
+/* Group marks: "digit d is in one of these cells". Shown as small blue digits at the top of each cell in the group. When every
+   still-open cell of a group lies in one row, column or region, d is struck out of the other open cells of that line. */
+function groupState() {
+  const P = app.play, p = app.puzzle, val = i => p.givens[i] || P.vals[i], E = new Array(NN).fill(0), marks = new Array(NN).fill(0);
+  const units = [];
+  for (let r = 0; r < N; r++) units.push(Array.from({ length: N }, (_, c) => ix(r, c)));
+  for (let c = 0; c < N; c++) units.push(Array.from({ length: N }, (_, r) => ix(r, c)));
+  const rg = {}; for (let i = 0; i < NN; i++) (rg[p.regions[i]] = rg[p.regions[i]] || []).push(i);
+  Object.values(rg).forEach(u => units.push(u));
+  for (const gr of (P.groups || [])) {
+    if (gr.cells.some(i => val(i) === gr.d)) continue;
+    const eff = gr.cells.filter(i => !val(i)); if (!eff.length) continue;
+    eff.forEach(i => { marks[i] |= bit(gr.d); });
+    for (const u of units) if (eff.every(i => u.includes(i))) for (const j of u) if (!val(j) && !eff.includes(j)) E[j] |= bit(gr.d);
+  }
+  return { E, marks };
+}
+function enterGroupDigit(d) {
+  const P = app.play, cells = Array.from(app.sel).filter(i => !app.puzzle.givens[i] && !P.vals[i]).sort((a, b) => a - b);
+  if (!d) { if (!cells.length) return; pushUndo(); P.groups = P.groups.filter(g => !g.cells.some(i => cells.includes(i))); afterPlayChange(); return; }
+  if (!cells.length) { flash('Select one or more empty cells for a group mark.'); return; }
+  pushUndo();
+  const k = P.groups.findIndex(g => g.d === d && g.cells.length === cells.length && g.cells.every((x, n) => x === cells[n]));
+  if (k >= 0) P.groups.splice(k, 1); else P.groups.push({ d, cells });
+  afterPlayChange();
+}
 function enterDigit(d) {
   if (app.tab === 'edit') return editDigit(d);
   if (app.ringSel || app.cipherSel) return ringPad(d);
   const P = app.play, p = app.puzzle;
   if (P.solved && !P.revealed) return;
+  if (P.gmode) return enterGroupDigit(d);
   const cells = Array.from(app.sel).filter(i => !p.givens[i]);
   if (!cells.length) return;
   pushUndo();
@@ -5878,6 +5911,7 @@ function enterDigit(d) {
       else {
         P.vals[i] = d; P.cands[i] = 0;
         if (app.autoClear) for (const j of getModel().peers[i]) if (!P.vals[j] && !p.givens[j]) P.cands[j] &= ~bit(d);
+        if (app.autoClear) { const pe = new Set(getModel().peers[i]); P.groups.forEach(gr => { if (gr.d === d && !gr.cells.includes(i)) gr.cells = gr.cells.filter(x => !pe.has(x)); }); P.groups = P.groups.filter(gr => gr.cells.length); }
       }
     });
   } else cells.forEach(i => { if (P.vals[i]) P.vals[i] = 0; else P.cands[i] = 0; });
@@ -6397,6 +6431,7 @@ function renderBoard() {
       s += `<text class="mkn" style="font-size:${fs}px" x="${gx(colOf(i)) + CELL - 6}" y="${gy(rowOf(i)) + (txt.length > 1 ? 16 : 14)}">${txt}</text>`; }
   }
   // digits
+  const gs = (P && !editing) ? groupState() : { E: new Array(NN).fill(0), marks: new Array(NN).fill(0) };
   for (let i = 0; i < NN; i++) {
     const x = cx(i), y = cy(i);
     if (p.givens[i]) s += `<text class="gv" x="${x}" y="${y + 1}">${p.givens[i]}</text>`;
@@ -6410,11 +6445,14 @@ function renderBoard() {
       // toggle - this is a correctness check on the mark itself, not a rule-violation overlay.
       const peers = getModel().peers[i];
       for (let d = 1; d <= 6; d++) if (P.cands[i] & bit(d)) {
-        const dead = peers.some(j => g[j] === d);
-        s += `<text class="cd${dead ? ' bad' : ''}" x="${gx(colOf(i)) + CELL * (0.22 + 0.28 * ((d - 1) % 3))}" y="${gy(rowOf(i)) + CELL * (0.38 + 0.28 * (((d - 1) / 3) | 0))}">${d}</text>`;
+        const dead = peers.some(j => g[j] === d), struck = !!(gs.E[i] & bit(d));
+        s += `<text class="cd${dead ? ' bad' : ''}${struck ? ' elim' : ''}" x="${gx(colOf(i)) + CELL * (0.22 + 0.28 * ((d - 1) % 3))}" y="${gy(rowOf(i)) + CELL * (0.38 + 0.28 * (((d - 1) / 3) | 0))}">${d}</text>`;
       }
     }
   }
+  // group marks: small blue digits along the top of each open cell in the group
+  for (let i = 0; i < NN; i++) if (gs.marks[i] && !p.givens[i] && !(P && P.vals[i])) for (let d = 1; d <= 6; d++) if (gs.marks[i] & bit(d))
+    s += `<text class="gm" x="${gx(colOf(i)) + CELL * (0.13 + 0.148 * (d - 1))}" y="${gy(rowOf(i)) + CELL * 0.14}">${d}</text>`;
   // edge markers
   const groups = {};
   p.edges.forEach(e => { const k = Math.min(e.a, e.b) + ',' + Math.max(e.a, e.b); (groups[k] = groups[k] || []).push(e); });
@@ -6819,6 +6857,8 @@ function renderMeta() {
   const t = app.play ? app.play.elapsed : 0; $('#timer').textContent = fmtTime(t);
   $('#pencilBtn').setAttribute('aria-pressed', app.play && app.play.pencil ? 'true' : 'false');
   $('#pencilBtn').classList.toggle('on', !!(app.play && app.play.pencil));
+  $('#groupBtn').setAttribute('aria-pressed', app.play && app.play.gmode ? 'true' : 'false');
+  $('#groupBtn').classList.toggle('on', !!(app.play && app.play.gmode));
   renderRingBar();
   $('#undoBtn').disabled = !app.play || !app.play.undo.length; $('#redoBtn').disabled = !app.play || !app.play.redo.length;
   const gv = p.givens.filter(x => x).length;
@@ -7894,13 +7934,13 @@ function replayById(id) {
   if (!q) return flash('That puzzle is no longer stored on this device.', 'warn');
   loadPuzzle(q, 'play');
 }
-const emptyPlay = P => !P.vals.some(x => x) && !P.cands.some(x => x) && !P.col.some(x => x) && !Object.keys(P.ring).length && !Object.keys(P.cnotes || {}).some(k => P.cnotes[k]) && !P.elapsed;
+const emptyPlay = P => !P.vals.some(x => x) && !P.cands.some(x => x) && !P.col.some(x => x) && !Object.keys(P.ring).length && !(P.groups || []).length && !Object.keys(P.cnotes || {}).some(k => P.cnotes[k]) && !P.elapsed;
 function saveProgress() {
   const P = app.play, p = app.puzzle;
   if (!P || !p || P.hash !== hashOf(p)) return;
   const id = pid(p), all = lsGet(PKEY, {});
   if (P.solved || emptyPlay(P)) { if (all[id]) { delete all[id]; lsSet(PKEY, all); } return; }
-  all[id] = { p: X.clonePuzzle(p), vals: P.vals, cands: P.cands, col: P.col, ring: P.ring, cnotes: P.cnotes, elapsed: P.elapsed, hints: P.hints, usedReveal: P.usedReveal, pencil: P.pencil, at: Date.now() };
+  all[id] = { p: X.clonePuzzle(p), vals: P.vals, cands: P.cands, col: P.col, ring: P.ring, cnotes: P.cnotes, elapsed: P.elapsed, hints: P.hints, usedReveal: P.usedReveal, pencil: P.pencil, groups: P.groups, at: Date.now() };
   Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(30).forEach(k => delete all[k]);
   lsSet(PKEY, all);
   updateUnfinishedBadge(all);
@@ -7935,7 +7975,7 @@ function restoreProgress() {
   if (!sv || !Array.isArray(sv.vals) || sv.vals.length !== NN) return;
   P.vals = sv.vals; P.cands = Array.isArray(sv.cands) && sv.cands.length === NN ? sv.cands : P.cands;
   P.col = Array.isArray(sv.col) && sv.col.length === NN ? sv.col : P.col; P.ring = sv.ring || {}; P.cnotes = {}; if (sv.cnotes && typeof sv.cnotes === 'object') for (const L in sv.cnotes) { const e = sv.cnotes[L]; if (e && typeof e === 'object' && Array.isArray(e.c)) P.cnotes[L] = e; }
-  P.started = true; P.elapsed = sv.elapsed || 0; P.hints = sv.hints || 0; P.usedReveal = !!sv.usedReveal; P.pencil = !!sv.pencil;
+  P.started = true; P.elapsed = sv.elapsed || 0; P.hints = sv.hints || 0; P.usedReveal = !!sv.usedReveal; P.pencil = !!sv.pencil; P.groups = Array.isArray(sv.groups) ? sv.groups.filter(g => g && g.d >= 1 && g.d <= 6 && Array.isArray(g.cells) && g.cells.every(i => Number.isInteger(i) && i >= 0 && i < NN)) : [];
 }
 
 /* ---------- library ---------- */
@@ -7961,7 +8001,8 @@ function bind() {
   sv.addEventListener('pointerup', onUp); sv.addEventListener('pointercancel', onUp);
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
   $('#pad').addEventListener('click', e => { const b = e.target.closest('button[data-d]'); if (b) enterDigit(+b.dataset.d); });
-  $('#pencilBtn').addEventListener('click', () => { app.play.pencil = !app.play.pencil; renderMeta(); });
+  $('#pencilBtn').addEventListener('click', () => { app.play.pencil = !app.play.pencil; if (app.play.pencil) app.play.gmode = false; renderMeta(); });
+  $('#groupBtn').addEventListener('click', () => { app.play.gmode = !app.play.gmode; if (app.play.gmode) app.play.pencil = false; renderMeta(); });
   $('#undoBtn').addEventListener('click', undo); $('#redoBtn').addEventListener('click', redo);
   $('#checkBtn').addEventListener('click', checkPlay); $('#hintBtn').addEventListener('click', hint);
   $('#revealBtn').addEventListener('click', reveal); $('#restartBtn').addEventListener('click', restart);
@@ -8076,7 +8117,8 @@ function bind() {
       if (k === 'ArrowUp') r = Math.max(0, r - 1); if (k === 'ArrowDown') r = Math.min(N - 1, r + 1);
       if (k === 'ArrowLeft') c = Math.max(0, c - 1); if (k === 'ArrowRight') c = Math.min(N - 1, c + 1);
       if (!e.shiftKey) app.sel.clear(); app.sel.add(ix(r, c)); renderBoard();
-    } else if ((k === 'c' || k === 'p') && !e.ctrlKey && !e.metaKey) { if (app.tab !== 'edit') { app.play.pencil = !app.play.pencil; renderMeta(); } }
+    } else if ((k === 'c' || k === 'p') && !e.ctrlKey && !e.metaKey) { if (app.tab !== 'edit') { app.play.pencil = !app.play.pencil; if (app.play.pencil) app.play.gmode = false; renderMeta(); } }
+    else if (k === 'g' && !e.ctrlKey && !e.metaKey) { if (app.tab !== 'edit') { app.play.gmode = !app.play.gmode; if (app.play.gmode) app.play.pencil = false; renderMeta(); } }
     else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (k.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey && app.tab === 'play') { applyColor(1); }
