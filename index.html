@@ -1367,9 +1367,9 @@ function chkTurtle(g, start, dir, n) {
   const c2 = ix(sr, sc); seen.add(c2);
   return rec(c2, dir, 2);
 }
-/* inside Turtle route: the digit in the circled cell is the route length (1-6); unknown means any of them */
+/* inside Turtle route: the digit in the circled cell is the number of cells after it (1-6), so the route has that many plus the circled cell; unknown means any of them */
 function chkTurtleD(g, start, dir) {
-  for (const n of (g[start] ? [g[start]] : [1, 2, 3, 4, 5, 6])) if (chkTurtle(g, start, dir, n)) return true;
+  for (const n of (g[start] ? [g[start]] : [1, 2, 3, 4, 5, 6])) if (chkTurtle(g, start, dir, n + 1)) return true;
   return false;
 }
 /* Hidden lines: a circled marker cell `a` holds the line's length N (cells). An arrow points from the marker to the line's first
@@ -2069,7 +2069,7 @@ function compile(p) {
   }
   for (const t of (p.turtle || [])) {
     why = 'Turtle route (its length is the digit in the circled cell)';
-    addGroup(turtleCells(t.a, 6).concat(t.a), g => chkTurtleD(g, t.a, t.d));
+    addGroup(turtleCells(t.a, 7).concat(t.a), g => chkTurtleD(g, t.a, t.d));
   }
   for (const t of (p.tsnake || [])) {
     why = 'hidden ' + (t.t || 'thermo') + ' line (its length is the digit in the circled cell)';
@@ -2778,7 +2778,7 @@ function verify(p, g, sh) {
       }
     }
   }
-  for (const t of (p.turtle || [])) if (!chkTurtle(g, t.a, t.d, g[t.a])) errs.push('Turtle route');
+  for (const t of (p.turtle || [])) if (!chkTurtle(g, t.a, t.d, g[t.a] + 1)) errs.push('Turtle route');
   for (const t of (p.tsnake || [])) if (!countHidden(g, t.a, t.d, g[t.a], t.t)) errs.push('Hidden ' + (t.t || 'thermo') + ' line');
   for (const ol of (p.olines || [])) {
     const vals = ol.cells.map(([r, c]) => outVal(olKindOf(ol), clueSeq({ kind: olKindOf(ol), r, c }), g)), L = vals.length;
@@ -4205,11 +4205,11 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     }
   });
   if (V.has('turtle')) {
-    // hidden routes: a circle and an arrow for the first step; the digit in the circled cell is the route's length (2-6)
+    // hidden routes: a circle and an arrow for the first step; the digit in the circled cell is the number of cells after it (1-6)
     const want = capOf('turtle', 4), starts = new Set(), DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; let made = 0, att = 0;
     while (made < want && att++ < 4000) {
       const a = Math.floor(rng() * NN), dir = pick(DIRS, rng);
-      if (starts.has(a) || sol[a] < 2 || !S.chkTurtle(sol, a, dir, sol[a])) continue;
+      if (starts.has(a) || !S.chkTurtle(sol, a, dir, sol[a] + 1)) continue;
       starts.add(a); made++;
       add('turtle', p => p.turtle.push({ a, d: dir.slice() }), lk('turtle'));
       items[items.length - 1].hopCell = a;
@@ -5674,7 +5674,7 @@ function rulesFor(p) {
     const seen = new Set();
     (p.tsnake || []).forEach(t => { const k = t.t || 'thermo'; if (seen.has(k)) return; seen.add(k);
       R.push(HD[k][0] + ' (coloured circle and arrow, dashed first cell): the digit in the circled cell is the number of cells in a hidden line. Its first cell is the cell next to the circle in the arrow’s direction. From there the line moves one cell at a time (up, down, left or right), never revisits a cell and never uses the circled cell. On the line ' + HD[k][1] + '. The line is not drawn: work it out. Every hidden line has exactly one possible route.'); }); }
-  if (p.turtle && p.turtle.length) R.push('Turtle routes (red circle and arrow): the digit in the circled cell is the length of the route in cells, circled cell included. The arrow gives the direction the route leaves the circled cell. From the second cell on, the digit in each cell turns the route: 1–2 left, 3–4 right, 5–6 straight, left and right as the route sees them. The last cell’s digit does nothing. The route is not drawn: work it out. A route may not leave the grid or revisit a cell.');
+  if (p.turtle && p.turtle.length) R.push('Turtle routes (red circle and arrow): the digit in the circled cell is the number of cells on the route after the circled cell (the circled cell is not counted). The arrow gives the direction the route leaves the circled cell. From the second cell on, the digit in each cell turns the route: 1–2 left, 3–4 right, 5–6 straight, left and right as the route sees them. The last cell’s digit does nothing. The route is not drawn: work it out. A route may not leave the grid or revisit a cell.');
   if (p.axia && p.axia.length) R.push('Axia cells (gray squares with four corner arrows): the digit in a marked cell appears nowhere else along its four diagonals, in all directions out to the edge of the grid.');
   if (p.sling && p.sling.length) R.push('Slingshot arrows (purple bent arrows): each arrow starts in one cell, its tail, and bends into a neighboring cell, its head. Starting at the head cell, count as many cells as the digit in the head cell, in the direction the arrowhead points. The cell you reach holds the same digit as the tail cell.');
   if (p.echo && p.echo.length) R.push('Echo arrows (violet double arrows): the digit in an arrow cell appears again somewhere further along the diagonal the arrow points down.');
@@ -6077,7 +6077,7 @@ function renderBoard() {
     const f = q => q[0].toFixed(1) + ',' + q[1].toFixed(1), px = -h.dr, py = h.dc, B = [E[0] - h.dc * 7, E[1] - h.dr * 7];
     cloneTxt += `<g style="stroke:#9b4fd0;fill:#9b4fd0"><polyline points="${f(S0)} ${f(K)} ${f(B)}" style="fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round"/><polygon points="${f(E)} ${f([B[0] + px * 5.5, B[1] + py * 5.5])} ${f([B[0] - px * 5.5, B[1] - py * 5.5])}" style="stroke:none"/></g>`;
   });
-  // Turtle routes: a red circle on the start cell and an arrow for the first step; the digit in the circle is the route length (the route itself is never drawn)
+  // Turtle routes: a red circle on the start cell and an arrow for the first step; the digit in the circle is the number of route cells after it (the route itself is never drawn)
   (p.turtle || []).forEach(t => {
     const x = cx(t.a), y = cy(t.a), dx = t.d[1], dy = t.d[0], px = -dy, py = dx;
     const P = (a, w) => (x + dx * a + px * w).toFixed(1) + ',' + (y + dy * a + py * w).toFixed(1);
@@ -6869,7 +6869,7 @@ const HINTS = {
   hrenban: 'Hidden renban: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length; the line holds consecutive digits in any order.',
   hparity: 'Hidden parity: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length; neighbours on the line alternate odd and even.',
   hentropic: 'Hidden entropic: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length (3 or more); every three in a row hold one digit from 1-2, 3-4 and 5-6.',
-  turtle: 'Click a cell to add a Turtle start whose arrow points up. Click the cell again to turn the arrow clockwise, and once more after the fourth direction to remove it. The digit in the circled cell is the route length. The route leaves the circled cell in the arrow’s direction, then each digit turns it: 1–2 left, 3–4 right, 5–6 straight.',
+  turtle: 'Click a cell to add a Turtle start whose arrow points up. Click the cell again to turn the arrow clockwise, and once more after the fourth direction to remove it. The digit in the circled cell is the number of route cells after it (the circled cell is not counted). The route leaves the circled cell in the arrow’s direction, then each digit turns it: 1–2 left, 3–4 right, 5–6 straight.',
   axia: 'Click a cell to add or remove an Axia mark. The digit in a marked cell appears nowhere else along its four diagonals, out to the edge of the grid.',
   loc: 'Click a cell to add or remove a six locator. The digit in the circled cell is the column (1 to 6 from the left) that holds the 6 in that row.',
   slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
