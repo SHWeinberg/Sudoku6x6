@@ -633,7 +633,7 @@ function newPuzzle() {
             nonconsec: false, kropkiNeg: false, xvNeg: false, whisperDiff: 4,
             waterConn: false, noPool: false, nkLand: false, nkWater: false, shadeWhisper: false,
             landConn: false, noPoolLand: false, sandwichShade: false, caves: false, snake: false },
-    sn: null, cages: [], lines: [], edges: [], ext: [], hop: [], pk: [], wsum: [], throw: [], sling: [], axia: [], echo: [], crowd: [], spin: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
+    sn: null, cages: [], lines: [], edges: [], ext: [], hop: [], pk: [], wsum: [], throw: [], turtle: [], tsnake: [], sling: [], axia: [], echo: [], crowd: [], spin: [], loc: [], cmax: [], bat: [], clones: [], cc: [], parity: new Array(NN).fill(0), clues: [], olines: [], quads: [],
     marks: new Array(NN).fill(0), mval: new Array(NN).fill(0), paint: new Array(NN).fill(0),
     sol: null, ssol: null, meta: null
   };
@@ -891,6 +891,22 @@ function wsRange(g, seq) {
   return [lo, hi];
 }
 function chkWsOut(g, seq, T) { const r = wsRange(g, seq); return r[0] <= T && T <= r[1]; }
+/* Frame sum: the first three digits from the clue's edge add up to the clue */
+function chkFrame(g, seq, T) { const b = sumBounds(g, seq.slice(0, 3)); return !!b && b[0] <= T && T <= b[1]; }
+/* outside Thrown Sum: N = digit nearest the clue; the sum starts N cells in (counting the cell after the nearest one as 1)
+   and runs for a hidden length L >= 1 along the line; the clue is that sum */
+function chkThOut(g, seq, T) {
+  const ray = seq.slice(1);
+  for (const n of (g[seq[0]] ? [g[seq[0]]] : [1, 2, 3, 4, 5, 6])) {
+    if (n > ray.length) continue;
+    let s = 0, unk = 0;
+    for (let k = n - 1; k < ray.length; k++) {
+      const v = g[ray[k]]; if (v) s += v; else unk++;
+      if (s + unk <= T && T <= s + 6 * unk) return true;
+    }
+  }
+  return false;
+}
 function chkWsIn(g, a, ray, T) {
   for (const n of (g[a] ? [g[a]] : [1, 2, 3, 4, 5, 6])) {
     if (n > ray.length) continue;
@@ -1186,7 +1202,7 @@ function branchOK(cells, br) {
   for (let k = 0; k + 1 < full.length; k++) if (!nbr8[full[k]].includes(full[k + 1])) return false;
   return !diagCross(cells, full);
 }
-const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'];
+const OWN_LINE_RULES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'pointing', 'prodarrow', 'sumgap', 'cloneline', 'tiedline', 'turnline'];
 /* Equal Split lines: ln.d lists the cut positions k (1..L-1); a dot sits on the border between cells[k-1] and cells[k].
    Every segment between dots has the same digit sum. */
 function esDots(ln) {
@@ -1271,6 +1287,154 @@ function splitEqual(v) {
 /* Line-only rule test on a digit sequence v for the rule list `types`.
    complete=false: v is a prefix; checks the constraints that involve its last cell (ctx.L = target length if known).
    complete=true: v is the whole line; checks every rule. ctx: { wd, L, cells, regions, minRuns, maxRuns } */
+/* Pointing line: a digit N means the nearest larger digit on the line is exactly N steps away along the line
+   (either direction); the line's largest digits have no larger digit and no requirement. v may hold 0 for unknown cells. */
+function chkPointing(v) {
+  const n = v.length;
+  for (let i = 0; i < n; i++) {
+    const N = v[i]; if (!N) continue;
+    for (let k = 0; k < n; k++) if (k !== i && v[k] > N && Math.abs(k - i) < N) return false;
+    if (Math.max(i, n - 1 - i) < N) { for (let k = 0; k < n; k++) if (v[k] > N) return false; }
+  }
+  if (v.every(x => x)) {
+    for (let i = 0; i < n; i++) {
+      let best = 99; for (let k = 0; k < n; k++) if (v[k] > v[i]) best = Math.min(best, Math.abs(k - i));
+      if (best !== 99 && best !== v[i]) return false;
+    }
+  }
+  return true;
+}
+/* Product arrow: the digits after the circle (first cell) multiply to the circle */
+function chkProdArrow(v) {
+  const n = v.length; let P = 1, unk = 0;
+  for (let k = 1; k < n; k++) { if (v[k]) P *= v[k]; else unk++; }
+  if (P > 6) return false;
+  if (v[0]) { if (v[0] % P) return false; if (!unk && v[0] !== P) return false; if (unk && v[0] < P) return false; }
+  else if (!unk && (P < 1 || P > 6)) return false;
+  return true;
+}
+/* Sum-gap line: every adjacent pair differs by exactly the digit in the circled first cell */
+function chkSumGap(v) {
+  let D = v[0] || 0;
+  for (let k = 0; k + 1 < v.length; k++) {
+    if (!v[k] || !v[k + 1]) continue;
+    const d = Math.abs(v[k] - v[k + 1]);
+    if (!d || (D && d !== D)) return false;
+    D = d;
+  }
+  return true;
+}
+
+/* Clone / Tied line pairs: two lines of the same kind with the same pair id. Clone: the same digits in the same order.
+   Tied: the same digit sum. partner() finds the other line; only the earlier of the two applies the rule. */
+function linePartner(lines, ln) { return lines.find(m => m !== ln && m.type === ln.type && m.pair === ln.pair && m.pair != null) || null; }
+function chkTied(g, a, b) {
+  const rg = cs => { let s = 0, unk = 0; for (const i of cs) { const v = g[i]; if (v) s += v; else unk++; } return [s + unk, s + 6 * unk]; };
+  const x = rg(a), y = rg(b);
+  return Math.max(x[0], y[0]) <= Math.min(x[1], y[1]);
+}
+/* Turn lines / Turtle routes: the digit in a cell turns the route that arrives there. 1-2 left, 3-4 right, 5-6 straight (rows run down, columns run right). */
+const turnOfDigit = d => d <= 2 ? 0 : d <= 4 ? 1 : 2;   // 0 left, 1 right, 2 straight
+const TURN_MASK = [bit(1) | bit(2), bit(3) | bit(4), bit(5) | bit(6)];
+function turnClassAt(cells, k) {
+  const a = cells[k - 1], b = cells[k], c2 = cells[k + 1];
+  const ir = rowOf(b) - rowOf(a), ic = colOf(b) - colOf(a), or = rowOf(c2) - rowOf(b), oc = colOf(c2) - colOf(b);
+  if (Math.abs(ir) + Math.abs(ic) !== 1 || Math.abs(or) + Math.abs(oc) !== 1) return -1;
+  const cr = ir * oc - ic * or;
+  return cr === 1 ? 0 : cr === -1 ? 1 : (ir * or + ic * oc === 1 ? 2 : -1);
+}
+/* Turtle route: starts at `start`, leaves it heading dir, and is n cells long counting the start. From the second cell on, each digit
+   turns the route; the last cell's digit and the start's digit do nothing. A route that would leave the grid or revisit a cell is invalid.
+   g may hold 0 for unknown digits: the search then tries all three turns there. */
+function chkTurtle(g, start, dir, n) {
+  if (n <= 1) return true;
+  const seen = new Set([start]);
+  const sr = rowOf(start) + dir[0], sc = colOf(start) + dir[1];
+  if (!inGrid(sr, sc)) return false;
+  const rec = (cell, h, k) => {
+    if (k === n) return true;
+    const d = g[cell], cls = d ? [turnOfDigit(d)] : [0, 1, 2];
+    for (const t of cls) {
+      const nh = t === 0 ? [-h[1], h[0]] : t === 1 ? [h[1], -h[0]] : h;
+      const r = rowOf(cell) + nh[0], cc = colOf(cell) + nh[1];
+      if (!inGrid(r, cc)) continue;
+      const nx = ix(r, cc); if (seen.has(nx)) continue;
+      seen.add(nx); const ok = rec(nx, nh, k + 1); seen.delete(nx);
+      if (ok) return true;
+    }
+    return false;
+  };
+  const c2 = ix(sr, sc); seen.add(c2);
+  return rec(c2, dir, 2);
+}
+/* inside Turtle route: the digit in the circled cell is the route length (1-6); unknown means any of them */
+function chkTurtleD(g, start, dir) {
+  for (const n of (g[start] ? [g[start]] : [1, 2, 3, 4, 5, 6])) if (chkTurtle(g, start, dir, n)) return true;
+  return false;
+}
+/* Hidden lines: a circled marker cell `a` holds the line's length N (cells). An arrow points from the marker to the line's first
+   cell (the bulb). From there the line steps orthogonally, never revisits a cell and never uses the marker. The line follows one rule:
+   thermo (digits rise), whisper (neighbors differ by 3+), arrow (the first cell, the arrow's circle, equals the sum of the other N-1),
+   renban (consecutive digits, any order), parity (neighbors alternate odd/even) or entropic (every three in a row hold one digit
+   from each of 1-2, 3-4, 5-6). The rule applies to the cells in route order. */
+const HID_MIN = { thermo: 2, whisper: 2, arrow: 3, renban: 2, parity: 2, entropic: 3 };
+const HID_WD = 3;
+function hidFeas(rule, v) {         // v: digits along a candidate route, 0 = unknown
+  const n = v.length;
+  if (v.every(x => x)) return lineOK([rule], v, true, { wd: HID_WD });
+  if (rule === 'thermo') { let lo = 1; for (let i = 0; i < n; i++) { if (v[i]) { if (v[i] < lo || v[i] > 6 - (n - 1 - i)) return false; lo = v[i] + 1; } else lo++; } return true; }
+  if (rule === 'whisper') { for (let i = 0; i + 1 < n; i++) if (v[i] && v[i + 1] && Math.abs(v[i] - v[i + 1]) < HID_WD) return false; return true; }
+  if (rule === 'parity') { for (let i = 0; i < n; i++) if (v[i]) for (let j = i + 1; j < n; j++) if (v[j] && ((v[i] + v[j]) % 2 === 1) !== ((j - i) % 2 === 1)) return false; return true; }
+  if (rule === 'renban') { const k = v.filter(x => x); if (new Set(k).size !== k.length) return false; return !k.length || Math.max(...k) - Math.min(...k) <= n - 1; }
+  if (rule === 'entropic') { for (let i = 0; i + 2 < n; i++) { const k = [v[i], v[i + 1], v[i + 2]].filter(x => x).map(x => (x + 1) >> 1); if (new Set(k).size !== k.length) return false; } return true; }
+  if (rule === 'arrow') { let s = 0, unk = 0; for (let i = 1; i < n; i++) { if (v[i]) s += v[i]; else unk++; } const lo = s + unk, hi = s + 6 * unk; return v[0] ? lo <= v[0] && v[0] <= hi : lo <= 6; }
+  return true;
+}
+function chkHidden(g, a, dir, rule) {
+  rule = rule || 'thermo';
+  const br = rowOf(a) + dir[0], bc = colOf(a) + dir[1];
+  if (!inGrid(br, bc)) return false;
+  const bulb = ix(br, bc);
+  for (const n of (g[a] ? [g[a]] : [1, 2, 3, 4, 5, 6])) {
+    if (n < HID_MIN[rule]) continue;
+    const path = [bulb], seen = new Set(path);
+    const rec = () => {
+      if (!hidFeas(rule, path.map(i => g[i]).concat(new Array(n - path.length).fill(0)))) return false;
+      if (path.length === n) return true;
+      for (const nx of nbr4[path[path.length - 1]]) {
+        if (nx === a || seen.has(nx)) continue;
+        path.push(nx); seen.add(nx); const ok = rec(); path.pop(); seen.delete(nx);
+        if (ok) return true;
+      }
+      return false;
+    };
+    if (rec()) return true;
+  }
+  return false;
+}
+function countHidden(g, a, dir, n, rule) {
+  rule = rule || 'thermo';
+  const br = rowOf(a) + dir[0], bc = colOf(a) + dir[1];
+  if (!inGrid(br, bc) || n < HID_MIN[rule]) return 0;
+  let cnt = 0; const path = [ix(br, bc)], seen = new Set(path);
+  const rec = () => {
+    if (path.length === n) { if (hidFeas(rule, path.map(i => g[i]))) cnt++; return; }
+    if (!hidFeas(rule, path.map(i => g[i]).concat(new Array(n - path.length).fill(0)))) return;
+    for (const nx of nbr4[path[path.length - 1]]) {
+      if (nx === a || seen.has(nx)) continue;
+      path.push(nx); seen.add(nx); rec(); path.pop(); seen.delete(nx);
+    }
+  };
+  rec(); return cnt;
+}
+/* direction an outside Turtle clue sends its route: from the edge cell inward */
+function tuDir(seq) { return [rowOf(seq[1]) - rowOf(seq[0]), colOf(seq[1]) - colOf(seq[0])]; }
+/* cells whose digits can change a Turtle route of n cells from `start` */
+function turtleCells(start, n) {
+  const out = []; for (let i = 0; i < NN; i++) if (i !== start && Math.abs(rowOf(i) - rowOf(start)) + Math.abs(colOf(i) - colOf(start)) <= n - 1) out.push(i);
+  return out;
+}
+
 function lineOK(types, v, complete, ctx) {
   ctx = ctx || {};
   const n = v.length, wd = +ctx.wd || 4;
@@ -1319,6 +1483,10 @@ function lineOK(types, v, complete, ctx) {
           else if (done ? t2 !== s0 : t2 > s0) return false;
         }
       }
+      else if (t === 'turnline') { if (ctx.cells && j >= 2) { const tc = turnClassAt(ctx.cells, j - 1); if (tc < 0 || turnOfDigit(v[j - 1]) !== tc) return false; } }
+      else if (t === 'pointing') { if (!chkPointing(v.concat(new Array(Math.max(0, (Lt || 8) - n)).fill(0)))) return false; }
+      else if (t === 'prodarrow' && j > 0) { let P = 1; for (let a = 1; a <= j; a++) P *= v[a]; if (P > 6 || v[0] % P) return false; }
+      else if (t === 'sumgap' && j > 0) { if (Math.abs(v[j] - v[j - 1]) !== v[0]) return false; }
       else if (t === 'gap' && j > 0) { if (v[j] === v[j - 1]) return false; if (j > 1 && Math.abs(v[j] - v[j - 1]) !== Math.abs(v[1] - v[0])) return false; }
       else if (t === 'slow' && j > 0 && v[j] < v[j - 1]) return false;
       else if (t === 'nabner') { for (let a = 0; a < j; a++) if (Math.abs(v[a] - v[j]) < 2) return false; }
@@ -1347,6 +1515,10 @@ function lineOK(types, v, complete, ctx) {
       if (ctx.d && ctx.d.length) { const sg = esSegs(n, ctx.d), sm = sg.map(x => { let t2 = 0; for (let k = x[0]; k < x[1]; k++) t2 += v[k]; return t2; }); if (!sm.every(t2 => t2 === sm[0])) return false; }
       else if (!esAny(v)) return false;
     }
+    else if (t === 'turnline') { if (n < 3) return false; if (ctx.cells) for (let k = 1; k < n - 1; k++) { const tc = turnClassAt(ctx.cells, k); if (tc < 0 || turnOfDigit(v[k]) !== tc) return false; } }
+    else if (t === 'pointing') { if (n < 3 || !chkPointing(v)) return false; }
+    else if (t === 'prodarrow') { if (n < 3) return false; let P = 1; for (let k = 1; k < n; k++) P *= v[k]; if (P !== v[0]) return false; }
+    else if (t === 'sumgap') { if (n < 3) return false; for (let k = 0; k + 1 < n; k++) if (Math.abs(v[k] - v[k + 1]) !== v[0]) return false; }
     else if (t === 'gap') { if (n < 3) return false; const d = Math.abs(v[1] - v[0]); if (!d) return false; for (let k = 1; k < n; k++) if (Math.abs(v[k] - v[k - 1]) !== d) return false; }
     else if (t === 'slow') { for (let k = 0; k + 1 < n; k++) if (v[k] > v[k + 1]) return false; }
     else if (t === 'nabner') { for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (Math.abs(v[a] - v[b]) < 2) return false; }
@@ -1457,10 +1629,44 @@ function chkOLine(g, ol, seqs) {
    [v, v] for every resolved digit, [1, 6] for an unresolved one, and the escape slot's own clueRange
    for its position. This is the same interval math chkOLine already uses for a line strung entirely
    between outside clues, just mixed with ordinary grid-digit ranges. */
-function chkLineEsc(types, R, wd) {
+/* chain index of a Greater Lots circle: ln.c counts grid cells only, so every outside box ahead of it shifts it */
+function escCi(ln, boxes) {
+  if (ln.type !== 'lots') return 0;
+  const L = ln.cells.length, c = ln.c > 0 && ln.c < L ? ln.c : 0;
+  return c + boxes.filter(b => b.pos <= c).length;
+}
+/* Equal Split cuts of an escaping line, as chain positions: ln.d counts grid cells, so every outside box ahead of a cut shifts it */
+function escD(ln, boxes) {
+  if (ln.type !== 'esplit') return null;
+  return esDots(ln).map(k => k + boxes.filter(b => b.pos < k).length);
+}
+const ESC_GENERIC = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'pointing', 'prodarrow', 'sumgap'];
+/* rules without a dedicated range check: search the chain's value ranges with lineOK (sound, never rejects a
+   valid completion; exact once every range is a single value) */
+function chkChainGen(t, R, wd, ci) {
+  const k = R.length; let prod = 1;
+  for (const r of R) { prod *= Math.max(1, r[1] - r[0] + 1); if (prod > 6000) return true; }
+  const ctx = { wd, L: k, ci }, v = [];
+  const rec = () => {
+    const j = v.length;
+    if (j === k) return lineOK([t], v, true, ctx);
+    for (let x = R[j][0]; x <= R[j][1]; x++) { v.push(x); const ok = lineOK([t], v, false, ctx) && rec(); v.pop(); if (ok) return true; }
+    return false;
+  };
+  return rec();
+}
+function chkLineEsc(types, R, wd, ci, d) {
   const k = R.length;
   for (const t of types) {
-    if (t === 'thermo') {
+    if (ESC_GENERIC.includes(t)) { if (!chkChainGen(t, R, wd, ci || 0)) return false; }
+    else if (t === 'esplit') {
+      if (d && d.length) {
+        let lo = 0, hi = 99;
+        for (const sg of esSegs(k, d)) { let a = 0, z = 0; for (let i = sg[0]; i < sg[1]; i++) { a += R[i][0]; z += R[i][1]; } if (a > lo) lo = a; if (z < hi) hi = z; }
+        if (lo > hi) return false;
+      }
+    }
+    else if (t === 'thermo') {
       let m = R[0][0]; if (m > R[0][1]) return false;
       for (let i = 1; i < k; i++) { m = Math.max(R[i][0], m + 1); if (m > R[i][1]) return false; }
     } else if (t === 'whisper') {
@@ -1629,12 +1835,12 @@ function compile(p) {
       const types = lineTypes(ln);
       addGroup(Array.from(new Set(cs.concat(...eseqs))), g => {
         const R = chainR(cs, boxes, i => g[i] ? [g[i], g[i]] : [1, 6], k => clueRange(boxKind(boxes[k]), eseqs[k], g));
-        return !!R && chkLineEsc(types, R, wd) && (!types.includes('regsum') || chkRegEsc(g, cs, boxes, eseqs, p.regions));
+        return !!R && chkLineEsc(types, R, wd, escCi(ln, boxes), escD(ln, boxes)) && (!types.includes('regsum') || chkRegEsc(g, cs, boxes, eseqs, p.regions));
       });
       continue;
     }
     for (const ty of lineTypes(ln)) {
-    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zigzag: 'zigzag line (digits alternately rise and fall)', modular: 'modular line (every three consecutive cells hold one digit from each of 3/6, 1/4 and 2/5)', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', nabner: 'Nabner line (no two digits on it are the same or consecutive)', lots: 'Greater Lots line (the circled digit counts the digits on the line that are larger than it)', esplit: 'Equal Split line (every segment between dots has the same sum)' }[ty] || (ty + ' line');
+    why = { thermo: 'thermo line (digits increase)', whisper: 'German whisper line (neighbors differ by ' + wd + '+)', palindrome: 'palindrome line', renban: 'Renban line (consecutive digits)', between: 'between line', regsum: 'region-sum line', arrow: 'arrow (digits sum to the circle)', parity: 'parity line (neighbors alternate odd/even)', entropic: 'entropic line', zigzag: 'zigzag line (digits alternately rise and fall)', modular: 'modular line (every three consecutive cells hold one digit from each of 3/6, 1/4 and 2/5)', zipper: 'zipper line (each mirrored pair sums to the center digit)', darrow: 'double arrow (the two end digits sum to the cells between them)', slow: 'slow thermo (digits never decrease)', mountain: 'mountain line (digits rise to a peak, then fall)', gap: 'equal-gap line (neighbors always differ by the same amount)', pointing: 'pointing line (each digit is how many steps away the nearest larger digit is)', prodarrow: 'product arrow (the digits after the circle multiply to the circle)', sumgap: 'sum-gap line (neighbors differ by the circled digit)', turnline: 'turn line (each digit turns the line left, right or straight)', cloneline: 'clone line (matches its partner digit for digit)', tiedline: 'tied line (same digit sum as its partner)', nabner: 'Nabner line (no two digits on it are the same or consecutive)', lots: 'Greater Lots line (the circled digit counts the digits on the line that are larger than it)', esplit: 'Equal Split line (every segment between dots has the same sum)' }[ty] || (ty + ' line');
     if (ty === 'thermo') {
       for (let k = 0; k + 1 < L; k++) addBin(cs[k], cs[k + 1], (a, b) => a < b);
       for (let k = 0; k < L; k++) {
@@ -1691,6 +1897,20 @@ function compile(p) {
       if (L >= 2) { const ci = ln.c > 0 && ln.c < L ? ln.c : 0; cand0[cs[ci]] &= ~bit(6); let mk = 0; for (let d = 1; d <= 5; d++) if (d <= L - 1) mk |= bit(d); cand0[cs[ci]] &= mk; addGroup(cs, g => chkLots(g, cs, ci)); }
     } else if (ty === 'esplit') {
       const ed = esDots(ln); if (L >= 3 && ed.length) { const segs = esSegs(L, ed); addGroup(cs, g => chkEsplit(g, cs, segs)); }
+    } else if (ty === 'cloneline' || ty === 'tiedline') {
+      const m = linePartner(p.lines, ln);
+      if (m && p.lines.indexOf(ln) < p.lines.indexOf(m)) {
+        if (ty === 'cloneline') { if (m.cells.length === L) for (let k = 0; k < L; k++) if (cs[k] !== m.cells[k]) addBin(cs[k], m.cells[k], (a, b) => a === b); }
+        else addGroup(Array.from(new Set(cs.concat(m.cells))), g => chkTied(g, cs, m.cells));
+      }
+    } else if (ty === 'turnline') {
+      for (let k = 1; k < L - 1; k++) { const tc = turnClassAt(cs, k); if (tc >= 0) cand0[cs[k]] &= TURN_MASK[tc]; }
+    } else if (ty === 'pointing') {
+      if (L >= 3) addGroup(cs, g => chkPointing(cs.map(i => g[i])));
+    } else if (ty === 'prodarrow') {
+      if (L >= 3) addGroup(cs, g => chkProdArrow(cs.map(i => g[i])));
+    } else if (ty === 'sumgap') {
+      if (L >= 3) addGroup(cs, g => chkSumGap(cs.map(i => g[i])));
     } else if (ty === 'gap') {
       if (L >= 3) addGroup(cs, g => chkGap(g, cs));
     } else if (ty === 'slow') {
@@ -1847,6 +2067,14 @@ function compile(p) {
     if (seqs.length < 2 || seqs.some(sq => sq.length !== N)) continue;
     addGroup(Array.from(new Set([].concat(...seqs))), g => chkOLine(g, ol, seqs));
   }
+  for (const t of (p.turtle || [])) {
+    why = 'Turtle route (its length is the digit in the circled cell)';
+    addGroup(turtleCells(t.a, 6).concat(t.a), g => chkTurtleD(g, t.a, t.d));
+  }
+  for (const t of (p.tsnake || [])) {
+    why = 'hidden ' + (t.t || 'thermo') + ' line (its length is the digit in the circled cell)';
+    addGroup(Array.from({ length: NN }, (_, i) => i), g => chkHidden(g, t.a, t.d, t.t));
+  }
   // outside clues
   for (const cl of p.clues) {
     why = (RING_LABEL[cl.kind] || 'outside') + ' clue ' + cl.val;
@@ -1859,6 +2087,10 @@ function compile(p) {
       else if (cl.kind === 'sk') addGroup(seq, g => chkSky(g, seq, T));
       else if (cl.kind === 'nr') addGroup(seq, g => chkRooms(g, seq, T));
       else if (cl.kind === 'ws') addGroup(seq, g => chkWsOut(g, seq, T));
+      else if (cl.kind === 'fr') addGroup(seq.slice(0, 3), g => chkFrame(g, seq, T));
+      else if (cl.kind === 'th') addGroup(seq, g => chkThOut(g, seq, T));
+      else if (cl.kind === 'tu') { const st = seq[0], dr = tuDir(seq); addGroup(turtleCells(st, T).concat(st), g => chkTurtle(g, st, dr, T)); }
+      else if (cl.kind === 'rs') { if (T === 1) { addBin(seq[0], seq[1], (a, b) => a < b); addBin(seq[1], seq[2], (a, b) => a < b); } else if (T === 2) { addBin(seq[0], seq[1], (a, b) => a > b); addBin(seq[1], seq[2], (a, b) => a > b); } }
     }
   }
   const useShade = usesShade(p);
@@ -2411,7 +2643,7 @@ function verify(p, g, sh) {
     if (ln.escape) {
       const boxes = escBoxes(ln);
       const R = chainR(cs0, boxes, i => [g[i], g[i]], k => clueRange(boxKind(boxes[k]), clueSeq(boxes[k]), g));
-      if (!R || !chkLineEsc(lineTypes(ln), R, +o.whisperDiff || 4) || (lineTypes(ln).includes('regsum') && !chkRegEsc(g, cs0, boxes, boxes.map(b => clueSeq(b)), p.regions))) errs.push('escaping line');
+      if (!R || !chkLineEsc(lineTypes(ln), R, +o.whisperDiff || 4, escCi(ln, boxes), escD(ln, boxes)) || (lineTypes(ln).includes('regsum') && !chkRegEsc(g, cs0, boxes, boxes.map(b => clueSeq(b)), p.regions))) errs.push('escaping line');
       continue;
     }
     const v = ln.cells.map(c => g[c]), L = v.length;
@@ -2448,6 +2680,19 @@ function verify(p, g, sh) {
     else if (ty === 'esplit') { const ed = esDots(ln); if (ed.length && !lineOK(['esplit'], v, true, { d: ed })) errs.push('Equal Split'); }
     else if (ty === 'lots') { if (L >= 2 && !lineOK(['lots'], v, true, { ci: ln.c > 0 && ln.c < L ? ln.c : 0 })) errs.push('Greater Lots'); }
     else if (ty === 'slow') { for (let k = 0; k + 1 < L; k++) if (v[k] > v[k + 1]) errs.push('slow thermo'); }
+    else if (ty === 'cloneline' || ty === 'tiedline') {
+      const m = linePartner(p.lines, ln);
+      if (!m) errs.push(ty === 'cloneline' ? 'Clone line (no partner)' : 'Tied line (no partner)');
+      else if (p.lines.indexOf(ln) < p.lines.indexOf(m)) {
+        const w = m.cells.map(i => g[i]);
+        if (ty === 'cloneline') { if (w.length !== v.length || v.some((x, k) => x !== w[k])) errs.push('Clone lines'); }
+        else if (v.reduce((a, b) => a + b, 0) !== w.reduce((a, b) => a + b, 0)) errs.push('Tied lines');
+      }
+    }
+    else if (ty === 'turnline') { for (let k = 1; k < L - 1; k++) { const tc = turnClassAt(ln.cells, k); if (tc < 0 || turnOfDigit(v[k]) !== tc) { errs.push('Turn line'); break; } } }
+    else if (ty === 'pointing') { if (L < 3 || !chkPointing(v)) errs.push('Pointing line'); }
+    else if (ty === 'prodarrow') { if (L < 3 || !lineOK(['prodarrow'], v, true)) errs.push('Product arrow'); }
+    else if (ty === 'sumgap') { if (L < 3 || !lineOK(['sumgap'], v, true)) errs.push('Sum-gap line'); }
     else if (ty === 'nabner') { for (let a = 0; a < L; a++) for (let b = a + 1; b < L; b++) if (Math.abs(v[a] - v[b]) < 2) errs.push('Nabner'); }
     else if (ty === 'darrow') { if (L >= 3) { let sm = 0; for (let k = 1; k < L - 1; k++) sm += v[k]; if (sm !== v[0] + v[L - 1]) errs.push('double arrow'); } }
     else if (ty === 'zipper') { if (L >= 3 && L % 2 === 1) { const m = (L - 1) >> 1; for (let k = 0; k < m; k++) if (v[k] + v[L - 1 - k] !== v[m]) errs.push('zipper'); } }
@@ -2520,9 +2765,21 @@ function verify(p, g, sh) {
       } else if (cl.kind === 'ws') {
         const n = v[v[0] - 1]; let s = 0; for (let k = 0; k < n; k++) s += v[k];
         if (s !== T) errs.push('ws');
+      } else if (cl.kind === 'fr') {
+        if (v[0] + v[1] + v[2] !== T) errs.push('fr');
+      } else if (cl.kind === 'th') {
+        const n = v[0]; let ok = false, s = 0;
+        if (n <= v.length - 1) for (let k = n; k < v.length; k++) { s += v[k]; if (s === T) ok = true; }
+        if (!ok) errs.push('th');
+      } else if (cl.kind === 'tu') {
+        if (!chkTurtle(g, seq[0], tuDir(seq), T)) errs.push('tu');
+      } else if (cl.kind === 'rs') {
+        if (!(T === 1 ? v[0] < v[1] && v[1] < v[2] : v[0] > v[1] && v[1] > v[2])) errs.push('rs');
       }
     }
   }
+  for (const t of (p.turtle || [])) if (!chkTurtle(g, t.a, t.d, g[t.a])) errs.push('Turtle route');
+  for (const t of (p.tsnake || [])) if (!countHidden(g, t.a, t.d, g[t.a], t.t)) errs.push('Hidden ' + (t.t || 'thermo') + ' line');
   for (const ol of (p.olines || [])) {
     const vals = ol.cells.map(([r, c]) => outVal(olKindOf(ol), clueSeq({ kind: olKindOf(ol), r, c }), g)), L = vals.length;
     if (vals.some(v => v == null)) { errs.push('outside line'); continue; }
@@ -2680,10 +2937,10 @@ function conflicts(p, model, grid) {
   return bad;
 }
 
-const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum' };
+const RING_LABEL = { lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum', tu: 'Turtle route', fr: 'Frame sum', th: 'Thrown Sum', rs: 'Rossini' };
 
 root.SX = { chkThrow, chkSling, chkPos, chkPole, chkWsIn, chkWsOut, wsRange, nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
-  stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, chkRegEsc, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, esDots, esSegs, esDotSets, esAny, chkEsplit, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
+  stdRegions, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, chkTurtle, chkTurtleD, chkHidden, countHidden, HID_MIN, tuDir, turtleCells, turnClassAt, turnOfDigit, linePartner, chkRegEsc, escCi, escD, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, esDots, esSegs, esDotSets, esAny, chkEsplit, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
   chkSum, chkXsum, chkSandwich, chkSky, lookSayCode, chkLookSay, verifyLookSay, chkSumEsc, chkLookSayEsc, chkLineEsc };
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -2721,6 +2978,9 @@ const VARIANTS = [
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
   { k: 'wsum', label: 'W-Sums', group: 'Sums' },
   { k: 'thrown', label: 'Thrown Sums', group: 'Sums' },
+  { k: 'frame', label: 'Frame sums', group: 'Sums' },
+  { k: 'rossini', label: 'Rossini clues', group: 'Sums' },
+  { k: 'outthrown', label: 'Thrown Sums (outside)', group: 'Sums' },
   { k: 'sandwich', label: 'Sandwich', group: 'Sums' },
   { k: 'skyscraper', label: 'Skyscraper', group: 'Sums' },
   { k: 'roomnumbers', label: 'Numbered Rooms', group: 'Sums' },
@@ -2733,6 +2993,12 @@ const VARIANTS = [
   { k: 'ksplit', label: 'Kropki split lines', group: 'Lines' },
   { k: 'dualarrow', label: 'Dual arrows', group: 'Lines' },
   { k: 'nabner', label: 'Nabner lines', group: 'Lines' },
+  { k: 'pointing', label: 'Pointing lines', group: 'Lines' },
+  { k: 'prodarrow', label: 'Product arrows', group: 'Lines' },
+  { k: 'sumgap', label: 'Sum-gap lines', group: 'Lines' },
+  { k: 'cloneline', label: 'Clone lines', group: 'Lines' },
+  { k: 'turnline', label: 'Turn lines', group: 'Lines' },
+  { k: 'tiedline', label: 'Tied lines', group: 'Lines' },
   { k: 'whisper', label: 'German whispers', group: 'Lines' },
   { k: 'renban', label: 'Renban', group: 'Lines' },
   { k: 'palindrome', label: 'Palindrome', group: 'Lines' },
@@ -2769,6 +3035,14 @@ const VARIANTS = [
   { k: 'clone', label: 'Clone regions', group: 'Grid rules' },
   { k: 'countcircles', label: 'Counting circles', group: 'Grid rules' },
   { k: 'zipper', label: 'Zipper lines', group: 'Lines' },
+  { k: 'turtle', label: 'Turtle lines', group: 'Hidden lines' },
+  { k: 'turtleout', label: 'Turtle clues (outside)', group: 'Hidden lines' },
+  { k: 'tsnake', label: 'Hidden thermo', group: 'Hidden lines' },
+  { k: 'hwhisper', label: 'Hidden German whispers', group: 'Hidden lines' },
+  { k: 'harrow', label: 'Hidden arrows', group: 'Hidden lines' },
+  { k: 'hrenban', label: 'Hidden renban', group: 'Hidden lines' },
+  { k: 'hparity', label: 'Hidden parity', group: 'Hidden lines' },
+  { k: 'hentropic', label: 'Hidden entropic', group: 'Hidden lines' },
   { k: 'evenodd', label: 'Even / Odd', group: 'Pair clues' },
   { k: 'outxsum', label: 'X-sums on lines', group: 'Outside lines' },
   { k: 'outwsum', label: 'W-sums on lines', group: 'Outside lines' },
@@ -2785,12 +3059,12 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, esplit: 1, ksplit: 1, dualarrow: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
+const MIN_KEEP = { killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, pointing: 1, prodarrow: 1, sumgap: 1, cloneline: 1, tiedline: 1, turnline: 1, tsnake: 2, hwhisper: 2, harrow: 2, hrenban: 2, hparity: 2, hentropic: 2, turtle: 2, turtleout: 2, esplit: 1, ksplit: 1, dualarrow: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, wsum: 4, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
-  outxsum: 1, outwsum: 3, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
+  frame: 2, rossini: 2, outthrown: 2, outxsum: 1, outwsum: 3, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
    floor during redundant-constraint pruning below, instead of always collapsing toward MIN_KEEP */
-const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'ksplit', 'dualarrow']);
+const LINE_DENSITY_KEYS = new Set(['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'ksplit', 'dualarrow', 'pointing', 'prodarrow', 'sumgap', 'cloneline', 'tiedline', 'turnline']);
 
 function randomRegions(rng) {
   for (let attempt = 0; attempt < 800; attempt++) {
@@ -2847,6 +3121,8 @@ function clueValue(cl, sol) {
   }
   if (cl.kind === 'nr') { const n = v[0]; return v[n - 1]; }
   if (cl.kind === 'ws') { const n = v[v[0] - 1]; let s = 0; for (let k = 0; k < n; k++) s += v[k]; return s; }
+  if (cl.kind === 'fr') return v[0] + v[1] + v[2];
+  if (cl.kind === 'rs') return v[0] < v[1] && v[1] < v[2] ? 1 : v[0] > v[1] && v[1] > v[2] ? 2 : 0;
   let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
   return c;
 }
@@ -2894,7 +3170,7 @@ function sampleLines(sol, rng, o) {
       const path = [start], inPath = new Set(path);
       while (path.length < L) {
         const last = path[path.length - 1];
-        const opts = nbr8[last].filter(j => !inPath.has(j) && crossOK(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
+        const opts = (o.orth ? nbr4 : nbr8)[last].filter(j => !inPath.has(j) && crossOK(j) && o.prefixOK(path.concat(j).map(k => sol[k]), path.concat(j), L));
         if (!opts.length) break;
         const j = pick(opts, rng); path.push(j); inPath.add(j);
       }
@@ -3523,11 +3799,12 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     const sumTargets = ['xs', 'sw', 'sk', 'nr'].filter(k => V.has(TARGET_VARIANT[k]));
     const codeTargets = ['sk', 'nr'].filter(k => V.has(TARGET_VARIANT[k]));
     const lineTargets = ['xs', 'ws', 'sw', 'sk', 'nr', 'lk'].filter(k => V.has(TARGET_VARIANT[k]));
-    const escLineTypes = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic', 'modular', 'zigzag'].filter(t => V.has(t));
+    const escLineTypes = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic', 'modular', 'zigzag', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'pointing', 'prodarrow', 'sumgap', 'esplit', 'ksplit', 'duality', 'dualarrow'].filter(t => V.has(t));
     const regTargets = lineTargets.filter(k => k === 'nr' || k === 'ws'); // region sum escape lines end in hidden N boxes
     if (V.has('regsum') && regTargets.length) escLineTypes.push('regsum');
     const cageEligible = sumTargets.length || codeTargets.length;
     const lineEligible = lineTargets.length && escLineTypes.length;
+    const regTargetsOnly = t => t.some(k => k !== 'lk'); // re-entry needs a non-Little-Killer outside box
     const escClaimed = new Set(plainCageCells), escCageCells = new Set(); // cells held by escaping CAGES (plain cages avoid these; lines may be overlapped)
     const maxEsc = 3;
     let made = 0;
@@ -3645,11 +3922,19 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
        through an outside box, may continue along the outside ring through up to two more boxes (each
        with its own outside-clue rule), and may re-enter the grid. Every candidate is validated against
        the real solution with the exact same range check the solver and verifier use (S.chkLineEsc). */
-    const attemptLine = wantBoxes => {
+    const attemptLine = (wantBoxes, wantRe) => {
       let nb = wantBoxes || pickCount();
       const multiKinds = lineTargets.filter(k => k !== 'lk');
       if (nb > 1 && !multiKinds.length) { if (wantBoxes) return false; nb = 1; }
-      const type = pick(escLineTypes, rng);
+      const pickedT = pick(escLineTypes, rng);
+      // Duality / Dual arrows: the line carries two rules at once (Dual arrows: an arrow plus one more); Equal Split and Kropki split become 'esplit'
+      const comboPool = S.LINE_RULES.filter(r => r !== 'regsum');
+      let types, type;
+      if (pickedT === 'duality') { const a = pick(comboPool, rng); types = [a, pick(comboPool.filter(r => r !== a), rng)]; }
+      else if (pickedT === 'dualarrow') types = ['arrow', pick(comboPool.filter(r => r !== 'arrow'), rng)];
+      else types = [pickedT === 'ksplit' ? 'esplit' : pickedT];
+      type = types[0];
+      const isSplit = pickedT === 'esplit' || pickedT === 'ksplit';
       const isReg = type === 'regsum';
       const multiKinds2 = isReg ? multiKinds.filter(k => k === 'nr' || k === 'ws') : multiKinds;
       const kind = isReg ? pick(regTargets, rng) : (nb > 1 ? pick(multiKinds, rng) : pick(lineTargets, rng));
@@ -3675,7 +3960,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
         const x = pick(ok, rng); taken.add(slotKey(x)); boxes.push({ kind: k2, r: x.r, c: x.c });
       }
       if (wantBoxes && boxes.length < wantBoxes) return false;
-      const minL = (type === 'regsum') ? 3 : (type === 'between' || type === 'entropic' || type === 'modular' || type === 'zigzag') ? 3 : 2;
+      const minL = (type === 'regsum' || types.length > 1 || isSplit) ? 3 : (type === 'between' || type === 'entropic' || type === 'modular' || type === 'zigzag') ? 3 : 2;
       const grow = (start, len, avoid) => {
         const seg = [start], inSeg = new Set(seg);
         while (seg.length < len) {
@@ -3686,7 +3971,8 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
         }
         return seg;
       };
-      const reenter = boxes.length > 1 && boxes[0].kind !== 'lk' && rng() < 0.55;
+      const reenter = boxes.length > 1 && boxes[0].kind !== 'lk' && (wantRe || rng() < 0.55);
+      if (wantRe && !reenter) return false;
       const path = grow(anchor, reenter ? 1 + Math.floor(rng() * 3) : minL + Math.floor(rng() * 2), new Set());
       let back = [];
       if (reenter) {
@@ -3705,7 +3991,24 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       const L = cells.length;
       // a W-Sum box carries the N value on the line; its arrow's sum becomes a separate given clue (added with the line below)
       const R = S.chainR(cells, bx, i => [sol[i], sol[i]], k => { const v = clueValue(bx[k].kind === 'ws' ? Object.assign({}, bx[k], { kind: 'nr' }) : bx[k], sol); return [v, v]; });
-      if (!R || !S.chkLineEsc([type], R, whisperDiff)) return false;
+      let lotsC = 0, dCells = null, kEdges = null;
+      if (!R) return false;
+      if (type === 'lots') {
+        const okC = []; for (let c = 0; c < L; c++) { const ci = c + bx.filter(b => b.pos <= c).length; if (S.chkLineEsc(['lots'], R, whisperDiff, ci)) okC.push(c); }
+        if (!okC.length) return false; lotsC = pick(okC, rng);
+      } else if (isSplit) {
+        // dots sit on borders between two grid cells (never next to an outside box); outside values count toward their segment
+        const chainCell = []; { let bi = 0; for (let k = 0; k <= L; k++) { while (bi < bx.length && bx[bi].pos === k) { chainCell.push(-1); bi++; } if (k < L) chainCell.push(cells[k]); } }
+        const vals = R.map(r => r[0]);
+        const kt = (x, y) => (x === 2 * y || y === 2 * x) ? 'black' : Math.abs(x - y) === 1 ? 'white' : null;
+        const adj = (a, b) => Math.abs(Math.floor(a / 6) - Math.floor(b / 6)) + Math.abs(a % 6 - b % 6) === 1;
+        const cutOK = k => chainCell[k] >= 0 && chainCell[k - 1] >= 0 && (pickedT !== 'ksplit' || (adj(chainCell[k], chainCell[k - 1]) && !!kt(vals[k - 1], vals[k])));
+        const sets = S.esDotSets(vals, 2, 4, 3, cutOK);
+        if (!sets.length) return false;
+        const dch = pick(sets, rng), before = k => chainCell.slice(0, k).filter(x => x < 0).length;
+        dCells = dch.map(k => k - before(k));
+        if (pickedT === 'ksplit') kEdges = dch.map(k => ({ a: chainCell[k - 1], b: chainCell[k], t: kt(vals[k - 1], vals[k]) }));
+      } else if (!S.chkLineEsc(types, R, whisperDiff)) return false;
       if (type === 'regsum') {
         const eseqs = bx.map(b => S.clueSeq(b));
         if (!S.chkRegEsc(sol, cells, bx, eseqs, regions)) return false;
@@ -3720,9 +4023,13 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       [cells[0], cells[L - 1], anchor].concat(back.length ? [back[0]] : []).forEach(c => usedEndpoints.add(c));
       const first = bx[0], escape = Object.assign({}, first); delete escape.pos; escape.idx = first.pos >= L ? L - 1 : 0;
       const ln = { type, cells: cells.slice(), escape };
+      if (types.length > 1) ln.also = types.slice(1);
+      if (pickedT === 'dualarrow') ln.da = 1;
+      if (type === 'lots' && lotsC > 0) ln.c = lotsC;
+      if (dCells) ln.d = dCells;
       if (bx.length > 1 || (first.pos > 0 && first.pos < L)) ln.escs = bx.map(b => Object.assign({}, b));
       const wsClues = bx.filter(b => b.kind === 'ws').map(b => ({ kind: 'ws', r: b.r, c: b.c, val: clueValue({ kind: 'ws', r: b.r, c: b.c }, sol) }));
-      add('escape', p => { p.lines.push(JSON.parse(JSON.stringify(ln))); wsClues.forEach(q => p.clues.push(Object.assign({}, q))); }, false, ['escline'].concat(bx.length > 1 ? ['escmulti'] : []));
+      add('escape', p => { p.lines.push(JSON.parse(JSON.stringify(ln))); if (kEdges) kEdges.forEach(e => p.edges.push(Object.assign({}, e))); wsClues.forEach(q => p.clues.push(Object.assign({}, q))); }, false, ['escline'].concat(bx.length > 1 ? ['escmulti'] : [], bx.some(b => b.pos > 0 && b.pos < L) ? ['escreenter'] : []));
       return true;
     };
 
@@ -3731,13 +4038,15 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     let tries = 0;
     {
       const wantN = () => rng() < 0.65 ? 2 : 3;
-      for (let k = 0; k < 300 && !made; k++) {
+      for (let k = 0; k < 1500 && !made; k++) {
         const useLine = lineEligible && (!cageEligible || rng() < 0.5);
         const n2 = wantN(), got = useLine ? attemptLine(n2) : (cageEligible ? attemptCage(n2) : false);
         if (got) made++;
       }
+      // a line that leaves the grid through two or more outside boxes and comes back in, whenever one can be built
+      if (lineEligible && regTargetsOnly(lineTargets)) for (let k = 0; k < 1500; k++) if (attemptLine(rng() < 0.65 ? 2 : 3, true)) { made++; break; }
       if (lineEligible && !items.some(it => it.tags && it.tags.includes('escline'))) {
-        for (let k = 0; k < 400; k++) if (attemptLine()) { made++; break; }
+        for (let k = 0; k < 3000; k++) if (attemptLine()) { made++; break; }
       }
     }
     while (made < maxEsc && tries < 500 && (cageEligible || lineEligible)) {
@@ -3849,6 +4158,80 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
         const d = pick(S.esDotSets(v, 2, 4, 3, cutOKf(v, cs)), rng);
         add('ksplit', p => { p.lines.push({ type: 'esplit', cells: cs.slice(), d: d.slice() }); d.forEach(k => p.edges.push({ a: cs[k - 1], b: cs[k], t: kt(v[k - 1], v[k]) })); }, lk('ksplit'));
       });
+  }
+  [['pointing', 3, 6, 5, 6000], ['prodarrow', 3, 5, 4, 12000], ['sumgap', 3, 6, 4, 8000]].forEach(([key, minL, maxL, dflt, att]) => {
+    if (!V.has(key)) return;
+    sampleLines(sol, rng, { minL, maxL, max: capOf(key, dflt), attempts: att, lenBias, usedEndpoints, cellCross, lineKey: key,
+      prefixOK: (v, c, Lt) => S.lineOK([key], v, false, { wd: wdv, L: Lt }),
+      finalOK: v => S.lineOK([key], v, true, { wd: wdv }) })
+      .forEach(cs => add(key, p => p.lines.push({ type: key, cells: cs.slice() }), lk(key)));
+  });
+  // Clone lines (same digits in the same order) and Tied lines (same digit sum): each puzzle item is a PAIR of lines sharing a letter or number
+  [['cloneline', 'ABCDEFGH', 3, 5], ['tiedline', '12345678', 3, 4]].forEach(([key, ids, minL, maxL]) => {
+    if (!V.has(key)) return;
+    const want = capOf(key, 2); let made = 0, att = 0;
+    const used = new Set();
+    const okCell = j => { if (used.has(j)) return false; const ex = cellCross.get(j); return !(ex && ex.length >= 2); };
+    while (made < want && att++ < 4000) {
+      const L = minL + Math.floor(rng() * (maxL - minL + 1)), start = Math.floor(rng() * NN);
+      if (!okCell(start) || usedEndpoints.has(start)) continue;
+      const A = [start], inA = new Set(A);
+      while (A.length < L) { const o = nbr8[A[A.length - 1]].filter(j => !inA.has(j) && okCell(j)); if (!o.length) break; const j = pick(o, rng); A.push(j); inA.add(j); }
+      if (A.length < L || usedEndpoints.has(A[A.length - 1])) continue;
+      const vA = A.map(k => sol[k]), sumA = vA.reduce((x, y) => x + y, 0);
+      // find a partner B that is disjoint from A and from every line already claimed
+      const cands = [];
+      const dfs = (path, tot) => {
+        if (cands.length > 40) return;
+        const k = path.length;
+        if (key === 'cloneline' ? k === L : (k >= 2 && tot === sumA)) { if (!usedEndpoints.has(path[0]) && !usedEndpoints.has(path[k - 1]) && path[0] !== A[0] && path[k - 1] !== A[0]) cands.push(path.slice()); if (key === 'cloneline') return; }
+        if (k >= (key === 'cloneline' ? L : 5) || (key === 'tiedline' && tot >= sumA)) return;
+        for (const j of nbr8[path[k - 1]]) {
+          if (path.includes(j) || inA.has(j) || !okCell(j)) continue;
+          if (key === 'cloneline' && sol[j] !== vA[k]) continue;
+          path.push(j); dfs(path, tot + sol[j]); path.pop();
+        }
+      };
+      for (const s0 of shuffle(Array.from({ length: NN }, (_, i) => i), rng)) {
+        if (inA.has(s0) || !okCell(s0) || (key === 'cloneline' && sol[s0] !== vA[0])) continue;
+        dfs([s0], sol[s0]); if (cands.length) break;
+      }
+      if (!cands.length) continue;
+      const B = pick(cands, rng), id = ids[made % ids.length];
+      if (key === 'tiedline' && B.length === A.length && B.every((c, i) => sol[c] === sol[A[i]])) continue; // identical to a clone: pick something more interesting
+      [A, B].forEach(path => { path.forEach(c => { used.add(c); const ex = cellCross.get(c); if (ex) ex.push(key); else cellCross.set(c, [key]); }); usedEndpoints.add(path[0]); usedEndpoints.add(path[path.length - 1]); });
+      add(key, p => { p.lines.push({ type: key, cells: A.slice(), pair: id }); p.lines.push({ type: key, cells: B.slice(), pair: id }); }, lk(key));
+      made++;
+    }
+  });
+  if (V.has('turtle')) {
+    // hidden routes: a circle and an arrow for the first step; the digit in the circled cell is the route's length (2-6)
+    const want = capOf('turtle', 4), starts = new Set(), DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; let made = 0, att = 0;
+    while (made < want && att++ < 4000) {
+      const a = Math.floor(rng() * NN), dir = pick(DIRS, rng);
+      if (starts.has(a) || sol[a] < 2 || !S.chkTurtle(sol, a, dir, sol[a])) continue;
+      starts.add(a); made++;
+      add('turtle', p => p.turtle.push({ a, d: dir.slice() }), lk('turtle'));
+      items[items.length - 1].hopCell = a;
+    }
+  }
+  for (const [vk, rule] of [['tsnake', 'thermo'], ['hwhisper', 'whisper'], ['harrow', 'arrow'], ['hrenban', 'renban'], ['hparity', 'parity'], ['hentropic', 'entropic']]) {
+    if (!V.has(vk)) continue;
+    // hidden lines: a circle holding the length, an arrow to the first cell; the solution grid has exactly one valid route of that length
+    const want = capOf(vk, 4), starts = new Set(), DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; let made = 0, att = 0;
+    while (made < want && att++ < 6000) {
+      const a = Math.floor(rng() * NN), dir = pick(DIRS, rng), n = sol[a];
+      if (starts.has(a) || n < S.HID_MIN[rule] || S.countHidden(sol, a, dir, n, rule) !== 1) continue;
+      starts.add(a); made++;
+      add(vk, p => p.tsnake.push(rule === 'thermo' ? { a, d: dir.slice() } : { a, d: dir.slice(), t: rule }), lk(vk));
+      items[items.length - 1].hopCell = a;
+    }
+  }
+  if (V.has('turnline')) {
+    sampleLines(sol, rng, { minL: 3, maxL: 7, max: capOf('turnline', 5), attempts: 8000, orth: true, lenBias, usedEndpoints, cellCross, lineKey: 'turnline',
+      prefixOK: (v, c, Lt) => S.lineOK(['turnline'], v, false, { wd: wdv, L: Lt, cells: c }),
+      finalOK: (v, cells) => S.lineOK(['turnline'], v, true, { wd: wdv, cells }) })
+      .forEach(cs => add('turnline', p => p.lines.push({ type: 'turnline', cells: cs.slice() }), lk('turnline')));
   }
   if (V.has('nabner')) {
     sampleLines(sol, rng, { lens: [2, 3, 3], minL: 2, maxL: 3, max: capOf('nabner', 5), attempts: 6000, lenBias, usedEndpoints, cellCross, lineKey: 'nabner',
@@ -3989,7 +4372,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
     }
   };
-  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers'].filter(k => V.has(k)).length || 1;
+  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers', 'frame', 'rossini', 'outthrown', 'turtleout'].filter(k => V.has(k)).length || 1;
   const share = Math.max(3, Math.floor((28 - usedRing.size) / nRing));
   if (V.has('littlekiller')) ringPool('littlekiller', 'lk', Math.min(16, share), ringSlots('lk'));
   if (V.has('xsum')) ringPool('xsum', 'xs', Math.min(10, share), ringSlots('xs'));
@@ -4030,6 +4413,37 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
   }
   if (V.has('skyscraper')) ringPool('skyscraper', 'sk', Math.min(10, share), ringSlots('sk'));
   if (V.has('roomnumbers')) ringPool('roomnumbers', 'nr', Math.min(10, share), ringSlots('nr'));
+  if (V.has('frame')) ringPool('frame', 'fr', Math.min(10, share), ringSlots('fr'));
+  if (V.has('rossini')) {
+    // only edges whose first three digits are strictly monotone can carry an arrow
+    const slots = ringSlots('rs').filter(cl => clueValue(cl, sol) > 0);
+    ringPool('rossini', 'rs', Math.min(10, share), slots);
+  }
+  if (V.has('turtleout')) {
+    // the clue is a route length 3-8; pick one whose route stays in the grid and never revisits a cell
+    let n = 0;
+    for (const cl of shuffle(ringSlots('tu'), rng)) {
+      if (n >= Math.min(8, share)) break;
+      const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
+      const seq = S.clueSeq(cl), valid = [3, 4, 5, 6, 7, 8].filter(len => S.chkTurtle(sol, seq[0], S.tuDir(seq), len));
+      if (!valid.length) continue;
+      const val = pick(valid, rng); usedRing.add(rk); n++;
+      add('turtleout', p => p.clues.push(Object.assign({}, cl, { val })));
+    }
+  }
+  if (V.has('outthrown')) {
+    let n = 0;
+    for (const cl of shuffle(ringSlots('th'), rng)) {
+      if (n >= Math.min(8, share)) break;
+      const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
+      const v = S.clueSeq(cl).map(i => sol[i]), nn = v[0];
+      if (nn > 5) continue;
+      const len = 1 + Math.floor(rng() * (v.length - nn)); // hidden throw length
+      let val = 0; for (let k = nn; k < nn + len; k++) val += v[k];
+      usedRing.add(rk); n++;
+      add('outthrown', p => p.clues.push(Object.assign({}, cl, { val })));
+    }
+  }
 
   const key = (a, b) => [a, b];
   if (V.has('consecutive'))
@@ -4982,9 +5396,9 @@ const app = {
   extras: [], olExtras: [], olGen: null, selLine: -1, dualRules: new Set(X.LINE_RULES), dualMax: 3, genDensity: 'normal', genLenBias: 'normal', genCounts: {}, cipherK: 10,
   assist: { on: false, level: 2, cur: null, C: null, sig: '', auto: false, timer: null }
 };
-const RULE_LABEL = { esplit: 'Equal Split', lots: 'Greater Lots', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag' };
-const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit']; // line rules that stand alone (never layered with another rule)
-const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'];
+const RULE_LABEL = { turnline: 'Turn line', cloneline: 'Clone line', tiedline: 'Tied line', pointing: 'Pointing', prodarrow: 'Product arrow', sumgap: 'Sum-gap', esplit: 'Equal Split', lots: 'Greater Lots', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner', mountain: 'Mountain', gap: 'Equal-gap', thermo: 'Thermo', whisper: 'Whisper', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', arrow: 'Arrow', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag' };
+const SOLO_LINES = ['zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'pointing', 'prodarrow', 'sumgap', 'cloneline', 'tiedline', 'turnline']; // line rules that stand alone (never layered with another rule)
+const COUNT_KEYS = ['thermo', 'arrow', 'renban', 'whisper', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'duality', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'pointing', 'prodarrow', 'sumgap', 'cloneline', 'tiedline', 'turnline'];
 const PAL = ['Clear', 'Shade', 'Land', 'Red', 'Amber', 'Green', 'Blue', 'Purple', 'Teal'];
 
 /* ---------- puzzle helpers ---------- */
@@ -5002,7 +5416,8 @@ function normalize(o) {
   p.cages = ((o && o.cages) || []).filter(c => Array.isArray(c.cells) && c.cells.length && c.cells.every(i => i >= 0 && i < NN));
   p.cages.forEach(c => { if (c.type === 'sumprod') c.dots = (Array.isArray(c.dots) ? c.dots : []).filter(i => c.cells.includes(i)); });
   p.lines = ((o && o.lines) || []).filter(l => Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(i => i >= 0 && i < NN));
-  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (l.cells.length >= 3 && l.cells.length % 2 === 1)) && (l.type !== 'darrow' || l.cells.length >= 3) && (l.type !== 'nabner' || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || l.cells.length >= 3) && (l.type !== 'lots' || l.cells.length >= 3) && (l.type !== 'esplit' || (l.cells.length >= 3 && X.esDots(l).length >= 1)));
+  const cl = l => l.cells.length + (l.escape ? X.escBoxes(l).length : 0); // chain length: grid cells plus outside boxes
+  p.lines = p.lines.filter(l => X.LINE_ALL.includes(l.type) && (l.type !== 'zipper' || (cl(l) >= 3 && cl(l) % 2 === 1)) && (l.type !== 'darrow' || cl(l) >= 3) && (l.type !== 'nabner' || l.escape || l.cells.length <= 3) && ((l.type !== 'mountain' && l.type !== 'gap') || cl(l) >= 3) && (l.type !== 'lots' || cl(l) >= 3) && ((l.type !== 'pointing' && l.type !== 'prodarrow' && l.type !== 'sumgap') || cl(l) >= 3) && (l.type !== 'turnline' || (cl(l) >= 3 && l.cells.every((c, k) => !k || Math.abs(rowOf(c) - rowOf(l.cells[k - 1])) + Math.abs(colOf(c) - colOf(l.cells[k - 1])) === 1))) && (l.type !== 'esplit' || (cl(l) >= 3 && X.esDots(l).length >= 1)));
   p.lines.forEach(l => {
     l.also = SOLO_LINES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.LINE_RULES.includes(t) && t !== l.type)));
     if (!l.also.length) delete l.also;
@@ -5012,6 +5427,12 @@ function normalize(o) {
     if (l.da && !(l.type === 'arrow' && l.also && l.also.length === 1 && l.also[0] !== 'regsum')) delete l.da; else if (l.da) l.da = 1;
     if (l.branch && !(l.type === 'arrow' && (!l.also || l.da) && !l.escape && X.branchOK(l.cells, l.branch))) delete l.branch;
   });
+  { // Clone / Tied lines come in pairs that share an id; an unpaired line (or a clone pair of different lengths) is dropped
+    const grp = {};
+    p.lines.forEach(l => { if (l.type === 'cloneline' || l.type === 'tiedline') { l.pair = l.pair == null ? '' : String(l.pair).slice(0, 2); (grp[l.type + ':' + l.pair] = grp[l.type + ':' + l.pair] || []).push(l); } });
+    p.lines = p.lines.filter(l => !(l.type === 'cloneline' || l.type === 'tiedline') || (l.pair !== '' && grp[l.type + ':' + l.pair].length === 2 && (l.type !== 'cloneline' || grp[l.type + ':' + l.pair][0].cells.length === grp[l.type + ':' + l.pair][1].cells.length)));
+    p.lines.forEach(l => { if (l.type !== 'cloneline' && l.type !== 'tiedline') delete l.pair; });
+  }
   p.edges = ((o && o.edges) || []).filter(e => e.a >= 0 && e.a < NN && e.b >= 0 && e.b < NN && e.a !== e.b && ['cons', 'white', 'black', 'X', 'V', 'gt', 'prime', 'far'].includes(e.t)).map(e => {
     const q = { a: e.a, b: e.b, t: e.t };
     if ((e.t === 'white' || e.t === 'black') && Number.isInteger(+e.n) && +e.n >= (e.t === 'white' ? 1 : 2) && +e.n <= 6) q.n = +e.n;
@@ -5039,9 +5460,11 @@ function normalize(o) {
     { const sp = new Set(); p.pk = ((o && o.pk) || []).filter(h => h && Number.isInteger(h.cell) && h.cell >= 0 && h.cell < NN && Math.abs(h.dr || 0) + Math.abs(h.dc || 0) === 1 && (h.t === 'w' || h.t === 'b') && X.hopRay(h.cell, h.dr, h.dc).length >= 1 && !sp.has(h.cell) && sp.add(h.cell)).map(h => ({ cell: h.cell, dr: h.dr, dc: h.dc, t: h.t })); }
   { const sv = new Set(); p.cmax = ((o && o.cmax) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && [0, 1, 2, 3].includes(x.k) && !sv.has(x.r + ',' + x.c) && sv.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c, k: x.k }));
     const sb = new Set(); p.bat = ((o && o.bat) || []).filter(x => x && Number.isInteger(x.r) && Number.isInteger(x.c) && X.quadCells(x.r, x.c) && !sb.has(x.r + ',' + x.c) && sb.add(x.r + ',' + x.c)).map(x => ({ r: x.r, c: x.c })); }
+  p.turtle = ((o && o.turtle) || []).filter(t => t && Number.isInteger(t.a) && t.a >= 0 && t.a < NN && Array.isArray(t.d) && t.d.length === 2 && Math.abs(t.d[0]) + Math.abs(t.d[1]) === 1 && inCell(rowOf(t.a) + t.d[0], colOf(t.a) + t.d[1])).map(t => ({ a: t.a, d: [t.d[0], t.d[1]] })).filter((t, k, arr) => arr.findIndex(x => x.a === t.a) === k);
+  p.tsnake = ((o && o.tsnake) || []).filter(t => t && Number.isInteger(t.a) && t.a >= 0 && t.a < NN && Array.isArray(t.d) && t.d.length === 2 && Math.abs(t.d[0]) + Math.abs(t.d[1]) === 1 && inCell(rowOf(t.a) + t.d[0], colOf(t.a) + t.d[1])).map(t => (['whisper', 'arrow', 'renban', 'parity', 'entropic'].includes(t.t) ? { a: t.a, d: [t.d[0], t.d[1]], t: t.t } : { a: t.a, d: [t.d[0], t.d[1]] })).filter((t, k, arr) => arr.findIndex(x => x.a === t.a) === k);
   p.axia = Array.from(new Set(((o && o.axia) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
   p.loc = Array.from(new Set(((o && o.loc) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
-  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'ws', 'sw', 'sk', 'nr'].includes(c.kind));
+  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'xs', 'ws', 'sw', 'sk', 'nr', 'fr', 'th', 'rs', 'tu'].includes(c.kind) && (c.kind !== 'rs' || c.val === 1 || c.val === 2) && (c.kind !== 'tu' || (Number.isInteger(+c.val) && +c.val >= 3 && +c.val <= 9)));
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
   p.olines = ((o && o.olines) || []).filter(l => l && X.olAllowed(l.type, l.kind) && ['xs', 'ws', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
   p.olines.forEach(l => { l.also = X.OWN_LINE_RULES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.olAllowed(t, l.kind) && !X.OWN_LINE_RULES.includes(t) && t !== l.type))); if (!l.also.length) delete l.also; });
@@ -5085,7 +5508,7 @@ function normalize(o) {
   return p;
 }
 const hashOpts = o => { const q = Object.assign({}, o); if (!q.windows) delete q.windows; if (!q.balanced) delete q.balanced; if (!q.pole) delete q.pole; if (!q.twofive) delete q.twofive; if (!q.caves) delete q.caves; if (!q.snake) delete q.snake; return q; };
-const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.pk && p.pk.length ? [['pk', p.pk]] : [], p.echo && p.echo.length ? [['echo', p.echo]] : [], p.wsum && p.wsum.length ? [['wsum', p.wsum]] : [], p.sling && p.sling.length ? [['sling', p.sling]] : [], p.throw && p.throw.length ? [['throw', p.throw]] : [], p.axia && p.axia.length ? [['axia', p.axia]] : [], p.crowd && p.crowd.length ? [['crowd', p.crowd]] : [], p.spin && p.spin.length ? [['spin', p.spin]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : [], p.sn ? [['sn', p.sn]] : []));
+const hashOf = p => JSON.stringify([p.regions, p.givens, hashOpts(p.opts), p.cages, p.lines, p.edges, p.parity, p.clues, p.marks, p.mval, p.paint, p.olines, p.quads, p.cipher || null].concat(p.ext && p.ext.length ? [p.ext] : [], p.cc && p.cc.length ? [['cc', p.cc]] : [], p.clones && p.clones.length ? [p.clones] : [], p.hop && p.hop.length ? [['hop', p.hop]] : [], p.pk && p.pk.length ? [['pk', p.pk]] : [], p.echo && p.echo.length ? [['echo', p.echo]] : [], p.wsum && p.wsum.length ? [['wsum', p.wsum]] : [], p.sling && p.sling.length ? [['sling', p.sling]] : [], p.throw && p.throw.length ? [['throw', p.throw]] : [], p.axia && p.axia.length ? [['axia', p.axia]] : [], p.turtle && p.turtle.length ? [['turtle', p.turtle]] : [], p.tsnake && p.tsnake.length ? [['tsnake', p.tsnake]] : [], p.crowd && p.crowd.length ? [['crowd', p.crowd]] : [], p.spin && p.spin.length ? [['spin', p.spin]] : [], p.cmax && p.cmax.length ? [['cmax', p.cmax]] : [], p.bat && p.bat.length ? [['bat', p.bat]] : [], p.loc && p.loc.length ? [['loc', p.loc]] : [], p.sn ? [['sn', p.sn]] : []));
 const isStd = p => p.regions.every((v, i) => v === X.stdRegions()[i]);
 const getModel = () => app.model || (app.model = X.compile(app.puzzle));
 function getSol() {
@@ -5133,7 +5556,7 @@ function variantLabels(p) {
   if (p.cipher) L.push('Cipher');
   if (p.cages.some(c => c.mystery)) L.push('Mystery Cages');
   if (p.cages.some(c => c.escape) || p.lines.some(l => l.escape)) L.push('Escape the Grid');
-  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines', lots: 'Greater Lots', esplit: 'Equal split lines' };
+  const nm = { thermo: 'Thermo', arrow: 'Arrow', whisper: 'Whispers', renban: 'Renban', palindrome: 'Palindrome', between: 'Between', regsum: 'Region sum', parity: 'Parity', entropic: 'Entropic', modular: 'Modular', zigzag: 'Zigzag', zipper: 'Zipper', darrow: 'Double arrow', slow: 'Slow thermo', nabner: 'Nabner lines', mountain: 'Mountain lines', gap: 'Equal-gap lines', lots: 'Greater Lots', esplit: 'Equal split lines', turnline: 'Turn lines', cloneline: 'Clone lines', tiedline: 'Tied lines', pointing: 'Pointing lines', prodarrow: 'Product arrows', sumgap: 'Sum-gap lines' };
   if (p.quads.length) L.push('Quadruples');
   p.lines.forEach(l => X.lineTypes(l).forEach(t => has.add(nm[t])));
   has.forEach(x => x && L.push(x));
@@ -5143,7 +5566,7 @@ function variantLabels(p) {
   if (e.has('cons')) L.push('Consecutive'); if (o.nonconsec && !e.has('cons')) L.push('Non-consecutive');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && !x.n)) L.push('Kropki');
   if (p.edges.some(x => (x.t === 'white' || x.t === 'black') && x.n)) L.push('Numbered Kropki');
-  if (e.has('prime')) L.push('Prime dots'); if (e.has('far')) L.push('Far bars'); if (p.echo && p.echo.length) L.push('Echo arrows'); if (p.sling && p.sling.length) L.push('Slingshot arrows'); if (p.axia && p.axia.length) L.push('Axia cells'); if (p.throw && p.throw.length) L.push('Thrown Sums'); if ((p.wsum && p.wsum.length) || p.clues.some(c => c.kind === 'ws')) L.push('W-Sums'); if (p.crowd && p.crowd.length) L.push('Crowd cells'); if (p.spin && p.spin.length) L.push('Spinners'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.pk && p.pk.length) L.push('Projected Kropki'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
+  if (e.has('prime')) L.push('Prime dots'); if (e.has('far')) L.push('Far bars'); if (p.turtle && p.turtle.length) L.push('Turtle lines'); { const HL = { whisper: 'Hidden German whispers', arrow: 'Hidden arrows', renban: 'Hidden renban', parity: 'Hidden parity', entropic: 'Hidden entropic' }, hs = new Set((p.tsnake || []).map(t => t.t ? HL[t.t] : 'Hidden thermo')); hs.forEach(x => L.push(x)); } if (p.echo && p.echo.length) L.push('Echo arrows'); if (p.sling && p.sling.length) L.push('Slingshot arrows'); if (p.axia && p.axia.length) L.push('Axia cells'); if (p.throw && p.throw.length) L.push('Thrown Sums'); if ((p.wsum && p.wsum.length) || p.clues.some(c => c.kind === 'ws')) L.push('W-Sums'); if (p.crowd && p.crowd.length) L.push('Crowd cells'); if (p.spin && p.spin.length) L.push('Spinners'); if (e.has('gt')) L.push('Greater-than signs'); if (p.ext && p.ext.length) L.push('Extremes'); if (p.cc && p.cc.length) L.push('Counting circles'); if (p.hop && p.hop.length) L.push('Hop arrows'); if (p.pk && p.pk.length) L.push('Projected Kropki'); if (p.cmax && p.cmax.length) L.push('Corner max arrows'); if (p.bat && p.bat.length) L.push('Battenburg'); if (p.loc && p.loc.length) L.push('Six locators'); if (p.clones && p.clones.some(g => g.regs.length > 1)) L.push('Clone regions');
   if (e.has('X') || e.has('V')) L.push('XV');
   if (p.parity.some(x => x)) L.push('Even/Odd');
   const nk = !o.caves && !o.snake && ((p.marks.some(x => x) && !o.shadeWhisper && !o.boxRenban) || o.nkLand || o.nkWater);
@@ -5156,7 +5579,7 @@ function variantLabels(p) {
   if (!nk && !o.caves && !o.snake && !o.shadeWhisper && !o.boxRenban && !o.landConn && X.usesShade(p)) L.push('Shading');
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
   if (p.olines.length || p.lines.some(l => l.type === 'regsum' && l.ring)) L.push('Outside lines');
-  if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper'); if (ck.has('nr')) L.push('Numbered Rooms');
+  if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper'); if (ck.has('nr')) L.push('Numbered Rooms'); if (ck.has('fr')) L.push('Frame sums'); if (ck.has('rs')) L.push('Rossini'); if (ck.has('th')) L.push('Outside Thrown Sums'); if (ck.has('tu')) L.push('Turtle clues');
   return L;
 }
 function rulesFor(p) {
@@ -5203,6 +5626,12 @@ function rulesFor(p) {
   if (lt.has('lots')) R.push('Greater Lots (gold, with a circle on one cell of the line): the digit in the circle counts how many digits on its line are strictly larger than it. The circled digit itself is not counted, and larger digits that repeat on the line each count.');
   if (lt.has('gap')) R.push('Equal-gap lines (indigo): every pair of neighboring digits on the line differs by the same amount, which is not given. The line can step up or down at each cell, so 2, 4, 2, 4, 6 and 2, 5, 2, 5 both follow a gap rule.');
   if (lt.has('slow')) R.push('Slow thermometers (teal, with a bulb): digits never decrease from the bulb to the tip. Two neighbors on the line may hold the same digit, but only when their cells do not share a row, column or box.');
+  if (lt.has('turnline')) R.push('Turn lines (olive, a dot at the start and an arrowhead at the end): the line is read in the direction of the arrowhead. At every cell that is not an end cell, the digit tells how the line turns there: 1–2 left, 3–4 right, 5–6 straight, left and right as seen traveling along the line. The two end cells carry no turn.');
+  if (lt.has('cloneline')) R.push('Clone lines (rose, matching letters): the two lines with the same letter hold the same digits in the same order, reading from the lettered end.');
+  if (lt.has('tiedline')) R.push('Tied lines (blue, matching numbers): the two lines with the same number have the same digit sum. They can differ in length.');
+  if (lt.has('pointing')) R.push('Pointing lines (brown): a digit N on the line means the nearest larger digit on the line is exactly N steps away along it, counting cells in either direction. The largest digits on the line have nothing larger and carry no condition.');
+  if (lt.has('prodarrow')) R.push('Product arrows (violet, × at the circle): the digits on the arrow multiply to the digit in the circle. Digits may repeat along the arrow where the cells see each other nowhere.');
+  if (lt.has('sumgap')) R.push('Sum-gap lines (green, circled end): every pair of neighboring cells on the line differs by exactly the digit in the circle.');
   if (lt.has('nabner')) R.push('Nabner lines (plum): no two digits on the line are the same or consecutive, whether or not the cells touch. Any two differ by at least 2.');
   if (lt.has('darrow')) R.push('Double arrows (a circle at each end): the digits at the two ends add up to the sum of the digits on the cells between them.');
   if (lt.has('zipper')) R.push('Zipper lines (lime-green): the line has an odd number of cells, and the cell in the middle is marked with a diamond. Each pair of cells the same distance from the middle cell adds up to the digit in the middle cell.');
@@ -5235,6 +5664,17 @@ function rulesFor(p) {
   if (p.bat && p.bat.length) R.push('Battenburg corners (small checkerboard where four cells meet): the four cells alternate between odd and even like a checkerboard, so cells that touch at a side differ in parity and diagonal cells match. The colors do not say which cells are odd.');
   if (p.pk && p.pk.length) R.push('Projected Kropki dots (a circle with an arrow in a cell): look from the dotted cell in the arrow\'s direction, as many cells as the digit in the dotted cell. The cell reached holds a digit consecutive to it if the dot is white, or double or half of it if the dot is black (1 and 2, 2 and 4, 3 and 6). A digit whose reach would leave the grid cannot go in that cell. Not every dot is shown, and a missing dot says nothing. The dotted cell\'s own digit is not given.');
   if (p.throw && p.throw.length) R.push('Thrown Sums (amber arrows with a dotted tail): N is the digit right behind the arrow. Counting from the cell behind the arrow, the arrow throws N cells in the direction it points. The number on the arrow is the sum of a run of cells that starts on that landing cell and continues along the arrow. The length of the run is not shown and differs from arrow to arrow.');
+  { const HD = {
+      thermo: ['Hidden thermo', 'every digit on it is larger than the one before'],
+      whisper: ['Hidden German whispers', 'neighbouring digits on it differ by at least 3'],
+      arrow: ['Hidden arrows', 'the digit in its first cell (the arrow’s circle) equals the sum of the other cells on it; its length is at least 3'],
+      renban: ['Hidden renban', 'its digits are all different and form a run of consecutive numbers, in any order'],
+      parity: ['Hidden parity', 'neighbouring digits on it alternate odd and even'],
+      entropic: ['Hidden entropic', 'every three cells in a row on it contain one digit from each of 1-2, 3-4 and 5-6; its length is at least 3'] };
+    const seen = new Set();
+    (p.tsnake || []).forEach(t => { const k = t.t || 'thermo'; if (seen.has(k)) return; seen.add(k);
+      R.push(HD[k][0] + ' (coloured circle and arrow, dashed first cell): the digit in the circled cell is the number of cells in a hidden line. Its first cell is the cell next to the circle in the arrow’s direction. From there the line moves one cell at a time (up, down, left or right), never revisits a cell and never uses the circled cell. On the line ' + HD[k][1] + '. The line is not drawn: work it out. Every hidden line has exactly one possible route.'); }); }
+  if (p.turtle && p.turtle.length) R.push('Turtle routes (red circle and arrow): the digit in the circled cell is the length of the route in cells, circled cell included. The arrow gives the direction the route leaves the circled cell. From the second cell on, the digit in each cell turns the route: 1–2 left, 3–4 right, 5–6 straight, left and right as the route sees them. The last cell’s digit does nothing. The route is not drawn: work it out. A route may not leave the grid or revisit a cell.');
   if (p.axia && p.axia.length) R.push('Axia cells (gray squares with four corner arrows): the digit in a marked cell appears nowhere else along its four diagonals, in all directions out to the edge of the grid.');
   if (p.sling && p.sling.length) R.push('Slingshot arrows (purple bent arrows): each arrow starts in one cell, its tail, and bends into a neighboring cell, its head. Starting at the head cell, count as many cells as the digit in the head cell, in the direction the arrowhead points. The cell you reach holds the same digit as the tail cell.');
   if (p.echo && p.echo.length) R.push('Echo arrows (violet double arrows): the digit in an arrow cell appears again somewhere further along the diagonal the arrow points down.');
@@ -5250,6 +5690,10 @@ function rulesFor(p) {
   if ((p.wsum && p.wsum.length) || ck.has('ws')) R.push('W-Sums (arrows): the number on an arrow is the sum of the first N digits the arrow points at, where N is the digit right behind the arrow.' + (ck.has('ws') ? ' For an arrow outside the grid, N is the Numbered Rooms value of that row or column: the digit found in cell number v, where v is the digit nearest the clue. That number is never given: work it out and enter it in the box behind the arrow.' : '') + (p.olines.some(l => l.kind === 'ws') || p.lines.some(l => X.escBoxes(l).some(b => b.kind === 'ws')) ? ' When a W-Sum arrow is on an outside line or at the end of a line that leaves the grid, the line runs through the N box behind the arrow. The arrow gives its sum, N is never given, and the N values are what obey the line’s rule.' : ''));
   if (ck.has('sw')) R.push('Sandwich (S): digits between the 1 and the 6 in that row or column sum to the clue.');
   if (ck.has('sk')) R.push('Skyscraper (▲): the clue counts the digits visible from that side; a larger digit hides smaller ones behind it.');
+  if (ck.has('tu')) R.push('Turtle clues (R): the clue is a route length N. The route starts in the cell next to the clue and heads straight into the grid. From the second cell on, the digit in each cell turns the route: 1–2 left, 3–4 right, 5–6 straight (left and right as the route sees them). The route is N cells long, counting its first cell. The first and last cells’ digits do nothing. A route may not leave the grid or revisit a cell.');
+  if (ck.has('fr')) R.push('Frame sums (F): the first three digits from that edge add up to the clue.');
+  if (ck.has('rs')) R.push('Rossini arrows: the first three digits from that edge strictly increase in the direction the arrow points (an arrow pointing into the grid means they rise going inward, away from the edge). An edge with no arrow may be anything.');
+  if (ck.has('th')) R.push('Outside Thrown Sums (T): let N be the digit nearest the clue. Counting inward from the cell after that digit, the sum starts N cells in and runs for a length that is not shown. The clue is that sum.');
   if (ck.has('nr')) R.push('Numbered Rooms (N): let n be the digit nearest the clue; the clue’s value must appear in the nth cell counting in from the clue.');
   if (p.olines.length) {
     R.push('Outside lines: squares outside the grid joined by a line hold clues (marked X, W, S or ▲) whose values are not all shown. Work the values out from the grid. Hidden values obey the line’s rule:');
@@ -5466,7 +5910,7 @@ function loadPuzzle(o, tab) {
 }
 
 /* ---------- board drawing ---------- */
-const COL = { esplit: '#5bb8dc', lots: '#d4b53b', mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', modular: '#45c4a0', zigzag: '#f08a24', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
+const COL = { turnline: '#7f8c3a', cloneline: '#e0568b', tiedline: '#2b8cc4', pointing: '#9b7a52', prodarrow: '#a35ad6', sumgap: '#3f9f5f', esplit: '#5bb8dc', lots: '#d4b53b', mountain: '#c9692e', gap: '#5b6fd6', slow: '#2f9aa0', nabner: '#b04a82', darrow: 'var(--arrow)', zipper: 'var(--zipper)', parity: 'var(--parity)', entropic: 'var(--entropic)', modular: '#45c4a0', zigzag: '#f08a24', regsum: 'var(--regsum)', thermo: 'var(--thermo)', arrow: 'var(--arrow)', whisper: 'var(--whisper)', renban: 'var(--renban)', palindrome: 'var(--pal)', between: 'var(--between)' };
 const pts = cells => cells.map(i => cx(i).toFixed(1) + ',' + cy(i).toFixed(1)).join(' ');
 
 // Dashed outline around a cage's cells and, for escaping cages, its outside boxes: every tile (a grid
@@ -5507,7 +5951,7 @@ function arrowHeadXY(ax, ay, bx, by) { // triangle at b pointing away from a
 const arrowHead = (a, b) => arrowHeadXY(cx(a), cy(a), cx(b), cy(b));
 
 const ARROW = { '1,1': '↘', '1,-1': '↙', '-1,1': '↗', '-1,-1': '↖' };
-const TAG = { wn: 'N', ws: 'W', xs: 'X', sw: 'S', sk: '▲', nr: 'N' };
+const TAG = { wn: 'N', ws: 'W', xs: 'X', sw: 'S', sk: '▲', nr: 'N', fr: 'F', th: 'T', rs: '', tu: 'R' };
 
 function regRingAnchor(cells, r, c) {
   const check = cell => {
@@ -5633,6 +6077,19 @@ function renderBoard() {
     const f = q => q[0].toFixed(1) + ',' + q[1].toFixed(1), px = -h.dr, py = h.dc, B = [E[0] - h.dc * 7, E[1] - h.dr * 7];
     cloneTxt += `<g style="stroke:#9b4fd0;fill:#9b4fd0"><polyline points="${f(S0)} ${f(K)} ${f(B)}" style="fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round"/><polygon points="${f(E)} ${f([B[0] + px * 5.5, B[1] + py * 5.5])} ${f([B[0] - px * 5.5, B[1] - py * 5.5])}" style="stroke:none"/></g>`;
   });
+  // Turtle routes: a red circle on the start cell and an arrow for the first step; the digit in the circle is the route length (the route itself is never drawn)
+  (p.turtle || []).forEach(t => {
+    const x = cx(t.a), y = cy(t.a), dx = t.d[1], dy = t.d[0], px = -dy, py = dx;
+    const P = (a, w) => (x + dx * a + px * w).toFixed(1) + ',' + (y + dy * a + py * w).toFixed(1);
+    cloneTxt += `<circle cx="${x}" cy="${y}" r="24" style="fill:none;stroke:#d1495b;stroke-width:3.4"/><polygon points="${P(21, -10)} ${P(21, 10)} ${P(38, 0)}" style="fill:#d1495b"/>`;
+  });
+  // Thermo snakes: a slate circle holding the length, an arrow, and a dashed bulb on the first thermo cell (the thermo itself is never drawn)
+  (p.tsnake || []).forEach(t => {
+    const x = cx(t.a), y = cy(t.a), dx = t.d[1], dy = t.d[0], px = -dy, py = dx, bx = x + dx * CELL, by = y + dy * CELL;
+    const P = (a, w) => (x + dx * a + px * w).toFixed(1) + ',' + (y + dy * a + py * w).toFixed(1);
+    const hc = t.t ? COL[t.t] : '#5b6b82', hl = { whisper: 'W', arrow: 'A', renban: 'R', parity: 'P', entropic: 'E' }[t.t] || 'T';
+    cloneTxt += `<circle cx="${x}" cy="${y}" r="24" style="fill:none;stroke:${hc};stroke-width:3.4"/><polygon points="${P(21, -10)} ${P(21, 10)} ${P(38, 0)}" style="fill:${hc}"/><circle cx="${bx}" cy="${by}" r="21" style="fill:${hc};fill-opacity:.18;stroke:${hc};stroke-width:3;stroke-dasharray:5 4"/><text x="${(bx - dx * 12 - dy * 0 + (dx === 0 ? 0 : 0)).toFixed(1)}" y="${(by - dy * 12).toFixed(1)}" style="font-size:12px;font-weight:700;fill:${hc};text-anchor:middle;dominant-baseline:central">${hl}</text>`;
+  });
   // Thrown Sum arrows: an amber arrow whose dotted tail runs on past the head, showing the throw
   (p.throw || []).forEach(h => {
     const ux = colOf(h.b) - colOf(h.a), uy = rowOf(h.b) - rowOf(h.a), px = -uy, py = ux, mx = (cx(h.a) + cx(h.b)) / 2, my = (cy(h.a) + cy(h.b)) / 2;
@@ -5711,7 +6168,7 @@ function renderBoard() {
   });
   // lines
   if (editing && app.tool === 'lrule' && app.selLine >= 0 && p.lines[app.selLine]) s += `<polyline class="lsel" points="${pts(p.lines[app.selLine].cells)}"/>`;
-  const LW = { esplit: 11, lots: 13, mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, modular: 12, zigzag: 12, regsum: 9, whisper: 8 };
+  const LW = { turnline: 12, cloneline: 11, tiedline: 11, pointing: 12, sumgap: 12, esplit: 11, lots: 13, mountain: 12, gap: 10, slow: 15, nabner: 10, zipper: 11, thermo: 15, renban: 14, palindrome: 14, parity: 12, entropic: 12, modular: 12, zigzag: 12, regsum: 9, whisper: 8 };
   /* perpendicular unit normal at vertex i of a polyline, bisecting the incoming/outgoing segments
      (falls back to a single segment's normal at a sharp near-reversal, e.g. a V-shaped line) */
   const normalAt = (P, i) => {
@@ -5736,8 +6193,8 @@ function renderBoard() {
   let lineSink = null; // while set, thick strokes are collected here and painted widest first, so thinner lines always end up on top
   const drawLine = (typesIn, cells, preview, circ, tint) => {
     const types = tint ? ['arrow'] : Array.isArray(typesIn) ? typesIn : [typesIn], L = cells.length, multi = types.length > 1;
-    const thick = types.filter(t => t !== 'arrow' && t !== 'between' && t !== 'darrow').sort((x, y) => LW[y] - LW[x]);
-    const thin = types.filter(t => t === 'arrow' || t === 'between' || t === 'darrow');
+    const thick = types.filter(t => t !== 'arrow' && t !== 'between' && t !== 'darrow' && t !== 'prodarrow').sort((x, y) => LW[y] - LW[x]);
+    const thin = types.filter(t => t === 'arrow' || t === 'between' || t === 'darrow' || t === 'prodarrow');
     let o = '';
     const out = (w, html) => { if (lineSink) lineSink.push({ w, html }); else o += html; };
     if (multi && thick.length > 1) {
@@ -5754,8 +6211,11 @@ function renderBoard() {
     } else {
       thick.forEach(type => {
         const col = preview ? 'var(--accent)' : COL[type];
-        out(LW[type] || 10, halo('ln', pts(cells), (LW[type] || 10) + 6) + `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap', 'lots', 'modular', 'zigzag', 'esplit'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:' + (type === 'lots' ? '.55' : '.92') : ''}" points="${pts(cells)}"/>`);
+        out(LW[type] || 10, halo('ln', pts(cells), (LW[type] || 10) + 6) + `<polyline class="ln ${type}" style="stroke:${col}${['slow', 'nabner', 'mountain', 'gap', 'lots', 'modular', 'zigzag', 'esplit', 'pointing', 'sumgap', 'cloneline', 'tiedline', 'turnline'].includes(type) ? ';stroke-width:' + LW[type] + ';opacity:' + (type === 'lots' ? '.55' : '.92') : ''}" points="${pts(cells)}"/>`);
         if (type === 'esplit' && Array.isArray(circ)) circ.forEach(k => { if (k >= 1 && k < L && !p.edges.some(e => (e.t === 'white' || e.t === 'black') && ((e.a === cells[k - 1] && e.b === cells[k]) || (e.b === cells[k - 1] && e.a === cells[k])))) markerBuf += `<circle style="fill:var(--cell);stroke:${preview ? 'var(--accent)' : '#4aa6cc'};stroke-width:4" cx="${((cx(cells[k - 1]) + cx(cells[k])) / 2).toFixed(1)}" cy="${((cy(cells[k - 1]) + cy(cells[k])) / 2).toFixed(1)}" r="9"/>`; });
+        if (type === 'cloneline' || type === 'tiedline') markerBuf += `<circle style="fill:#fff;stroke:${col};stroke-width:3" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="13"/><text x="${cx(cells[0])}" y="${cy(cells[0]) + 5}" style="font-size:14px;font-weight:700;fill:${col};text-anchor:middle">${circ || ''}</text>`;
+        if (type === 'turnline' && L >= 2) markerBuf += `<polygon style="fill:#3f4817" points="${arrowHead(cells[L - 2], cells[L - 1])}"/><circle style="fill:#3f4817" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="8"/>`;
+        if (type === 'sumgap') markerBuf += `<circle class="ebulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`;
         if (type === 'lots') out(LW.lots, `<circle style="fill:${col};fill-opacity:.35;stroke:${preview ? 'var(--accent)' : '#e0a020'};stroke-width:4" cx="${cx(cells[circ > 0 && circ < cells.length ? circ : 0])}" cy="${cy(cells[circ > 0 && circ < cells.length ? circ : 0])}" r="26"/>`);
         if (type === 'thermo' || type === 'slow') out(LW[type], `<circle class="bulb" style="fill:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="21"/>`);
       });
@@ -5780,6 +6240,7 @@ function renderBoard() {
         thinBuf += `<polyline class="ln arrow" style="stroke:${col}" points="${bodyPts}"/>`;
         markerBuf += `<polygon style="fill:${col}" points="${arrowHead(cells[L - 2], cells[L - 1])}"/>`;
         markerBuf += `<circle class="abulb" style="stroke:${col}" cx="${cx(cells[0])}" cy="${cy(cells[0])}" r="23"/>`;
+        if (type === 'prodarrow') markerBuf += `<text x="${cx(cells[0]) + 15}" y="${cy(cells[0]) - 13}" style="font-size:15px;font-weight:700;fill:${col};text-anchor:middle">×</text>`;
       }
     });
     if (types.includes('zipper') && L >= 3 && L % 2 === 1) {
@@ -5817,7 +6278,7 @@ function renderBoard() {
     escInfo.set(l, { chain, boxes, vidx, types, last: chain.length - 1 });
   });
   lineSink = [];
-  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells, false, l.type === 'esplit' ? l.d : l.c, l.da && l.also && l.also.length === 1 ? COL[l.also[0]] : undefined); if (l.branch) s += drawLine(['arrow'], [l.cells[0]].concat(l.branch), false, undefined, l.da && l.also && l.also.length === 1 ? COL[l.also[0]] : undefined); });
+  p.lines.forEach(l => { const ei = escInfo.get(l); s += drawLine(X.lineTypes(l), ei ? ei.chain : l.cells, false, l.pair ? l.pair : l.type === 'esplit' ? (ei ? X.escD(l, ei.boxes) : l.d) : (ei && l.type === 'lots' ? X.escCi(l, ei.boxes) : l.c), l.da && l.also && l.also.length === 1 ? COL[l.also[0]] : undefined); if (l.branch) s += drawLine(['arrow'], [l.cells[0]].concat(l.branch), false, undefined, l.da && l.also && l.also.length === 1 ? COL[l.also[0]] : undefined); });
   s += lineSink.map((x, k) => [x.w, k, x.html]).sort((x, y) => y[0] - x[0] || x[1] - y[1]).map(x => x[2]).join(''); lineSink = null;
   s += bulbBuf; bulbBuf = '';
   s += thinBuf; thinBuf = '';
@@ -6110,6 +6571,12 @@ function renderBoard() {
     if (cl.kind === 'lk') {
       s += `<text class="rval" x="${mx - cl.dc * 6}" y="${my - cl.dr * 6 + 6}">${cz(cl.val)}</text>`;
       s += `<text class="rtag lk" x="${mx + cl.dc * 12}" y="${my + cl.dr * 12 + 6}">${ARROW[cl.dr + ',' + cl.dc]}</text>`;
+    } else if (cl.kind === 'rs') {
+      // Rossini: an arrow pointing the way the first three digits grow (val 1 = rising away from the edge, 2 = falling)
+      const ur = cl.r === -1 ? 1 : cl.r === N ? -1 : 0, uc = cl.c === -1 ? 1 : cl.c === N ? -1 : 0, sg = +cl.val === 2 ? -1 : 1;
+      const dx = uc * sg, dy = ur * sg, px = -dy, py = dx, L2 = 15, W = 9;
+      const P3 = (t, w) => (mx + dx * t + px * w).toFixed(1) + ',' + (my + dy * t + py * w).toFixed(1);
+      s += `<polygon points="${P3(-L2, -4)} ${P3(2, -4)} ${P3(2, -W)} ${P3(L2, 0)} ${P3(2, W)} ${P3(2, 4)} ${P3(-L2, 4)}" style="fill:#fff;stroke:#222;stroke-width:1.6;stroke-linejoin:round"/>`;
     } else {
       s += `<text class="rtag" x="${rc.x + 5}" y="${rc.y + 13}">${TAG[cl.kind]}</text>`;
       if (cl.val !== '' && cl.val != null) s += `<text class="rval" x="${mx}" y="${my + 6}">${cz(cl.val)}</text>`;
@@ -6359,9 +6826,10 @@ function renderMeta() {
 }
 
 const TOOLS = [
+  { g: 'Hidden lines', t: [['turtle', 'Turtle start'], ['tsnake', 'Hidden thermo'], ['hwhisper', 'Hidden whispers'], ['harrow', 'Hidden arrow'], ['hrenban', 'Hidden renban'], ['hparity', 'Hidden parity'], ['hentropic', 'Hidden entropic']] },
   { g: 'Cells', t: [['given', 'Given digit'], ['even', 'Even'], ['odd', 'Odd'], ['emax', 'Peak'], ['emin', 'Valley'], ['clone', 'Clone region'], ['ccirc', 'Counting circle'], ['hop', 'Hop arrow'], ['axia', 'Axia cell'], ['echo', 'Echo arrow'], ['crowd', 'Crowd cell'], ['spin', 'Spinner'], ['pk', 'Projected dot'], ['loc', 'Six locator'], ['region', 'Region']] },
   { g: 'Sums', t: [['cage', 'Killer cage'], ['spcage', 'Sum+product cage'], ['arrow', 'Arrow'], ['clue', 'Outside clue'], ['quad', 'Quadruple'], ['cmax', 'Corner arrow'], ['bat', 'Battenburg']] },
-  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['modular', 'Modular'], ['zigzag', 'Zigzag'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['esplit', 'Equal split'], ['lrule', 'Edit line rules']] },
+  { g: 'Lines', t: [['thermo', 'Thermo'], ['whisper', 'Whisper'], ['renban', 'Renban'], ['palindrome', 'Palindrome'], ['between', 'Between'], ['regsum', 'Region sum'], ['parity', 'Parity'], ['entropic', 'Entropic'], ['modular', 'Modular'], ['zigzag', 'Zigzag'], ['zipper', 'Zipper'], ['darrow', 'Double arrow'], ['slow', 'Slow thermo'], ['nabner', 'Nabner'], ['mountain', 'Mountain'], ['gap', 'Equal gap'], ['lots', 'Greater Lots'], ['esplit', 'Equal split'], ['pointing', 'Pointing'], ['prodarrow', 'Product arrow'], ['sumgap', 'Sum-gap'], ['cloneline', 'Clone lines'], ['tiedline', 'Tied lines'], ['turnline', 'Turn line'], ['lrule', 'Edit line rules']] },
   { g: 'Lines outside the grid', t: [['oline', 'Outside line']] },
   { g: 'Between two cells', t: [['cons', 'Consecutive bar'], ['white', 'White dot'], ['black', 'Black dot'], ['X', 'X (10)'], ['V', 'V (5)'], ['gt', 'Greater-than'], ['nwhite', 'Numbered white'], ['nblack', 'Numbered black'], ['prime', 'Prime dot'], ['far', 'Far bar'], ['wsum', 'W-Sum arrow'], ['throw', 'Thrown Sum arrow'], ['sling', 'Slingshot arrow']] },
   { g: 'Shading', t: [['paint', 'Paint cells'], ['mkc', 'Circle (island)'], ['mks', 'Square (water)'], ['sncnt', 'Snake count']] },
@@ -6395,9 +6863,22 @@ const HINTS = {
   esplit: 'Drag along the line, three or more cells (3 to 6 in generated puzzles). One dot is placed near the middle. Click a cell of an existing line to add or remove the dot between that cell and the next one (the last cell uses the dot before it). The digits in each segment between dots add up to the same sum.',
   lots: 'Drag along the line, three or more cells (5 to 8 in generated puzzles). The circle starts on the first cell you drag from. Click another cell of the line to move the circle there. The digit in the circle counts how many digits on the line are strictly larger than it.',
   gap: 'Drag along the line, three or more cells. Every pair of neighbors differs by the same amount, up or down.',
+  tsnake: 'Click a cell to add a Hidden thermo whose arrow points up. Click the cell again to turn the arrow clockwise, and once more after the fourth direction to remove it. The digit in the circled cell is the line’s length. The first cell is next to the circle in the arrow’s direction; digits rise along the line.',
+  hwhisper: 'Hidden German whispers: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length; neighbours on the line differ by 3 or more.',
+  harrow: 'Hidden arrow: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length (3 or more); the first cell is the arrow’s circle and equals the sum of the rest.',
+  hrenban: 'Hidden renban: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length; the line holds consecutive digits in any order.',
+  hparity: 'Hidden parity: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length; neighbours on the line alternate odd and even.',
+  hentropic: 'Hidden entropic: click a cell to add one (arrow up; click again to turn, then remove). The circled digit is the length (3 or more); every three in a row hold one digit from 1-2, 3-4 and 5-6.',
+  turtle: 'Click a cell to add a Turtle start whose arrow points up. Click the cell again to turn the arrow clockwise, and once more after the fourth direction to remove it. The digit in the circled cell is the route length. The route leaves the circled cell in the arrow’s direction, then each digit turns it: 1–2 left, 3–4 right, 5–6 straight.',
   axia: 'Click a cell to add or remove an Axia mark. The digit in a marked cell appears nowhere else along its four diagonals, out to the edge of the grid.',
   loc: 'Click a cell to add or remove a six locator. The digit in the circled cell is the column (1 to 6 from the left) that holds the 6 in that row.',
   slow: 'Drag along the line from the bulb to the tip. Digits never decrease along it. Equal neighbors are possible only on cells that share no row, column or box.',
+  turnline: 'Drag along the line in the direction it is read, three or more cells, one orthogonal step at a time. The dot marks the start and the arrowhead the end. At every cell between the ends, the digit says how the line turns there: 1–2 left, 3–4 right, 5–6 straight.',
+  cloneline: 'Drag a line. Then drag a second line of the same length: it joins the first as a pair (shown with the same letter). The two lines hold the same digits in the same order. A third line starts a new pair.',
+  tiedline: 'Drag a line. Then drag a second line: it joins the first as a pair (shown with the same number). The digits on the two lines add up to the same total. The lines can have different lengths. A third line starts a new pair.',
+  pointing: 'Drag along the line, three or more cells. A digit N means the nearest larger digit on the line is exactly N steps away along it, in either direction. The largest digits on the line carry no condition.',
+  prodarrow: 'Drag from the circle along the arrow, three or more cells. The digits after the circle multiply to the digit in the circle.',
+  sumgap: 'Drag from the circled cell along the line, three or more cells. Every pair of neighbors on the line differs by exactly the digit in the circle.',
   nabner: 'Drag along a line of 2 or 3 cells. No two digits on it are the same or consecutive.',
   sling: 'Click the border between two cells to add a Slingshot arrow. Keep clicking to cycle which cell is the tail and which way the arrow points, then once more to remove it. Counting from the head cell, as many cells as the head digit in the arrow direction, you reach a cell holding the tail digit.',
   throw: 'Set the sum below, then click the border between two cells to add a Thrown Sum arrow. Click again to turn it around, and once more to remove it. N is the digit behind the arrow. The sum starts N cells from the cell behind the arrow and runs for a hidden length.',
@@ -6499,7 +6980,7 @@ function ringOptions(r, c) {
   const side = r === -1 ? 'T' : r === N ? 'B' : c === -1 ? 'L' : 'R';
   const corner = (r < 0 || r >= N) && (c < 0 || c >= N);
   if (!corner) {
-    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'ws', label: 'W-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' });
+    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'ws', label: 'W-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' }, { kind: 'fr', label: 'Frame sum' }, { kind: 'th', label: 'Thrown Sum' }, { kind: 'rs', label: 'Rossini (1 rises inward, 2 falls)' }, { kind: 'tu', label: 'Turtle route length (3-9)' });
   }
   for (const dr of [-1, 1]) for (const dc of [-1, 1]) {
     if (!inCell(r + dr, c + dc)) continue;
@@ -6661,7 +7142,7 @@ function setPaint(i, k, add) {
 }
 const adj8 = (a, b) => a !== b && Math.abs(rowOf(a) - rowOf(b)) <= 1 && Math.abs(colOf(a) - colOf(b)) <= 1;
 const adj4 = (a, b) => Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
-const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'];
+const LINE_TOOLS = ['thermo', 'arrow', 'whisper', 'renban', 'palindrome', 'between', 'regsum', 'parity', 'entropic', 'modular', 'zigzag', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'pointing', 'prodarrow', 'sumgap', 'cloneline', 'tiedline', 'turnline'];
 const curRules = () => { const t = app.tool; if (SOLO_LINES.includes(t)) return [t]; return LINE_TOOLS.includes(t) ? [t].concat(app.extras.filter(x => x !== t)) : [t]; };
 const comboCache = {};
 function comboNote(types) {
@@ -6769,6 +7250,23 @@ function onDown(e) {
     if (n >= DIRS.length) { if (k >= 0) p.hop.splice(k, 1); }
     else if (k >= 0) { p.hop[k].dr = DIRS[n][0]; p.hop[k].dc = DIRS[n][1]; }
     else p.hop.push({ cell: i, dr: DIRS[n][0], dc: DIRS[n][1] });
+    touch(true);
+  } else if (t === 'tsnake' || t === 'hwhisper' || t === 'harrow' || t === 'hrenban' || t === 'hparity' || t === 'hentropic') {
+    if (!inG) return;
+    const rule = { hwhisper: 'whisper', harrow: 'arrow', hrenban: 'renban', hparity: 'parity', hentropic: 'entropic' }[t];
+    const mk = d => rule ? { a: i, d, t: rule } : { a: i, d };
+    const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]], k = p.tsnake.findIndex(x => x.a === i);
+    if (k < 0) p.tsnake.push(mk(DIRS[0].slice()));
+    else if ((p.tsnake[k].t || undefined) !== rule) p.tsnake[k] = mk(DIRS[0].slice());
+    else { const di = DIRS.findIndex(d => d[0] === p.tsnake[k].d[0] && d[1] === p.tsnake[k].d[1]); if (di >= 3) p.tsnake.splice(k, 1); else p.tsnake[k].d = DIRS[di + 1].slice(); }
+    p.tsnake = p.tsnake.filter(x => inCell(rowOf(x.a) + x.d[0], colOf(x.a) + x.d[1]));
+    touch(true);
+  } else if (t === 'turtle') {
+    if (!inG) return;
+        const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]], k = p.turtle.findIndex(x => x.a === i);
+    if (k < 0) p.turtle.push({ a: i, d: DIRS[0].slice() });
+    else { const di = DIRS.findIndex(d => d[0] === p.turtle[k].d[0] && d[1] === p.turtle[k].d[1]); if (di >= 3) p.turtle.splice(k, 1); else p.turtle[k].d = DIRS[di + 1].slice(); }
+    p.turtle = p.turtle.filter(x => inCell(rowOf(x.a) + x.d[0], colOf(x.a) + x.d[1]));
     touch(true);
   } else if (t === 'axia') {
     if (!inG) return; const k = p.axia.indexOf(i); if (k >= 0) p.axia.splice(k, 1); else p.axia.push(i); p.axia.sort((a, b) => a - b); touch(true);
@@ -6920,6 +7418,8 @@ function onDown(e) {
       if (k >= 0) { p.cages.splice(k, 1); app.selCage = -1; touch(); return; }
       { const kc = p.cc.indexOf(i); if (kc >= 0) { p.cc.splice(kc, 1); touch(true); return; } }
       { const ke = p.ext.findIndex(x => x.cell === i); if (ke >= 0) { p.ext.splice(ke, 1); touch(true); return; } }
+      { const ks = p.tsnake.findIndex(x => x.a === i); if (ks >= 0) { p.tsnake.splice(ks, 1); touch(true); return; } }
+      { const kt = p.turtle.findIndex(x => x.a === i); if (kt >= 0) { p.turtle.splice(kt, 1); touch(true); return; } }
       { const ka = p.axia.indexOf(i); if (ka >= 0) { p.axia.splice(ka, 1); touch(true); return; } }
       { const kl = p.loc.indexOf(i); if (kl >= 0) { p.loc.splice(kl, 1); touch(true); return; } }
       { const kp = p.pk.findIndex(x => x.cell === i); if (kp >= 0) { p.pk.splice(kp, 1); touch(true); return; } }
@@ -7014,9 +7514,10 @@ function onUp() {
         touch(true); flash('Circle moved.', 'ok'); return;
       }
     }
-    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('modular') || rules.includes('zigzag') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') || rules.includes('lots') || rules.includes('esplit') ? 3 : 2;
+    const rules = curRules(), need = rules.includes('between') || rules.includes('entropic') || rules.includes('modular') || rules.includes('zigzag') || rules.includes('zipper') || rules.includes('darrow') || rules.includes('mountain') || rules.includes('gap') || rules.includes('lots') || rules.includes('esplit') || rules.includes('pointing') || rules.includes('prodarrow') || rules.includes('sumgap') || rules.includes('turnline') ? 3 : 2;
+    if (rules[0] === 'turnline' && d.path.length >= 3 && d.path.some((c, k) => k && Math.abs(rowOf(c) - rowOf(d.path[k - 1])) + Math.abs(colOf(c) - colOf(d.path[k - 1])) !== 1)) { renderBoard(); flash('Turn lines move one cell at a time, up, down, left or right (no diagonal steps), so every bend is a left or right turn.', 'warn'); return; }
     if (rules[0] === 'nabner' && d.path.length > 3) { renderBoard(); flash('Nabner lines hold at most 3 cells, because 1 to 6 has no four digits that all differ by 2 or more.', 'warn'); return; }
-    if (['darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
+    if (['darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots', 'esplit', 'pointing', 'prodarrow', 'sumgap', 'turnline'].includes(rules[0]) && d.path.length >= need && !X.lineFeasible([rules[0]], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a ' + RULE_LABEL[rules[0]] + ' line on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
     if (rules[0] === 'zipper' && d.path.length >= 3) {
       if (d.path.length % 2 === 0) { renderBoard(); flash('Zipper lines need an odd number of cells (3, 5 or 7), so there is a middle cell.', 'warn'); return; }
       if (!X.lineFeasible(['zipper'], d.path.length, p.opts.whisperDiff || 4, d.path, p.regions)) { renderBoard(); flash('No digits fit a zipper on these cells, because cells in the same row, column or region cannot repeat. Try another path.', 'warn'); return; }
@@ -7038,6 +7539,12 @@ function onUp() {
         app.tool = 'clue'; app.selRing = { r: rr, c: rc }; renderEditAux(); renderBoard();
         const inp = $('#ringVal'); if (inp) { inp.focus(); inp.select(); }
         return;
+      }
+      if (ln.type === 'cloneline' || ln.type === 'tiedline') {
+        const ids = ln.type === 'cloneline' ? 'ABCDEFGH' : '12345678', same = p.lines.filter(m => m.type === ln.type), cnt = {};
+        same.forEach(m => { cnt[m.pair] = (cnt[m.pair] || 0) + 1; });
+        const open = same.find(m => cnt[m.pair] === 1 && (ln.type !== 'cloneline' || m.cells.length === ln.cells.length));
+        ln.pair = open ? open.pair : (ids.split('').find(ch => !cnt[ch]) || ids[0]);
       }
       p.lines.push(ln); touch(true);
     }
@@ -7216,7 +7723,7 @@ function renderCounts() {
   $('#genCounts').innerHTML = keys.map(k => `<label class="cnt"><span>${X.VLABEL[k]}</span><input type="number" min="1" max="12" inputmode="numeric" data-cnt="${k}" placeholder="auto" value="${app.genCounts[k] || ''}"></label>`).join('');
 }
 const ESC_CAGE_TARGETS = ['xsum', 'sandwich', 'skyscraper', 'roomnumbers']; // outside-clue rules an escaping cage or line can reach
-const ESC_LINES = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic', 'modular', 'zigzag']; // line rules that can escape
+const ESC_LINES = ['thermo', 'whisper', 'renban', 'palindrome', 'between', 'arrow', 'parity', 'entropic', 'modular', 'zigzag', 'zipper', 'darrow', 'slow', 'nabner', 'mountain', 'gap', 'lots']; // line rules that can escape
 // Escape the Grid needs an outside-clue rule to escape into. When none is selected, add one at random
 // (and say so) rather than rejecting the mix.
 function completeCipher(list) {
