@@ -2990,6 +2990,7 @@ const VARIANTS = [
   { k: 'arrow', label: 'Arrow', group: 'Sums' },
   { k: 'darrow', label: 'Double arrow', group: 'Sums' },
   { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
+  { k: 'littlesandwich', label: 'Little Killer + Sandwich', group: 'Sums' },
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
   { k: 'wsum', label: 'W-Sums', group: 'Sums' },
   { k: 'thrown', label: 'Thrown Sums', group: 'Sums' },
@@ -3074,7 +3075,7 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { lscombo: 2, killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, pointing: 1, prodarrow: 1, sumgap: 1, cloneline: 1, tiedline: 1, turnline: 1, tsnake: 2, hwhisper: 2, harrow: 2, hrenban: 2, hparity: 2, hentropic: 2, turtle: 2, turtleout: 2, esplit: 1, ksplit: 1, dualarrow: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
+const MIN_KEEP = { littlesandwich: 3, lscombo: 2, killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, pointing: 1, prodarrow: 1, sumgap: 1, cloneline: 1, tiedline: 1, turnline: 1, tsnake: 2, hwhisper: 2, harrow: 2, hrenban: 2, hparity: 2, hentropic: 2, turtle: 2, turtleout: 2, esplit: 1, ksplit: 1, dualarrow: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, wsum: 4, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   frame: 2, rossini: 2, outthrown: 2, outxsum: 1, outwsum: 3, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
@@ -4394,9 +4395,20 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
     }
   };
-  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers', 'frame', 'rossini', 'outthrown', 'turtleout'].filter(k => V.has(k)).length || 1;
+  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers', 'frame', 'rossini', 'outthrown', 'turtleout', 'littlesandwich'].filter(k => V.has(k)).length || 1;
   const share = Math.max(3, Math.floor((28 - usedRing.size) / nRing));
-  if (V.has('littlekiller') && V.has('sandwich') && !sandwichTied) {
+  if (V.has('littlesandwich')) {
+    const edge = ringSlots('lk').filter(s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N)).map(s => Object.assign({}, s, { kind: 'ls' })).filter(s => clueValue(s, sol) !== null);
+    let n = 0;
+    for (const cl of shuffle(edge, rng)) {
+      if (n >= Math.min(14, Math.max(share, 10))) break;
+      const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
+      usedRing.add(rk); n++;
+      const val = clueValue(cl, sol);
+      add('littlesandwich', p => p.clues.push(Object.assign({}, cl, { val })));
+    }
+  }
+  if (V.has('littlekiller') && V.has('sandwich') && !V.has('littlesandwich') && !sandwichTied) {
     // combo clues (Little Killer + Sandwich in one number): only where the two sums coincide in the solution
     const edge = ringSlots('lk').filter(s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N)).map(s => Object.assign({}, s, { kind: 'ls' })).filter(s => clueValue(s, sol) !== null);
     let n = 0;
@@ -4825,7 +4837,21 @@ function tryGenerate(V, diff, rng, deadline, spec) {
 
   const r0 = solvePuzzle(base, { limit: 1, rng, maxNodes: 40000 });
   if (!r0.count) return null;
-  const sol = r0.sols[0];
+  let sol = r0.sols[0];
+  // Combo clues (Little Killer + Sandwich in one number) need a solution where the two sums coincide at several outside boxes,
+  // so when they are wanted, draw several random solutions and keep the one with the most such boxes.
+  if (V.has('littlesandwich') || (V.has('littlekiller') && V.has('sandwich'))) {
+    const lsSlots = ringSlots('lk').filter(s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N)).map(s => Object.assign({}, s, { kind: 'ls' }));
+    const score = g => new Set(lsSlots.filter(s => clueValue(s, g) !== null).map(s => s.r + ',' + s.c)).size;
+    const goal = V.has('littlesandwich') ? 9 : 4, tries = V.has('littlesandwich') ? 160 : 50;
+    let best = score(sol);
+    for (let t = 0; t < tries && best < goal; t++) {
+      const rr = solvePuzzle(base, { limit: 1, rng, maxNodes: 40000 });
+      if (!rr.count) continue;
+      const sc = score(rr.sols[0]);
+      if (sc > best) { best = sc; sol = rr.sols[0]; }
+    }
+  }
 
   base.opts.nonconsec = V.has('nonconsecutive') || (V.has('consecutive') && neg.consecutive);
   neg.consecutive = base.opts.nonconsec;
@@ -7739,7 +7765,7 @@ const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint']
 const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang', 'caves', 'snake'];
 const CAGE_EXCL = ['killer', 'looksay', 'product', 'range', 'evens', 'lssum', 'sumprod', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
 // a big share of the grid on its own, so no two of these ever share a puzzle
-const CIPHER_NEEDS = ['killer', 'product', 'range', 'evens', 'lssum', 'sumprod', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller'];
+const CIPHER_NEEDS = ['killer', 'product', 'range', 'evens', 'lssum', 'sumprod', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller', 'littlesandwich'];
 const OVERLAP_CAGES = ['killer', 'looksay', 'product', 'range', 'evens', 'lssum', 'sumprod'];
 const sameCagePair = (a, b) => OVERLAP_CAGES.includes(a) && OVERLAP_CAGES.includes(b);
 function clash(a, b, set) {
