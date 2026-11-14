@@ -2094,6 +2094,8 @@ function compile(p) {
       if (cl.kind === 'xs') addGroup(seq, g => chkXsum(g, seq, T));
       else if (cl.kind === 'sw') addGroup(seq, g => chkSandwich(g, seq, T));
       else if (cl.kind === 'ls') { addGroup(seq, g => chkSandwich(g, seq, T)); const dg = lsDiag(cl); if (dg.length) addGroup(dg, g => chkSum(g, dg, T, false)); }
+      else if (cl.kind === 'lx') { addGroup(seq, g => chkXsum(g, seq, T)); const dg = lsDiag(cl); if (dg.length) addGroup(dg, g => chkSum(g, dg, T, false)); }
+      else if (cl.kind === 'xw') { addGroup(seq, g => chkXsum(g, seq, T)); addGroup(seq, g => chkSandwich(g, seq, T)); }
       else if (cl.kind === 'sk') addGroup(seq, g => chkSky(g, seq, T));
       else if (cl.kind === 'nr') addGroup(seq, g => chkRooms(g, seq, T));
       else if (cl.kind === 'ws') addGroup(seq, g => chkWsOut(g, seq, T));
@@ -2771,6 +2773,11 @@ function verify(p, g, sh) {
         for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k];
         if (s !== T) errs.push('ls');
         if (lsDiag(cl).reduce((x, i) => x + g[i], 0) !== T) errs.push('ls');
+      } else if (cl.kind === 'lx' || cl.kind === 'xw') {
+        const n = v[0]; let s = 0; for (let k = 0; k < n; k++) s += v[k];
+        if (s !== T) errs.push(cl.kind);
+        if (cl.kind === 'lx') { if (lsDiag(cl).reduce((x, i) => x + g[i], 0) !== T) errs.push('lx'); }
+        else { const a = v.indexOf(1), b = v.indexOf(6); let s2 = 0; for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s2 += v[k]; if (s2 !== T) errs.push('xw'); }
       } else if (cl.kind === 'sk') {
         let mx = 0, c = 0; for (const x of v) if (x > mx) { mx = x; c++; }
         if (c !== T) errs.push('sk');
@@ -2952,7 +2959,7 @@ function conflicts(p, model, grid) {
   return bad;
 }
 
-const RING_LABEL = { ls: 'Little Killer + Sandwich', lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum', tu: 'Turtle route', fr: 'Frame sum', th: 'Thrown Sum', rs: 'Rossini' };
+const RING_LABEL = { lx: 'Little Killer + X-Sum', xw: 'X-Sum + Sandwich', ls: 'Little Killer + Sandwich', lk: 'Little Killer', xs: 'X-Sum', sw: 'Sandwich', sk: 'Skyscraper', nr: 'Numbered Rooms', ws: 'W-Sum', tu: 'Turtle route', fr: 'Frame sum', th: 'Thrown Sum', rs: 'Rossini' };
 
 root.SX = { chkThrow, chkSling, chkPos, chkPole, chkWsIn, chkWsOut, wsRange, nbr8, chkEcho, chkCrowd, chkSpin, spinRing, chkPk, pkRel, chkSumProd, chkLsSum, raysOf, chkLots, chkMountain, chkGap, chkLoc, isPrime, chkEvens, WINDOWS, chkDarrow, chkRange, hopRay, chkHop, N, NN, ALL, bit, EVEN, ODD, ix, rowOf, colOf, inGrid, pop, mulberry32, shuffle, pick, nbr4, nbr8, orthPairs,
   stdRegions, lsDiag, newPuzzle, usesShade, clueRange, outVal, escBoxes, chainR, sumRanges, regRuns, chkTurtle, chkTurtleD, chkHidden, countHidden, HID_MIN, tuDir, turtleCells, turnClassAt, turnOfDigit, linePartner, chkRegEsc, escCi, escD, regSumBounds, quadCells, chkQuad, verifyQuad, LINE_RULES, LINE_ALL, diagCross, branchOK, OL_RULES, olAllowed, OWN_LINE_RULES, esDots, esSegs, esDotSets, esAny, chkEsplit, chkZipper, lineTypes, grpOf, lineOK, lineFeasible, clonePuzzle, clueSeq, compile, solvePuzzle, verify, verifyShade, conflicts, shadeConflicts, RING_LABEL,
@@ -2991,6 +2998,8 @@ const VARIANTS = [
   { k: 'darrow', label: 'Double arrow', group: 'Sums' },
   { k: 'littlekiller', label: 'Little Killer', group: 'Sums' },
   { k: 'littlesandwich', label: 'Little Killer + Sandwich', group: 'Sums' },
+  { k: 'littlexsum', label: 'Little Killer + X-Sum', group: 'Sums' },
+  { k: 'xsumsandwich', label: 'X-Sum + Sandwich', group: 'Sums' },
   { k: 'xsum', label: 'X-Sums', group: 'Sums' },
   { k: 'wsum', label: 'W-Sums', group: 'Sums' },
   { k: 'thrown', label: 'Thrown Sums', group: 'Sums' },
@@ -3075,7 +3084,7 @@ const VARIANTS = [
 const LABEL = {}; VARIANTS.forEach(v => LABEL[v.k] = v.label);
 
 const SHADE_WHISPER_DIFF = 3; // shaded-loop pairwise difference threshold (independent of the drawn whisper lines' whisperDiff)
-const MIN_KEEP = { littlesandwich: 3, lscombo: 2, killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, pointing: 1, prodarrow: 1, sumgap: 1, cloneline: 1, tiedline: 1, turnline: 1, tsnake: 2, hwhisper: 2, harrow: 2, hrenban: 2, hparity: 2, hentropic: 2, turtle: 2, turtleout: 2, esplit: 1, ksplit: 1, dualarrow: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
+const MIN_KEEP = { littlesandwich: 3, littlexsum: 3, xsumsandwich: 3, lscombo: 2, lxcombo: 2, xwcombo: 2, killer: 3, looksay: 3, product: 3, escape: 2, mysterycage: 3, thermo: 2, arrow: 1, evenodd: 4, consecutive: 2, kropki: 2, xv: 2, kropkin: 2, clone: 2, inequality: 4, extremes: 2, hop: 4, cmax: 4, bat: 2, range: 3, evens: 3, slow: 1, nabner: 1, mountain: 1, gap: 1, lots: 1, pointing: 1, prodarrow: 1, sumgap: 1, cloneline: 1, tiedline: 1, turnline: 1, tsnake: 2, hwhisper: 2, harrow: 2, hrenban: 2, hparity: 2, hentropic: 2, turtle: 2, turtleout: 2, esplit: 1, ksplit: 1, dualarrow: 1, locator: 3, prime: 2, far: 3, axia: 3, sling: 3, thrown: 4, echo: 4, crowd: 4, spin: 3, darrow: 1, zipper: 1, renban: 1,
   whisper: 1, palindrome: 1, between: 1, littlekiller: 2, xsum: 2, wsum: 4, sandwich: 2, skyscraper: 2, roomnumbers: 2, nurikabe: 0, lssum: 3, sumprod: 3, caves: 0, cavecircle: 4, snake: 0, snakecount: 3, shadeline: 0, shaderenban: 0, yinyang: 0, regsum: 1, nonconsecutive: 0,
   frame: 2, rossini: 2, outthrown: 2, outxsum: 1, outwsum: 3, 'outwsum-c': 0, outsandwich: 1, outsky: 1, outrooms: 1, 'outxsum-c': 0, 'outsandwich-c': 0, 'outsky-c': 0, 'outrooms-c': 0, quad: 2, parity: 1, entropic: 1, modular: 1, zigzag: 1, duality: 1 };
 /* the line-density feature's own variant keys (mirrors ui.js's COUNT_KEYS) - these get a density-aware
@@ -3110,6 +3119,16 @@ function randomRegions(rng) {
   return null;
 }
 
+/* Combo clues: one number that holds for two clue rules at once. arrow: the second rule is a Little Killer diagonal. */
+const COMBOS = [
+  { kind: 'ls', only: 'littlesandwich', mixed: ['littlekiller', 'sandwich'], tag: 'lscombo', arrow: true },
+  { kind: 'lx', only: 'littlexsum', mixed: ['littlekiller', 'xsum'], tag: 'lxcombo', arrow: true },
+  { kind: 'xw', only: 'xsumsandwich', mixed: ['xsum', 'sandwich'], tag: 'xwcombo', arrow: false },
+];
+function comboSlots(cb) {
+  const edgeBox = s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N);
+  return (cb.arrow ? ringSlots('lk') : ringSlots('xs')).filter(edgeBox).map(s => Object.assign({}, s, { kind: cb.kind }));
+}
 function ringSlots(kind) {
   const out = [];
   if (kind === 'lk') {
@@ -3127,10 +3146,13 @@ function ringSlots(kind) {
   return out;
 }
 function clueValue(cl, sol) {
-  if (cl.kind === 'ls') {   // combo clue: only valid when the Sandwich sum and the Little Killer sum coincide
-    const v = clueSeq(cl).map(i => sol[i]), a = v.indexOf(1), b = v.indexOf(6); let s = 0;
-    for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k];
-    return s === S.lsDiag(cl).reduce((x, i) => x + sol[i], 0) ? s : null;
+  if (cl.kind === 'ls' || cl.kind === 'lx' || cl.kind === 'xw') {   // combo clue: only valid when its two sums coincide in the solution
+    const v = clueSeq(cl).map(i => sol[i]);
+    const sand = () => { const a = v.indexOf(1), b = v.indexOf(6); let s = 0; for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) s += v[k]; return s; };
+    const xsum = () => { let s = 0; for (let k = 0; k < v[0]; k++) s += v[k]; return s; };
+    const diag = () => S.lsDiag(cl).reduce((x, i) => x + sol[i], 0);
+    const [p1, p2] = cl.kind === 'ls' ? [sand(), diag()] : cl.kind === 'lx' ? [xsum(), diag()] : [xsum(), sand()];
+    return p1 === p2 ? p1 : null;
   }
   const v = clueSeq(cl).map(i => sol[i]);
   if (cl.kind === 'lk') return v.reduce((a, b) => a + b, 0);
@@ -4395,29 +4417,20 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
     }
   };
-  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers', 'frame', 'rossini', 'outthrown', 'turtleout', 'littlesandwich'].filter(k => V.has(k)).length || 1;
+  const nRing = ['littlekiller', 'xsum', 'wsum', 'sandwich', 'skyscraper', 'roomnumbers', 'frame', 'rossini', 'outthrown', 'turtleout', 'littlesandwich', 'littlexsum', 'xsumsandwich'].filter(k => V.has(k)).length || 1;
   const share = Math.max(3, Math.floor((28 - usedRing.size) / nRing));
-  if (V.has('littlesandwich')) {
-    const edge = ringSlots('lk').filter(s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N)).map(s => Object.assign({}, s, { kind: 'ls' })).filter(s => clueValue(s, sol) !== null);
+  for (const cb of COMBOS) {
+    if (cb.mixed.some(k => !V.has(k)) && !V.has(cb.only)) continue;
+    if (!V.has(cb.only) && (cb.mixed.includes('sandwich') && sandwichTied)) continue;
+    const full = V.has(cb.only), edge = comboSlots(cb).filter(s => clueValue(s, sol) !== null);
+    const cap = full ? Math.min(14, Math.max(share, 10)) : Math.min(4, share);
     let n = 0;
     for (const cl of shuffle(edge, rng)) {
-      if (n >= Math.min(14, Math.max(share, 10))) break;
+      if (n >= cap) break;
       const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
       usedRing.add(rk); n++;
       const val = clueValue(cl, sol);
-      add('littlesandwich', p => p.clues.push(Object.assign({}, cl, { val })));
-    }
-  }
-  if (V.has('littlekiller') && V.has('sandwich') && !V.has('littlesandwich') && !sandwichTied) {
-    // combo clues (Little Killer + Sandwich in one number): only where the two sums coincide in the solution
-    const edge = ringSlots('lk').filter(s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N)).map(s => Object.assign({}, s, { kind: 'ls' })).filter(s => clueValue(s, sol) !== null);
-    let n = 0;
-    for (const cl of shuffle(edge, rng)) {
-      if (n >= Math.min(4, share)) break;
-      const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
-      usedRing.add(rk); n++;
-      const val = clueValue(cl, sol);
-      add('lscombo', p => p.clues.push(Object.assign({}, cl, { val })));
+      add(full ? cb.only : cb.tag, p => p.clues.push(Object.assign({}, cl, { val })));
     }
   }
   if (V.has('littlekiller')) ringPool('littlekiller', 'lk', Math.min(16, share), ringSlots('lk'));
@@ -4838,12 +4851,13 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   const r0 = solvePuzzle(base, { limit: 1, rng, maxNodes: 40000 });
   if (!r0.count) return null;
   let sol = r0.sols[0];
-  // Combo clues (Little Killer + Sandwich in one number) need a solution where the two sums coincide at several outside boxes,
+  // Combo clues (two clue rules in one number) need a solution where the two sums coincide at several outside boxes,
   // so when they are wanted, draw several random solutions and keep the one with the most such boxes.
-  if (V.has('littlesandwich') || (V.has('littlekiller') && V.has('sandwich'))) {
-    const lsSlots = ringSlots('lk').filter(s => (s.r === -1 || s.r === N) !== (s.c === -1 || s.c === N)).map(s => Object.assign({}, s, { kind: 'ls' }));
-    const score = g => new Set(lsSlots.filter(s => clueValue(s, g) !== null).map(s => s.r + ',' + s.c)).size;
-    const goal = V.has('littlesandwich') ? 9 : 4, tries = V.has('littlesandwich') ? 160 : 50;
+  const activeCombos = COMBOS.filter(cb => V.has(cb.only) || cb.mixed.every(k => V.has(k)));
+  if (activeCombos.length) {
+    const slots = activeCombos.flatMap(comboSlots), anyFull = activeCombos.some(cb => V.has(cb.only));
+    const score = g => new Set(slots.filter(s => clueValue(s, g) !== null).map(s => s.r + ',' + s.c)).size;
+    const goal = anyFull ? 9 : 4, tries = anyFull ? 160 : 50;
     let best = score(sol);
     for (let t = 0; t < tries && best < goal; t++) {
       const rr = solvePuzzle(base, { limit: 1, rng, maxNodes: 40000 });
@@ -5525,7 +5539,7 @@ function normalize(o) {
   p.axia = Array.from(new Set(((o && o.axia) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
   p.loc = Array.from(new Set(((o && o.loc) || []).filter(i => Number.isInteger(i) && i >= 0 && i < NN))).sort((a, b) => a - b);
   const okLs = c => Number.isInteger(c.r) && Number.isInteger(c.c) && ((c.r === -1 || c.r === N) !== (c.c === -1 || c.c === N)) && Math.abs(c.dr) === 1 && Math.abs(c.dc) === 1 && inCell(c.r + c.dr, c.c + c.dc) && X.clueSeq({ kind: 'lk', r: c.r, c: c.c, dr: c.dr, dc: c.dc }).length >= 1;
-  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'ls', 'xs', 'ws', 'sw', 'sk', 'nr', 'fr', 'th', 'rs', 'tu'].includes(c.kind) && (c.kind !== 'ls' || (okLs(c))) && (c.kind !== 'rs' || c.val === 1 || c.val === 2) && (c.kind !== 'tu' || (Number.isInteger(+c.val) && +c.val >= 3 && +c.val <= 9)));
+  p.clues = ((o && o.clues) || []).filter(c => ['lk', 'ls', 'lx', 'xw', 'xs', 'ws', 'sw', 'sk', 'nr', 'fr', 'th', 'rs', 'tu'].includes(c.kind) && (c.kind !== 'ls' && c.kind !== 'lx' || (okLs(c))) && (c.kind !== 'xw' || ((c.r === -1 || c.r === N) !== (c.c === -1 || c.c === N))) && (c.kind !== 'rs' || c.val === 1 || c.val === 2) && (c.kind !== 'tu' || (Number.isInteger(+c.val) && +c.val >= 3 && +c.val <= 9)));
   const okRing = ([r, c]) => Number.isInteger(r) && Number.isInteger(c) && ((r === -1 || r === N) !== (c === -1 || c === N)) && r >= -1 && r <= N && c >= -1 && c <= N;
   p.olines = ((o && o.olines) || []).filter(l => l && X.olAllowed(l.type, l.kind) && ['xs', 'ws', 'sw', 'sk', 'nr'].includes(l.kind) && Array.isArray(l.cells) && l.cells.length >= 2 && l.cells.every(okRing));
   p.olines.forEach(l => { l.also = X.OWN_LINE_RULES.includes(l.type) ? [] : Array.from(new Set((l.also || []).filter(t => X.olAllowed(t, l.kind) && !X.OWN_LINE_RULES.includes(t) && t !== l.type))); if (!l.also.length) delete l.also; });
@@ -5641,6 +5655,8 @@ function variantLabels(p) {
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
   if (p.olines.length || p.lines.some(l => l.type === 'regsum' && l.ring)) L.push('Outside lines');
   if (ck.has('ls')) { ck.add('lk'); ck.add('sw'); }
+  if (ck.has('lx')) { ck.add('lk'); ck.add('xs'); }
+  if (ck.has('xw')) { ck.add('xs'); ck.add('sw'); }
   if (ck.has('lk')) L.push('Little Killer'); if (ck.has('xs')) L.push('X-Sums'); if (ck.has('sw')) L.push('Sandwich'); if (ck.has('sk')) L.push('Skyscraper'); if (ck.has('nr')) L.push('Numbered Rooms'); if (ck.has('fr')) L.push('Frame sums'); if (ck.has('rs')) L.push('Rossini'); if (ck.has('th')) L.push('Outside Thrown Sums'); if (ck.has('tu')) L.push('Turtle clues');
   return L;
 }
@@ -5747,6 +5763,8 @@ function rulesFor(p) {
   if (et.has('X') || et.has('V') || o.xvNeg) R.push('X: neighboring digits sum to 10. V: neighboring digits sum to 5.' + (o.xvNeg ? ' Every such pair is marked.' : ''));
   if (p.parity.some(x => x)) R.push('Grey squares hold even digits. Grey circles hold odd digits.');
   const ck = new Set(p.clues.map(c => c.kind)); p.olines.forEach(l => ck.add(l.kind));
+  if (ck.has('lx')) { ck.add('lk'); ck.add('xs'); R.push('Combo clue (X/L, teal number and arrow): the number is both a Little Killer sum and an X-Sum. The digits along its arrow’s diagonal sum to it, and so do the first n digits of the row or column it sits at the end of, where n is the digit nearest the clue.'); }
+  if (ck.has('xw')) { ck.add('xs'); ck.add('sw'); R.push('Combo clue (X/S, amber number): the number is both an X-Sum and a Sandwich sum for that row or column. The first n digits from the clue sum to it, where n is the digit nearest the clue, and so do the digits between the 1 and the 6.'); }
   if (ck.has('ls')) { ck.add('lk'); ck.add('sw'); R.push('Combo clue (S/L, magenta number and arrow): the number is both a Little Killer sum and a Sandwich sum. The digits along its arrow’s diagonal sum to it, and the digits between the 1 and the 6 in the row or column it sits at the end of also sum to it.'); }
   if (ck.has('lk')) R.push('Little Killer (arrows): digits along the diagonal in the arrow’s direction sum to the clue. Digits may repeat.');
   if (ck.has('xs')) R.push('X-Sums (X): if the digit nearest the clue is n, the first n digits in that line sum to the clue.');
@@ -5936,6 +5954,7 @@ function groupState() {
     eff.forEach(i => { marks[i] |= bit(gr.d); });
     for (const u of units) if (eff.every(i => u.includes(i))) for (const j of u) if (!val(j) && !eff.includes(j)) E[j] |= bit(gr.d);
   }
+  for (let i = 0; i < NN; i++) E[i] &= ~marks[i];   // a cell carrying a group mark for a digit is never struck for that digit
   return { E, marks };
 }
 function enterGroupDigit(d) {
@@ -6042,8 +6061,8 @@ function arrowHeadXY(ax, ay, bx, by) { // triangle at b pointing away from a
 const arrowHead = (a, b) => arrowHeadXY(cx(a), cy(a), cx(b), cy(b));
 
 const ARROW = { '1,1': '↘', '1,-1': '↙', '-1,1': '↗', '-1,-1': '↖' };
-const LSCOL = '#c2257f';
-const TAG = { ls: 'S/L', wn: 'N', ws: 'W', xs: 'X', sw: 'S', sk: '▲', nr: 'N', fr: 'F', th: 'T', rs: '', tu: 'R' };
+const LSCOL = '#c2257f', COMBOCOL = { ls: '#c2257f', lx: '#0f8b8d', xw: '#c77700' };
+const TAG = { ls: 'S/L', lx: 'X/L', xw: 'X/S', wn: 'N', ws: 'W', xs: 'X', sw: 'S', sk: '▲', nr: 'N', fr: 'F', th: 'T', rs: '', tu: 'R' };
 
 function regRingAnchor(cells, r, c) {
   const check = cell => {
@@ -6664,8 +6683,13 @@ function renderBoard() {
       s += wsBlock(cl.r, cl.c, cz(cl.val), cl.r + ',' + cl.c, false);
       return;
     }
-    if (cl.kind === 'ls') {
-      s += `<text class="rtag" style="fill:${LSCOL}" x="${rc.x + 5}" y="${rc.y + 13}">S/L</text>`;
+    if (cl.kind === 'xw') {
+      const cc = COMBOCOL.xw;
+      s += `<text class="rtag" style="fill:${cc}" x="${rc.x + 5}" y="${rc.y + 13}">X/S</text>`;
+      s += `<text class="rval" style="fill:${cc}" x="${mx}" y="${my + 6}">${cz(cl.val)}</text>`;
+    } else if (cl.kind === 'ls' || cl.kind === 'lx') {
+      const LSCOL = COMBOCOL[cl.kind];
+      s += `<text class="rtag" style="fill:${LSCOL}" x="${rc.x + 5}" y="${rc.y + 13}">${TAG[cl.kind]}</text>`;
       s += `<text class="rval" style="fill:${LSCOL}" x="${mx - cl.dc * 6}" y="${my - cl.dr * 6 + 6}">${cz(cl.val)}</text>`;
       s += `<text class="rtag lk" style="fill:${LSCOL}" x="${mx + cl.dc * 12}" y="${my + cl.dr * 12 + 6}">${ARROW[cl.dr + ',' + cl.dc]}</text>`;
     } else if (cl.kind === 'lk') {
@@ -7082,13 +7106,13 @@ function ringOptions(r, c) {
   const side = r === -1 ? 'T' : r === N ? 'B' : c === -1 ? 'L' : 'R';
   const corner = (r < 0 || r >= N) && (c < 0 || c >= N);
   if (!corner) {
-    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'ws', label: 'W-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' }, { kind: 'fr', label: 'Frame sum' }, { kind: 'th', label: 'Thrown Sum' }, { kind: 'rs', label: 'Rossini (1 rises inward, 2 falls)' }, { kind: 'tu', label: 'Turtle route length (3-9)' });
+    out.push({ kind: 'xs', label: 'X-Sum' }, { kind: 'ws', label: 'W-Sum' }, { kind: 'sw', label: 'Sandwich' }, { kind: 'xw', label: 'X-Sum + Sandwich' }, { kind: 'sk', label: 'Skyscraper' }, { kind: 'nr', label: 'Numbered Rooms' }, { kind: 'fr', label: 'Frame sum' }, { kind: 'th', label: 'Thrown Sum' }, { kind: 'rs', label: 'Rossini (1 rises inward, 2 falls)' }, { kind: 'tu', label: 'Turtle route length (3-9)' });
   }
   for (const dr of [-1, 1]) for (const dc of [-1, 1]) {
     if (!inCell(r + dr, c + dc)) continue;
     const seq = X.clueSeq({ kind: 'lk', r, c, dr, dc });
     if (seq.length >= 1) out.push({ kind: 'lk', dr, dc, label: 'Little Killer ' + ARROW[dr + ',' + dc] });
-    if (seq.length >= 1 && !corner) out.push({ kind: 'ls', dr, dc, label: 'Little Killer + Sandwich ' + ARROW[dr + ',' + dc] });
+    if (seq.length >= 1 && !corner) out.push({ kind: 'ls', dr, dc, label: 'Little Killer + Sandwich ' + ARROW[dr + ',' + dc] }, { kind: 'lx', dr, dc, label: 'Little Killer + X-Sum ' + ARROW[dr + ',' + dc] });
   }
   return out;
 }
@@ -7098,7 +7122,7 @@ function renderRingEditor() {
   const cur = p.clues.find(k => k.r === r && k.c === c);
   const sel = $('#ringKind');
   sel.innerHTML = opts.map((o, i) => `<option value="${i}">${o.label}</option>`).join('');
-  if (cur) { const i = opts.findIndex(o => o.kind === cur.kind && ((o.kind !== 'lk' && o.kind !== 'ls') || (o.dr === cur.dr && o.dc === cur.dc))); if (i >= 0) sel.value = i; $('#ringVal').value = cur.val; }
+  if (cur) { const i = opts.findIndex(o => o.kind === cur.kind && ((o.kind !== 'lk' && o.kind !== 'ls' && o.kind !== 'lx') || (o.dr === cur.dr && o.dc === cur.dc))); if (i >= 0) sel.value = i; $('#ringVal').value = cur.val; }
   else $('#ringVal').value = '';
   sel._opts = opts;
 }
@@ -7106,7 +7130,7 @@ function applyRing() {
   const p = app.puzzle, { r, c } = app.selRing, sel = $('#ringKind'), o = sel._opts[+sel.value];
   const v = $('#ringVal').value.trim();
   p.clues = p.clues.filter(k => !(k.r === r && k.c === c));
-  if (v !== '' && o) { const cl = { kind: o.kind, r, c, val: +v }; if (o.kind === 'lk' || o.kind === 'ls') { cl.dr = o.dr; cl.dc = o.dc; } p.clues.push(cl); }
+  if (v !== '' && o) { const cl = { kind: o.kind, r, c, val: +v }; if (o.kind === 'lk' || o.kind === 'ls' || o.kind === 'lx') { cl.dr = o.dr; cl.dc = o.dc; } p.clues.push(cl); }
   touch(true);
 }
 
@@ -7765,7 +7789,7 @@ const SOFT = [['diag', 'antiknight'], ['diag', 'antiking'], ['diag', 'disjoint']
 const SHADING_EXCL = ['nurikabe', 'shadeline', 'shaderenban', 'yinyang', 'caves', 'snake'];
 const CAGE_EXCL = ['killer', 'looksay', 'product', 'range', 'evens', 'lssum', 'sumprod', 'mysterycage']; // killer + looksay are the one allowed pair (see sameCagePair) // each cage-growth pool claims
 // a big share of the grid on its own, so no two of these ever share a puzzle
-const CIPHER_NEEDS = ['killer', 'product', 'range', 'evens', 'lssum', 'sumprod', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller', 'littlesandwich'];
+const CIPHER_NEEDS = ['killer', 'product', 'range', 'evens', 'lssum', 'sumprod', 'xsum', 'sandwich', 'skyscraper', 'roomnumbers', 'littlekiller', 'littlesandwich', 'littlexsum', 'xsumsandwich'];
 const OVERLAP_CAGES = ['killer', 'looksay', 'product', 'range', 'evens', 'lssum', 'sumprod'];
 const sameCagePair = (a, b) => OVERLAP_CAGES.includes(a) && OVERLAP_CAGES.includes(b);
 function clash(a, b, set) {
