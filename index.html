@@ -81,6 +81,7 @@ body{overscroll-behavior-y:none}
 .pad .btn{padding:0 4px;min-width:0}
 .pad .digit{height:52px;font-size:22px;font-weight:700}
 .pad .wide{grid-column:span 3}
+.pad .digit.dim{opacity:.3}
 .pad .d79{display:none}
 body[data-grid="quad"] .pad .d79{display:block}
 body[data-grid="quad"] .pad,body[data-grid="quad"][data-tab="edit"] .pad{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -6341,7 +6342,7 @@ function afterPlayChange() {
       P.solved = true;
       const rec = !P.recorded && !P.usedReveal ? recordSolve() : null;
       P.recorded = true;
-      flash('Solved in ' + fmtTime(P.elapsed) + '.' + (rec && rec.isBest ? ' Best time for this puzzle.' : '') + (P.usedReveal ? ' Not saved to history: the solution was shown.' : ''), 'ok');
+      flash('Solved in ' + fmtTime(P.elapsed) + '.' + (rec && rec.skipped ? ' Not saved to history: the timer did not run.' : '') + (rec && rec.isBest ? ' Best time for this puzzle.' : '') + (P.usedReveal ? ' Not saved to history: the solution was shown.' : ''), 'ok');
     }
     else {
       const sol = us ? getSol() : null;
@@ -6620,7 +6621,17 @@ function colorSvg(mask, x, y, id) {
   return o + '</g>';
 }
 
+/* Six of Nine: once six different digits are on the board, dim the keypad buttons for the other three */
+function updatePadDim() {
+  const p = app.puzzle; let keep = null;
+  if (p && p.s9 && app.play && app.tab !== 'edit') {
+    const s = new Set(); const g = effGrid(); for (let i = 0; i < NN; i++) if (g[i]) s.add(g[i]);
+    if (s.size === 6) keep = s;
+  }
+  $$('#pad .digit').forEach(b => { const d = +b.dataset.d; b.classList.toggle('dim', !!keep && d >= 1 && !keep.has(d)); });
+}
 function renderBoard() {
+  updatePadDim();
   const p = app.puzzle, P = app.play, editing = app.tab === 'edit';
   const g = effGrid();
   const bad = (app.showConflicts && !editing) ? X.conflicts(p, conflictModel(), g) : new Set();
@@ -8491,13 +8502,14 @@ const PRESETS = [
 const HKEY = 'sx6.history', HPKEY = 'sx6.hpuz', PKEY = 'sx6.progress';
 function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); }
 const pid = p => fnv(hashOf(p));
-const loadHist = () => { const h = lsGet(HKEY, []); return Array.isArray(h) ? h : []; };
+const loadHist = () => { const h = lsGet(HKEY, []); return Array.isArray(h) ? h.filter(r => r && +r.t > 0) : []; };   // a 0-second solve is a timer glitch, never a real time
 function fmtDate(ms) {
   const d = new Date(ms);
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 function recordSolve() {
   const p = app.puzzle, P = app.play, id = pid(p), hist = loadHist();
+  if (!(P.elapsed >= 1)) return { isBest: false, skipped: true };   // the clock did not run: do not save a 0-second time
   const prior = hist.filter(r => r.id === id && !r.hints).map(r => r.t);
   const rec = { id, title: p.title || 'Untitled puzzle', t: P.elapsed, at: Date.now(), hints: P.hints || 0, v: variantLabels(p) };
   hist.unshift(rec); lsSet(HKEY, hist.slice(0, 1000));
