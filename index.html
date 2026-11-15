@@ -4616,6 +4616,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     for (const cl of shuffle(ringSlots(kind), rng)) {
       if (n >= [0, 8, 4, 2, 2, 2][nOutV]) break;
       const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
+      if (clueValue(cl, sol) === null) continue;   // Quad Quattro / Six of Nine: a first digit above 6 leaves no value to show
       usedRing.add(rk); n++;
       const val = clueValue(cl, sol);
       add(variant + '-c', p => p.clues.push(Object.assign({}, cl, { val })));
@@ -4628,6 +4629,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
       if (n >= max) break;
       const rk = cl.r + ',' + cl.c;
       if (usedRing.has(rk)) continue;
+      if (clueValue(cl, sol) === null) continue;
       usedRing.add(rk); n++;
       const val = clueValue(cl, sol);
       add(variant, p => p.clues.push(Object.assign({}, cl, { val })));
@@ -4647,6 +4649,7 @@ function buildPool(V, sol, rng, neg, whisperDiff, regions, spec, sandwichTied) {
     for (const cl of shuffle(edge, rng)) {
       if (n >= cap) break;
       const rk = cl.r + ',' + cl.c; if (usedRing.has(rk)) continue;
+      if (clueValue(cl, sol) === null) continue;
       usedRing.add(rk); n++; if (cb.triple) tripLeft--;
       const val = clueValue(cl, sol);
       add(full ? cb.only : cb.tag, p => p.clues.push(Object.assign({}, cl, { val })));
@@ -5355,6 +5358,7 @@ function tryGenerate(V, diff, rng, deadline, spec) {
   const labels = [];
   V.forEach(k => { if (LABEL[k]) labels.push(LABEL[k]); });
   p.title = labels.length ? labels.join(' + ') : 'Classic';
+  p.clues = (p.clues || []).filter(cl => cl.val !== null);   // a clue with no value constrains nothing
   p.meta = { variants: Array.from(V), difficulty: diff, grid: base.quad ? 'quad' : base.s9 ? 's9' : undefined };
   if (base.quad) p.title = 'Quad Quattro' + (labels.length ? ' + ' + labels.join(' + ') : '');
   else if (base.s9) p.title = 'Six of Nine' + (labels.length ? ' + ' + labels.join(' + ') : '');
