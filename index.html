@@ -1114,9 +1114,9 @@ function chkRooms(g, seq, T) {
 function chkArrow(g, cells) {
   const c = g[cells[0]]; let s = 0, unk = 0;
   for (let k = 1; k < cells.length; k++) { const v = g[cells[k]]; if (v) s += v; else unk++; }
-  if (!unk) return c ? s === c : (s >= 1 && s <= 6);
-  if (c) return s + unk <= c && c <= s + 6 * unk;
-  return s + unk <= 6;
+  if (!unk) return c ? s === c : (s >= 1 && s <= DM);   // DM: 6, or 9 on Quad Quattro / Six of Nine
+  if (c) return s + unk <= c && c <= s + DM * unk;
+  return s + unk <= DM;
 }
 
 
