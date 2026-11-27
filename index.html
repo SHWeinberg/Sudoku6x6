@@ -134,6 +134,10 @@ textarea{width:100%;resize:vertical;font:12px/1.4 ui-monospace,Menlo,Consolas,mo
 .seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
 .seg label{position:relative;padding:7px 13px;cursor:pointer;border-right:1px solid var(--rule)}
 .seg label:last-child{border-right:0}
+.dytitle{margin:4px 0;font-size:18px;font-weight:700}.dystats{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}.dystat{flex:1;border:1px solid var(--rule);border-radius:8px;padding:8px 10px;background:var(--surface)}.dystat b{display:block;font-size:22px}.dystat span{font-size:12px;color:var(--muted)}.dybest{flex-basis:100%;margin:4px 0 0}
+.dymon{display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px}.dymon b{font-size:15px}.dcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.dcal .dh{text-align:center;font-size:11px;font-weight:700;color:var(--muted)}
+.dcal .dd{position:relative;height:38px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer;font-weight:700;font-size:14px}.dcal .dd:disabled{opacity:.35;cursor:default}.dcal .dd.blank{visibility:hidden}.dcal .dd.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.dcal .dd.done{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.dcal .dd.done.late{background:var(--surface);color:var(--ink)}.dcal .dd i{position:absolute;right:4px;top:1px;font-size:9px;font-style:normal}
+
 #genGrid,#gridType{display:inline-grid;grid-template-columns:repeat(2,auto)}
 #genGrid label,#gridType label{border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);white-space:nowrap}
 #genGrid label:nth-child(2n),#gridType label:nth-child(2n){border-right:0}
@@ -368,6 +372,7 @@ details.about p{margin:8px 0 0}
   <aside class="panel">
     <nav id="tabs" class="tabs" role="tablist" aria-label="Sections">
       <button data-tab="play" class="on" role="tab" aria-selected="true">Play</button>
+      <button data-tab="daily" role="tab" aria-selected="false">Daily</button>
       <button data-tab="unfinished" role="tab" aria-selected="false">Unfinished</button>
       <button data-tab="generate" role="tab" aria-selected="false">Generate</button>
       <button data-tab="edit" role="tab" aria-selected="false">Edit</button>
@@ -390,6 +395,18 @@ details.about p{margin:8px 0 0}
       </div>
       <p class="small">Keys: 1–6 enter a digit (1–9 in Quad Quattro), C toggles pencil marks, arrows move (Shift extends), Backspace erases, Ctrl+Z undoes. Drag across cells to select several.</p>
       <div class="row"><button id="editBtn" class="btn">Edit this puzzle</button></div>
+    </div>
+
+    <div id="tab-daily" class="tabpane" hidden>
+      <h2>Puzzle of the day</h2>
+      <p id="dyTitle" class="dytitle"></p>
+      <p id="dyInfo" class="small"></p>
+      <div class="row"><button id="dyPlay" class="btn">Play today’s puzzle</button></div>
+      <p id="dyStatus" class="small" aria-live="polite"></p>
+      <div id="dyStats" class="dystats"></div>
+      <div class="dymon"><button id="dyPrev" class="btn quiet" data-dymon="-1" aria-label="Previous month">‹</button><b id="dyMonth"></b><button id="dyNext" class="btn quiet" data-dymon="1" aria-label="Next month">›</button></div>
+      <div id="dyCal" class="dcal"></div>
+      <p class="small">Everyone gets the same puzzle on the same date. Difficulty rises from Monday to Sunday, and Saturday uses a different grid. A filled day was solved without Show solution; a day solved on its own date keeps your streak going, and earlier days stay playable for practice. Times and streaks stay on this device.</p>
     </div>
 
     <div id="tab-unfinished" class="tabpane" hidden>
@@ -5951,6 +5968,31 @@ function generate(spec, seed, budgetMs) {
   return null;
 }
 
+
+/* ---------- Puzzle of the day: the spec and the seed depend only on the date (YYYY-MM-DD), so every device builds the same puzzle ---------- */
+const DAILY_VER = 1;
+const DAILY_A = ['diag', 'killer', 'thermo', 'kropki', 'consecutive', 'renban', 'whisper', 'arrow', 'xv', 'windows', 'evenodd', 'sling', 'antiknight'];
+const DAILY_B = ['tsling', 'ladder', 'product', 'range', 'between', 'palindrome', 'zipper', 'entropic', 'modular', 'complement', 'prodsum', 'pk', 'hop', 'echo', 'parity', 'sandwich', 'littlekiller', 'skyscraper', 'rellik', 'evens'];
+const DAILY_ALT = ['killer', 'thermo', 'renban', 'whisper', 'kropki', 'consecutive', 'sling', 'ladder', 'tsling', 'arrow', 'xv'];
+const DAILY_T30 = ['tenmirror', 'frame', 'oddcount', 'highcount', 'complement', 'prodsum', 'freqcircle'];
+const DAILY_PLAN = [{ d: 'hard', a: 1, b: 2 }, { d: 'easy', a: 1, b: 0 }, { d: 'easy', a: 2, b: 0 }, { d: 'medium', a: 1, b: 1 }, { d: 'medium', a: 1, b: 2 }, { d: 'hard', a: 1, b: 1 }, { d: 'medium', alt: 2 }];   // Sunday first
+const DAILY_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function dailySeed(ds) {
+  let h = 2166136261; const s = 'sx-daily-' + DAILY_VER + '-' + ds;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) & 0x7fffffff;
+}
+function dailySpec(ds) {
+  const [y, m, d] = ds.split('-').map(Number), wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay(), plan = DAILY_PLAN[wd];
+  const rng = mulberry32(dailySeed(ds) ^ 0x5bd1e995), take = (pool, n) => shuffle(pool.slice(), rng).slice(0, n);
+  let grid, variants;
+  if (plan.alt) {
+    grid = ['quad', 's9', 't30'][Math.floor(rng() * 3)];
+    variants = take(grid === 't30' ? DAILY_ALT.concat(DAILY_T30) : DAILY_ALT, plan.alt);
+  } else variants = take(DAILY_A, plan.a).concat(take(DAILY_B, plan.b));
+  return { spec: { grid, variants, difficulty: plan.d }, seed: dailySeed(ds), weekday: DAILY_DAYS[wd] };
+}
+root.SX.dailySpec = dailySpec; root.SX.dailySeed = dailySeed;
 root.SX.dualCombos = dualCombos; root.SX.VARIANTS = VARIANTS; root.SX.VLABEL = LABEL; root.SX.generate = generate;
 root.SX.makeShadeBlob = makeShadeBlob; root.SX.boxRenbanOK = boxRenbanOK; root.SX.tryGenerate = tryGenerate; root.SX.sampleLines = sampleLines;
 root.SX.killerCages = killerCages; root.SX.lookSayCages = lookSayCages; root.SX.mixedCages = mixedCages;
@@ -6940,6 +6982,7 @@ function afterPlayChange() {
     if (badN.length) { badN.forEach(([r, c, , , , key]) => P.wrong.add(key || r + ',' + c)); flash('The grid is complete, but ' + (badN.length === 1 ? 'a W-Sum room number is' : 'some W-Sum room numbers are') + ' wrong. Fix ' + (badN.length === 1 ? 'it' : 'them') + ' to finish.', 'warn'); }
     else if (!errs.length) {
       P.solved = true;
+      if (!P.recorded && !P.usedReveal) dailyOnSolve();
       const rec = !P.recorded && !P.usedReveal ? recordSolve() : null;
       P.recorded = true;
       flash('Solved in ' + fmtTime(P.elapsed) + '.' + (rec && rec.skipped ? ' Not saved to history: the timer did not run.' : '') + (rec && rec.isBest ? ' Best time for this puzzle.' : '') + (P.usedReveal ? ' Not saved to history: the solution was shown.' : ''), 'ok');
@@ -8459,6 +8502,7 @@ function setTab(t) {
   document.body.dataset.tab = t;
   if (t === 'library') renderLibrary();
   if (t === 'history') renderHistory();
+  if (t === 'daily') renderDaily();
   if (t === 'unfinished') renderUnfinished();
   renderAll();
 }
@@ -9356,6 +9400,81 @@ function backfillHistLabels() {
   });
   if (changed) lsSet(HKEY, hist);
 }
+/* ---------- puzzle of the day ---------- */
+const DKEY = 'sx6.daily', DPUZ = 'sx6.dailyPuz', DSTART = '2026-11-01', DDIFF = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+const p2 = n => String(n).padStart(2, '0'), dstr = (y, m, d) => y + '-' + p2(m) + '-' + p2(d), dparts = ds => ds.split('-').map(Number);
+const todayStr = () => { const n = new Date(); return dstr(n.getFullYear(), n.getMonth() + 1, n.getDate()); };
+const dshift = (ds, k) => { const [y, m, d] = dparts(ds), t = new Date(Date.UTC(y, m - 1, d + k)); return dstr(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); };
+const dlabel = (ds, long) => { const [y, m, d] = dparts(ds); return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, long ? { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' } : { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); };
+const loadDaily = () => { const D = lsGet(DKEY, null) || {}; D.done = D.done || {}; D.idx = D.idx || {}; return D; };
+function dailyPlanOf(ds) {
+  const D = X.dailySpec(ds); const vs = D.spec.variants.slice();
+  while (vs.length > 1 && !feasibleMix(vs)) vs.pop();
+  return { spec: Object.assign({}, D.spec, { variants: vs }), seed: D.seed };
+}
+function dailyNames(spec) { const L = []; if (spec.grid) L.push({ quad: 'Quad Quattro', s9: 'Six of Nine', t30: 'Sum Thirty' }[spec.grid]); spec.variants.forEach(k => L.push(X.VLABEL[k] || k)); return L; }
+function dailyBuild(ds) {   // no wall-clock limit: the same date seed gives the same puzzle on every device
+  const pl = dailyPlanOf(ds), vs = pl.spec.variants.slice(); let q = null;
+  for (;;) {
+    try { q = X.generate(Object.assign({}, pl.spec, { variants: vs }), pl.seed, 3e8); } catch (e) { q = null; }
+    if (q || vs.length <= 1) break;
+    vs.pop();
+  }
+  if (q) q.title = 'Daily · ' + dlabel(ds);
+  return q;
+}
+function dailyStreaks(D, today) {
+  const on = new Set(Object.keys(D.done).filter(k => D.done[k].on));
+  let cur = 0, d = on.has(today) ? today : dshift(today, -1);
+  while (on.has(d)) { cur++; d = dshift(d, -1); }
+  let best = 0, run = 0, prev = null;
+  Array.from(on).sort().forEach(k => { run = prev && dshift(prev, 1) === k ? run + 1 : 1; best = Math.max(best, run); prev = k; });
+  return { cur, best };
+}
+function dailyOnSolve() {
+  const P = app.play; if (P.usedReveal || !(P.elapsed >= 1)) return;
+  const D = loadDaily(), ds = D.idx[pid(app.puzzle)]; if (!ds) return;
+  const hints = P.hints || 0, prev = D.done[ds];
+  if (!prev) D.done[ds] = { t: P.elapsed, hints, on: ds === todayStr() };
+  else if ((hints === 0 && prev.hints > 0) || (!!hints === !!prev.hints && P.elapsed < prev.t)) { prev.t = P.elapsed; prev.hints = hints; }
+  lsSet(DKEY, D);
+}
+function dailyPlay(ds) {
+  if (app.busy) return;
+  const cache = lsGet(DPUZ, {});
+  const open = q => { loadPuzzle(q, 'play'); const D = loadDaily(); D.idx[pid(app.puzzle)] = ds; lsSet(DKEY, D); };
+  if (cache[ds]) { open(cache[ds]); return; }
+  app.busy = true; app.dyStatus = 'Building the puzzle for ' + dlabel(ds) + '…'; renderDaily();
+  setTimeout(() => {
+    let q = null; try { q = dailyBuild(ds); } catch (e) { q = null; }
+    app.busy = false; app.dyStatus = '';
+    if (!q) { app.dyStatus = 'Could not build that puzzle. Try again.'; renderDaily(); return; }
+    cache[ds] = X.clonePuzzle(q); Object.keys(cache).sort().reverse().slice(45).forEach(k => delete cache[k]); lsSet(DPUZ, cache);
+    open(q);
+  }, 40);
+}
+function renderDaily() {
+  const D = loadDaily(), today = todayStr(), pl = dailyPlanOf(today), dn = D.done[today], st = dailyStreaks(D, today);
+  if (!app.dyMonth) app.dyMonth = today.slice(0, 7);
+  $('#dyTitle').textContent = dlabel(today, true);
+  $('#dyInfo').textContent = DDIFF[pl.spec.difficulty] + ' · ' + dailyNames(pl.spec).join(' + ');
+  $('#dyPlay').textContent = dn ? 'Play again' : 'Play today’s puzzle';
+  $('#dyPlay').disabled = !!app.busy;
+  $('#dyStatus').textContent = app.dyStatus || (dn ? 'Solved in ' + fmtTime(dn.t) + (dn.hints ? ' (with hints)' : '') + '.' : 'Not solved yet.');
+  const best = {};
+  Object.keys(D.done).forEach(k => { const e = D.done[k]; if (e.hints) return; const df = X.dailySpec(k).spec.difficulty; if (!(df in best) || e.t < best[df]) best[df] = e.t; });
+  $('#dyStats').innerHTML = `<div class="dystat"><b>${st.cur}</b><span>Current streak</span></div><div class="dystat"><b>${st.best}</b><span>Longest streak</span></div><div class="dystat"><b>${Object.keys(D.done).length}</b><span>Days solved</span></div>`
+    + `<p class="small dybest">Best times (no hints): ${Object.keys(DDIFF).map(k => DDIFF[k] + ' ' + (k in best ? fmtTime(best[k]) : '—')).join(' · ')}</p>`;
+  const [my, mm] = dparts(app.dyMonth + '-01'), lead = new Date(Date.UTC(my, mm - 1, 1)).getUTCDay(), dim = new Date(Date.UTC(my, mm, 0)).getUTCDate();
+  $('#dyMonth').textContent = new Date(Date.UTC(my, mm - 1, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  $('#dyPrev').disabled = app.dyMonth <= DSTART.slice(0, 7); $('#dyNext').disabled = app.dyMonth >= today.slice(0, 7);
+  let h = 'SMTWTFS'.split('').map(c => `<span class="dh">${c}</span>`).join('') + '<span class="dd blank"></span>'.repeat(lead);
+  for (let d = 1; d <= dim; d++) {
+    const ds = dstr(my, mm, d), e = D.done[ds], off = ds > today || ds < DSTART;
+    h += `<button class="dd${e ? ' done' + (e.on ? '' : ' late') : ''}${ds === today ? ' today' : ''}" data-dyd="${ds}"${off || app.busy ? ' disabled' : ''} aria-label="${dlabel(ds, true)}${e ? ', solved' : ''}">${d}${e ? '<i>✓</i>' : ''}</button>`;
+  }
+  $('#dyCal').innerHTML = h;
+}
 function renderHistory() {
   backfillHistLabels();
   const groups = histGroups(), total = groups.reduce((a, g) => a + g.recs.length, 0);
@@ -9382,7 +9501,7 @@ function saveProgress() {
   const P = app.play, p = app.puzzle;
   if (!P || !p || P.hash !== hashOf(p)) return;
   const id = pid(p), all = lsGet(PKEY, {});
-  if (P.solved || emptyPlay(P)) { if (all[id]) { delete all[id]; lsSet(PKEY, all); } return; }
+  if (P.solved || emptyPlay(P)) { if (all[id]) { delete all[id]; lsSet(PKEY, all); updateUnfinishedBadge(all); } return; }
   all[id] = { p: X.clonePuzzle(p), vals: P.vals, cands: P.cands, col: P.col, ring: P.ring, cnotes: P.cnotes, elapsed: P.elapsed, hints: P.hints, usedReveal: P.usedReveal, pencil: P.pencil, groups: P.groups, at: Date.now() };
   Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(30).forEach(k => delete all[k]);
   lsSet(PKEY, all);
@@ -9634,6 +9753,12 @@ function bind() {
       if (app.unfConfirm === id) { delete all[id]; lsSet(PKEY, all); app.unfConfirm = null; if (app.puzzle && pid(app.puzzle) === id && app.play) { resetPlay(); } renderUnfinished(); }
       else { app.unfConfirm = id; b.textContent = 'Tap again to discard'; setTimeout(() => { if (app.unfConfirm === id) { app.unfConfirm = null; b.textContent = 'Discard'; } }, 4000); }
     }
+  });
+  $('#tab-daily').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    if (b.id === 'dyPlay') dailyPlay(todayStr());
+    else if (b.dataset.dyd) dailyPlay(b.dataset.dyd);
+    else if (b.dataset.dymon) { const [y, m] = dparts(app.dyMonth + '-01'), t = new Date(Date.UTC(y, m - 1 + +b.dataset.dymon, 1)); app.dyMonth = t.getUTCFullYear() + '-' + p2(t.getUTCMonth() + 1); renderDaily(); }
   });
   $('#tab-history').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
